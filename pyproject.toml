@@ -1,0 +1,10 @@
+[project]
+name = "undarr"
+version = "0.1.0"
+description = "Self-hosted video transcoding"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "aiosqlite>=0.20.0",
+]
