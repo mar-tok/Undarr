@@ -4,12 +4,15 @@ from fastapi import FastAPI
 from starlette.staticfiles import StaticFiles
 
 from core.logger import log
+from core.queue_manager import queue_manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("Starting Undarr")
+    await queue_manager.start()
     yield
+    await queue_manager.stop()
     log.info("Undarr stopped")
 
 app = FastAPI(title="Undarr", lifespan=lifespan)
