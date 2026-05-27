@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -9,6 +10,7 @@ from enum import Enum
 from pathlib import Path
 
 from core.logger import log
+from core import db
 from core.ffprobe import probe_file, get_duration_us
 from core.ffmpeg import transcode
 
@@ -165,6 +167,9 @@ class QueueManager:
         await self._broadcast("job_started", job_to_dict(job))
         log.info("Started: %s [%s]", job.file_path, job.id)
 
+        started = time.monotonic()
+        ffmpeg_log = ""
+
         try:
             probe_data = await probe_file(job.file_path)
             duration_us = get_duration_us(probe_data) if probe_data else 0
@@ -175,6 +180,7 @@ class QueueManager:
                 output_path=job.file_path,
                 ffmpeg_args="-c:v libx265 -crf 24",
             )
+            ffmpeg_log = result.ffmpeg_log
 
             if result.success:
                 job.status = JobStatus.COMPLETED
@@ -193,9 +199,23 @@ class QueueManager:
             job.error_message = f"[{type(e).__name__}] {e}"
             log.error("Job %s crashed: %s", job.id, e)
         finally:
+            duration_secs = time.monotonic() - started
             async with self._lock:
                 self._active = None
                 self._known_paths.discard(job.file_path)
+            await db.insert_job_history(
+                id=job.id,
+                library_name="",
+                file_path=job.file_path,
+                status=job.status.value,
+                old_size_bytes=job.old_size_bytes,
+                new_size_bytes=job.new_size_bytes,
+                started_at=job.started_at or "",
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration_seconds=duration_secs,
+                ffmpeg_log=ffmpeg_log,
+                error_message=job.error_message,
+            )
             await self._broadcast("job_finished", job_to_dict(job))
             self._dispatch_event.set()
 
