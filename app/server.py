@@ -6,6 +6,7 @@ from starlette.staticfiles import StaticFiles
 from core.logger import log
 from core import db
 from core.queue_manager import queue_manager
+from app.routers import queue
 
 
 @asynccontextmanager
@@ -19,5 +20,5 @@ async def lifespan(app: FastAPI):
     log.info("Undarr stopped")
 
 app = FastAPI(title="Undarr", lifespan=lifespan)
-
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+app.include_router(queue.router)
