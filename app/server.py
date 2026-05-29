@@ -20,5 +20,5 @@ async def lifespan(app: FastAPI):
     log.info("Undarr stopped")
 
 app = FastAPI(title="Undarr", lifespan=lifespan)
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 app.include_router(queue.router)
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
