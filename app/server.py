@@ -6,12 +6,14 @@ from starlette.staticfiles import StaticFiles
 from core.logger import log
 from core import db
 from core.queue_manager import queue_manager
-from app.routers import queue
+from core.yaml_store import store
+from app.routers import queue, presets
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("Starting Undarr")
+    await store.load()
     await db.init_db()
     await queue_manager.start()
     yield
@@ -21,4 +23,5 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Undarr", lifespan=lifespan)
 app.include_router(queue.router)
+app.include_router(presets.router)
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from pydantic import BaseModel, field_validator
+
+
+def _validate_name(v: str) -> str:
+    v = v.strip()
+    if not v:
+        raise ValueError("Name cannot be empty")
+    if len(v) > 200:
+        raise ValueError("Name cannot exceed 200 characters")
+    return v
+
+
+class PresetCreate(BaseModel):
+    name: str
+    ffmpeg_args: str
+    output_container: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, v: str) -> str:
+        return _validate_name(v)
+
+
+class PresetUpdate(BaseModel):
+    name: str | None = None
+    ffmpeg_args: str
+    output_container: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, v: str | None) -> str | None:
+        return _validate_name(v) if v is not None else None
