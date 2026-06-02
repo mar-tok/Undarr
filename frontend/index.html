@@ -10,23 +10,32 @@
     <div id="layout">
         <nav id="sidebar">
             <h1><span class="accent">Un</span>darr</h1>
+            <button class="nav-item active" data-view="queue">Queue</button>
+            <button class="nav-item" data-view="presets">Presets</button>
         </nav>
         <main id="content">
-            <div class="queue-controls" id="queue-controls" style="display:none">
-                <button class="btn btn-primary" id="btn-pause">Pause Queue</button>
-                <span id="pending-count"></span>
+            <div id="view-queue" class="view active">
+                <div class="queue-controls" id="queue-controls" style="display:none">
+                    <button class="btn btn-primary" id="btn-pause">Pause Queue</button>
+                    <span id="pending-count"></span>
+                </div>
+                <table id="queue-table" style="display:none">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Size</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="queue-body"></tbody>
+                </table>
+                <p id="queue-empty">No jobs in queue.</p>
             </div>
-            <table id="queue-table" style="display:none">
-                <thead>
-                    <tr>
-                        <th>File</th>
-                        <th>Size</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody id="queue-body"></tbody>
-            </table>
-            <p id="queue-empty">No jobs in queue.</p>
+
+            <div id="view-presets" class="view">
+                <button class="btn btn-primary" id="btn-new-preset" style="margin-bottom:16px">New Preset</button>
+                <div id="preset-grid"></div>
+            </div>
         </main>
     </div>
     <script src="app.js"></script>

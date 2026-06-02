@@ -1,9 +1,4 @@
 (function () {
-    let activeJobs = [];
-    let pendingJobs = [];
-    let paused = false;
-    let eventSource = null;
-
     function esc(s) {
         if (s == null) return "";
         const d = document.createElement("div");
@@ -35,6 +30,22 @@
             return res.json();
         });
     }
+
+    const navItems = document.querySelectorAll(".nav-item");
+    const views = document.querySelectorAll(".view");
+
+    function navigate(viewId) {
+        navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));
+        views.forEach(v => v.classList.toggle("active", v.id === "view-" + viewId));
+        if (viewId === "presets") loadPresets();
+    }
+
+    navItems.forEach(n => n.addEventListener("click", () => navigate(n.dataset.view)));
+
+    let activeJobs = [];
+    let pendingJobs = [];
+    let paused = false;
+    let eventSource = null;
 
     function renderQueue() {
         const table = document.getElementById("queue-table");
@@ -111,6 +122,130 @@
 
     document.getElementById("btn-pause").addEventListener("click", () => {
         api("POST", "/api/queue/pause", { paused: !paused });
+    });
+
+    let presets = [];
+    let editingPreset = null;
+    let showingNewForm = false;
+
+    function loadPresets() {
+        api("GET", "/api/presets").then(data => {
+            presets = data;
+            renderPresets();
+        });
+    }
+
+    function renderPresets() {
+        const grid = document.getElementById("preset-grid");
+        let html = "";
+
+        if (showingNewForm) {
+            html += renderPresetForm(null);
+        }
+
+        for (const p of presets) {
+            if (editingPreset === p.name) {
+                html += renderPresetForm(p);
+            } else {
+                html += renderPresetCard(p);
+            }
+        }
+
+        grid.innerHTML = html;
+
+        const form = grid.querySelector(".preset-card.editing");
+        if (form) attachFormListeners(form, editingPreset);
+    }
+
+    function renderPresetCard(p) {
+        let props = "";
+        props += "<dt>Args</dt><dd>" + esc(p.ffmpeg_args) + "</dd>";
+        props += "<dt>Container</dt><dd>" + (p.output_container ? esc(p.output_container) : "Keep original") + "</dd>";
+
+        return '<div class="preset-card">'
+            + '<div class="preset-card-header">'
+            + '<span class="preset-card-name">' + esc(p.name) + '</span>'
+            + '<div class="preset-card-actions">'
+            + '<button class="btn" data-action="edit" data-name="' + esc(p.name) + '">Edit</button>'
+            + '<button class="btn btn-danger" data-action="delete" data-name="' + esc(p.name) + '">Delete</button>'
+            + '</div></div>'
+            + '<dl class="preset-card-props">' + props + '</dl>'
+            + '</div>';
+    }
+
+    function renderPresetForm(preset) {
+        const name = preset ? preset.name : "";
+        const args = preset ? preset.ffmpeg_args : "";
+        const container = preset ? (preset.output_container || "") : "";
+
+        return '<div class="preset-card editing">'
+            + '<div class="form-group"><label>Name</label>'
+            + '<input type="text" class="pc-name" value="' + esc(name) + '"></div>'
+            + '<div class="form-group"><label>FFmpeg Arguments</label>'
+            + '<input type="text" class="pc-args" value="' + esc(args) + '" placeholder="-c:v libx265 -crf 24 -preset slow"></div>'
+            + '<div class="form-group"><label>Output Container</label>'
+            + '<input type="text" class="pc-container" value="' + esc(container) + '" placeholder="Leave empty to keep original"></div>'
+            + '<div class="form-actions">'
+            + '<button class="btn pc-cancel">Cancel</button>'
+            + '<button class="btn btn-primary pc-save">Save</button>'
+            + '</div></div>';
+    }
+
+    function attachFormListeners(form, originalName) {
+        const isNew = originalName === null;
+
+        form.querySelector(".pc-save").addEventListener("click", async () => {
+            const name = form.querySelector(".pc-name").value.trim();
+            const args = form.querySelector(".pc-args").value.trim();
+            const container = form.querySelector(".pc-container").value.trim() || null;
+
+            if (!name || !args) {
+                alert("Name and arguments are required.");
+                return;
+            }
+
+            try {
+                if (isNew) {
+                    await api("POST", "/api/presets", { name, ffmpeg_args: args, output_container: container });
+                    showingNewForm = false;
+                } else {
+                    await api("POST", "/api/presets", { name, ffmpeg_args: args, output_container: container });
+                    editingPreset = null;
+                }
+                loadPresets();
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+
+        form.querySelector(".pc-cancel").addEventListener("click", () => {
+            if (isNew) showingNewForm = false;
+            else editingPreset = null;
+            renderPresets();
+        });
+    }
+
+    document.getElementById("preset-grid").addEventListener("click", e => {
+        const btn = e.target.closest("[data-action]");
+        if (!btn) return;
+        const name = btn.dataset.name;
+
+        if (btn.dataset.action === "edit") {
+            editingPreset = name;
+            showingNewForm = false;
+            renderPresets();
+        } else if (btn.dataset.action === "delete") {
+            if (!confirm('Delete preset "' + name + '"?')) return;
+            api("DELETE", "/api/presets/" + encodeURIComponent(name)).then(() => {
+                loadPresets();
+            }).catch(e => alert(e.message));
+        }
+    });
+
+    document.getElementById("btn-new-preset").addEventListener("click", () => {
+        showingNewForm = !showingNewForm;
+        editingPreset = null;
+        renderPresets();
     });
 
     connectSSE();
