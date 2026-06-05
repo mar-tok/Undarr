@@ -32,3 +32,27 @@ class PresetUpdate(BaseModel):
     @classmethod
     def check_name(cls, v: str | None) -> str | None:
         return _validate_name(v) if v is not None else None
+
+
+class LibraryCreate(BaseModel):
+    name: str
+    paths: list[str]
+    preset: str
+    watch: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, v: str) -> str:
+        return _validate_name(v)
+
+
+class LibraryUpdate(BaseModel):
+    name: str | None = None
+    paths: list[str]
+    preset: str
+    watch: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def check_name(cls, v: str | None) -> str | None:
+        return _validate_name(v) if v is not None else None

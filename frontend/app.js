@@ -38,6 +38,7 @@
         navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));
         views.forEach(v => v.classList.toggle("active", v.id === "view-" + viewId));
         if (viewId === "presets") loadPresets();
+        if (viewId === "libraries") loadLibraries();
     }
 
     navItems.forEach(n => n.addEventListener("click", () => navigate(n.dataset.view)));
@@ -246,6 +247,136 @@
         showingNewForm = !showingNewForm;
         editingPreset = null;
         renderPresets();
+    });
+
+    let libraries = [];
+    let editingLibrary = null;
+    let showingNewLibraryForm = false;
+
+    function loadLibraries() {
+        api("GET", "/api/libraries").then(data => {
+            libraries = data;
+            renderLibraries();
+        });
+    }
+
+    function renderLibraries() {
+        const grid = document.getElementById("library-grid");
+        let html = "";
+
+        if (showingNewLibraryForm) {
+            html += renderLibraryForm(null);
+        }
+
+        for (const lib of libraries) {
+            if (editingLibrary === lib.name) {
+                html += renderLibraryForm(lib);
+            } else {
+                html += renderLibraryCard(lib);
+            }
+        }
+
+        grid.innerHTML = html;
+
+        const form = grid.querySelector(".library-card.editing");
+        if (form) attachLibraryFormListeners(form, editingLibrary);
+    }
+
+    function renderLibraryCard(lib) {
+        let props = "";
+        props += "<dt>Preset</dt><dd>" + esc(lib.preset) + "</dd>";
+        props += "<dt>Watch</dt><dd>" + (lib.watch ? "Yes" : "No") + "</dd>";
+        props += "<dt>Paths</dt><dd>" + esc(lib.paths.join(", ")) + "</dd>";
+
+        return '<div class="library-card">'
+            + '<div class="library-card-header">'
+            + '<span class="library-card-name">' + esc(lib.name) + '</span>'
+            + '<div class="library-card-actions">'
+            + '<button class="btn" data-lib-action="edit" data-name="' + esc(lib.name) + '">Edit</button>'
+            + '<button class="btn btn-danger" data-lib-action="delete" data-name="' + esc(lib.name) + '">Delete</button>'
+            + '</div></div>'
+            + '<dl class="library-card-props">' + props + '</dl>'
+            + '</div>';
+    }
+
+    function renderLibraryForm(lib) {
+        const name = lib ? lib.name : "";
+        const paths = lib ? lib.paths.join(", ") : "";
+        const preset = lib ? lib.preset : "";
+        const watch = lib ? lib.watch : true;
+
+        return '<div class="library-card editing">'
+            + '<div class="form-group"><label>Name</label>'
+            + '<input type="text" class="lc-name" value="' + esc(name) + '"></div>'
+            + '<div class="form-group"><label>Preset</label>'
+            + '<input type="text" class="lc-preset" value="' + esc(preset) + '" placeholder="Preset name"></div>'
+            + '<div class="form-group"><label>Paths (comma-separated)</label>'
+            + '<input type="text" class="lc-paths" value="' + esc(paths) + '" placeholder="/media/movies, /media/tv"></div>'
+            + '<div class="form-group"><label>'
+            + '<input type="checkbox" class="lc-watch"' + (watch ? " checked" : "") + '> Watch for new files</label></div>'
+            + '<div class="form-actions">'
+            + '<button class="btn lc-cancel">Cancel</button>'
+            + '<button class="btn btn-primary lc-save">Save</button>'
+            + '</div></div>';
+    }
+
+    function attachLibraryFormListeners(form, originalName) {
+        const isNew = originalName === null;
+
+        form.querySelector(".lc-save").addEventListener("click", async () => {
+            const name = form.querySelector(".lc-name").value.trim();
+            const preset = form.querySelector(".lc-preset").value.trim();
+            const paths = form.querySelector(".lc-paths").value
+                .split(",").map(p => p.trim()).filter(Boolean);
+            const watch = form.querySelector(".lc-watch").checked;
+
+            if (!name || !preset || paths.length === 0) {
+                alert("Name, preset, and at least one path are required.");
+                return;
+            }
+
+            try {
+                if (isNew) {
+                    await api("POST", "/api/libraries", { name, paths, preset, watch });
+                    showingNewLibraryForm = false;
+                } else {
+                    await api("PUT", "/api/libraries/" + encodeURIComponent(originalName), { name, paths, preset, watch });
+                    editingLibrary = null;
+                }
+                loadLibraries();
+            } catch (e) {
+                alert(e.message);
+            }
+        });
+
+        form.querySelector(".lc-cancel").addEventListener("click", () => {
+            if (isNew) showingNewLibraryForm = false;
+            else editingLibrary = null;
+            renderLibraries();
+        });
+    }
+
+    document.getElementById("library-grid").addEventListener("click", e => {
+        const btn = e.target.closest("[data-lib-action]");
+        if (!btn) return;
+        const name = btn.dataset.name;
+
+        if (btn.dataset.libAction === "edit") {
+            editingLibrary = name;
+            showingNewLibraryForm = false;
+            renderLibraries();
+        } else if (btn.dataset.libAction === "delete") {
+            if (!confirm('Delete library "' + name + '"?')) return;
+            api("DELETE", "/api/libraries/" + encodeURIComponent(name)).then(() => {
+                loadLibraries();
+            }).catch(e => alert(e.message));
+        }
+    });
+
+    document.getElementById("btn-new-library").addEventListener("click", () => {
+        showingNewLibraryForm = !showingNewLibraryForm;
+        editingLibrary = null;
+        renderLibraries();
     });
 
     connectSSE();

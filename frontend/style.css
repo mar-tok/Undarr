@@ -288,3 +288,71 @@ button, button * {
 .preset-card-props dd:nth-of-type(odd) {
     background: var(--bg-tertiary);
 }
+
+#library-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.library-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 16px;
+}
+
+.library-card.editing {
+    border-color: var(--accent);
+    grid-column: 1 / -1;
+}
+
+.library-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.library-card-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.library-card-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.library-card-props {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0;
+}
+
+.library-card-props dt,
+.library-card-props dd {
+    padding: 4px 8px;
+}
+
+.library-card-props dt {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+}
+
+.library-card-props dd {
+    font-size: 13px;
+    text-align: right;
+}
+
+.library-card-props dt:nth-of-type(odd),
+.library-card-props dd:nth-of-type(odd) {
+    background: var(--bg-tertiary);
+}
+
+.form-group input[type="checkbox"] {
+    width: auto;
+    margin-right: 6px;
+}

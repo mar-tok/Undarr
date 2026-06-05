@@ -7,7 +7,7 @@ from core.logger import log
 from core import db
 from core.queue_manager import queue_manager
 from core.yaml_store import store
-from app.routers import queue, presets
+from app.routers import queue, presets, libraries
 
 
 @asynccontextmanager
@@ -24,4 +24,5 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Undarr", lifespan=lifespan)
 app.include_router(queue.router)
 app.include_router(presets.router)
+app.include_router(libraries.router)
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
