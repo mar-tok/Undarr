@@ -31,6 +31,8 @@ class Job:
     new_size_bytes: int | None = None
     started_at: str | None = None
     error_message: str | None = None
+    ffmpeg_args: str = ""
+    output_container: str = ""
 
 
 def job_to_dict(job: Job) -> dict:
@@ -103,7 +105,8 @@ class QueueManager:
         await self._broadcast("queue_paused", {"paused": False})
         log.info("Queue resumed")
 
-    async def enqueue(self, file_path: str, ffmpeg_args: str) -> Job | None:
+    async def enqueue(self, file_path: str, ffmpeg_args: str,
+                      output_container: str = "") -> Job | None:
         async with self._lock:
             if file_path in self._known_paths:
                 return None
@@ -119,8 +122,9 @@ class QueueManager:
                 id=uuid.uuid4().hex[:12],
                 file_path=file_path,
                 old_size_bytes=size,
+                ffmpeg_args=ffmpeg_args,
+                output_container=output_container,
             )
-            # TODO: ffmpeg_args need to be stored on the job
             self._pending.append(job)
 
         await self._broadcast("job_queued", job_to_dict(job))
@@ -174,18 +178,30 @@ class QueueManager:
             probe_data = await probe_file(job.file_path)
             duration_us = get_duration_us(probe_data) if probe_data else 0
 
-            # TODO: get ffmpeg_args from job/preset
+            input_path = Path(job.file_path)
+            container = job.output_container
+            if container and container != input_path.suffix.lstrip("."):
+                output_path = input_path.with_suffix("." + container + ".undarr.tmp")
+            else:
+                output_path = input_path
+
             result = await transcode(
                 input_path=job.file_path,
-                output_path=job.file_path,
-                ffmpeg_args="-c:v libx265 -crf 24",
+                output_path=str(output_path),
+                ffmpeg_args=job.ffmpeg_args,
             )
             ffmpeg_log = result.ffmpeg_log
 
             if result.success:
+                if container and output_path != input_path:
+                    final_path = input_path.with_suffix("." + container)
+                    input_path.unlink()
+                    output_path.rename(final_path)
+                    job.file_path = str(final_path)
+
                 job.status = JobStatus.COMPLETED
                 try:
-                    job.new_size_bytes = Path(result.output_path).stat().st_size
+                    job.new_size_bytes = Path(job.file_path).stat().st_size
                 except OSError:
                     pass
                 saved = job.old_size_bytes - (job.new_size_bytes or 0)
