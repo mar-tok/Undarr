@@ -47,6 +47,15 @@ def get_db() -> aiosqlite.Connection:
     return _db
 
 
+async def has_completed_job(file_path: str) -> bool:
+    db = get_db()
+    row = await db.execute_fetchall(
+        "SELECT 1 FROM job_history WHERE file_path = ? AND status = 'completed' LIMIT 1",
+        (file_path,),
+    )
+    return len(row) > 0
+
+
 async def insert_job_history(
     *,
     id: str,

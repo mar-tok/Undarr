@@ -2,9 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 import config
 from core.logger import log
+
+VIDEO_EXTENSIONS = {
+    ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm",
+    ".m4v", ".mpg", ".mpeg", ".ts", ".m2ts", ".vob", ".ogv",
+}
+
+
+def is_video_file(path: str) -> bool:
+    return Path(path).suffix.lower() in VIDEO_EXTENSIONS
 
 
 async def probe_file(file_path: str) -> dict | None:

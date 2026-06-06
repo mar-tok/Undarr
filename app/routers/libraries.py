@@ -4,6 +4,8 @@ from core.logger import log
 from app.models.requests import LibraryCreate, LibraryUpdate
 from app.models.responses import LibraryOut
 from core.yaml_store import store, Library
+from core.scanner import scan_library
+from core.queue_manager import queue_manager
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
@@ -52,3 +54,11 @@ async def delete_library(name: str):
     if not await store.delete_library(name):
         raise HTTPException(404, "Library not found")
     log.info("Library deleted: '%s'", name)
+
+@router.post("/{name}/scan")
+async def scan(name: str):
+    lib = await store.get_library(name)
+    if not lib:
+        raise HTTPException(404, "Library not found")
+    count = await scan_library(name, lib, queue_manager.enqueue)
+    return {"queued": count}
