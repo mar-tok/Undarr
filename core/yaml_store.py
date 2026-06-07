@@ -22,6 +22,8 @@ class Library:
     paths: list[str]
     preset: str
     watch: bool = True
+    scan_interval: int = 0
+    scan_unit: str = "hours"
 
 
 @dataclass
@@ -44,6 +46,8 @@ def _config_from_dict(data: dict) -> Config:
             paths=lib.get("paths", []),
             preset=lib.get("preset", ""),
             watch=lib.get("watch", True),
+            scan_interval=lib.get("scan_interval", 0),
+            scan_unit=lib.get("scan_unit", "hours"),
         )
 
     return Config(presets=presets, libraries=libraries)
@@ -63,6 +67,8 @@ def _config_to_dict(cfg: Config) -> dict:
                 "paths": lib.paths,
                 "preset": lib.preset,
                 "watch": lib.watch,
+                "scan_interval": lib.scan_interval,
+                "scan_unit": lib.scan_unit,
             }
             for name, lib in cfg.libraries.items()
         },

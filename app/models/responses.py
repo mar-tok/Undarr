@@ -14,3 +14,5 @@ class LibraryOut(BaseModel):
     paths: list[str]
     preset: str
     watch: bool
+    scan_interval: int = 0
+    scan_unit: str = "hours"

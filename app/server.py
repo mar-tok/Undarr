@@ -8,6 +8,7 @@ from core import db
 from core.queue_manager import queue_manager
 from core.yaml_store import store
 from core.watcher import watcher
+from core.scanner import periodic_scanner
 from app.routers import queue, presets, libraries
 
 
@@ -18,7 +19,9 @@ async def lifespan(app: FastAPI):
     await db.init_db()
     await queue_manager.start()
     await watcher.start(queue_manager.enqueue)
+    await periodic_scanner.start(queue_manager.enqueue)
     yield
+    await periodic_scanner.stop()
     await watcher.stop()
     await queue_manager.stop()
     await db.close_db()

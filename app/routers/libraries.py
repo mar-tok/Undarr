@@ -13,7 +13,8 @@ router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 @router.get("", response_model=list[LibraryOut])
 async def list_libraries():
     libs = await store.get_libraries()
-    return [LibraryOut(name=n, paths=l.paths, preset=l.preset, watch=l.watch)
+    return [LibraryOut(name=n, paths=l.paths, preset=l.preset, watch=l.watch,
+                       scan_interval=l.scan_interval, scan_unit=l.scan_unit)
             for n, l in libs.items()]
 
 
@@ -23,10 +24,12 @@ async def create_library(body: LibraryCreate):
         raise HTTPException(409, "Library already exists")
     if not await store.get_preset(body.preset):
         raise HTTPException(400, f"Preset '{body.preset}' not found")
-    lib = Library(paths=body.paths, preset=body.preset, watch=body.watch)
+    lib = Library(paths=body.paths, preset=body.preset, watch=body.watch,
+                  scan_interval=body.scan_interval, scan_unit=body.scan_unit)
     await store.create_library(body.name, lib)
     log.info("Library created: '%s'", body.name)
-    return LibraryOut(name=body.name, paths=lib.paths, preset=lib.preset, watch=lib.watch)
+    return LibraryOut(name=body.name, paths=lib.paths, preset=lib.preset, watch=lib.watch,
+                      scan_interval=lib.scan_interval, scan_unit=lib.scan_unit)
 
 @router.put("/{name}", response_model=LibraryOut)
 async def update_library(name: str, body: LibraryUpdate):
@@ -35,7 +38,8 @@ async def update_library(name: str, body: LibraryUpdate):
     if not await store.get_preset(body.preset):
         raise HTTPException(400, f"Preset '{body.preset}' not found")
 
-    lib = Library(paths=body.paths, preset=body.preset, watch=body.watch)
+    lib = Library(paths=body.paths, preset=body.preset, watch=body.watch,
+                  scan_interval=body.scan_interval, scan_unit=body.scan_unit)
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:
         if await store.get_library(new_name):
@@ -46,7 +50,8 @@ async def update_library(name: str, body: LibraryUpdate):
         log.info("Library renamed: '%s' -> '%s'", name, new_name)
     else:
         log.info("Library updated: '%s'",  name)
-    return LibraryOut(name=new_name, paths=lib.paths, preset=lib.preset, watch=lib.watch)
+    return LibraryOut(name=new_name, paths=lib.paths, preset=lib.preset, watch=lib.watch,
+                      scan_interval=lib.scan_interval, scan_unit=lib.scan_unit)
 
 
 @router.delete("/{name}", status_code=204)

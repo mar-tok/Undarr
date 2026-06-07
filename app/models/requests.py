@@ -39,6 +39,8 @@ class LibraryCreate(BaseModel):
     paths: list[str]
     preset: str
     watch: bool = True
+    scan_interval: int = 0
+    scan_unit: str = "hours"
 
     @field_validator("name")
     @classmethod
@@ -51,6 +53,8 @@ class LibraryUpdate(BaseModel):
     paths: list[str]
     preset: str
     watch: bool = True
+    scan_interval: int = 0
+    scan_unit: str = "hours"
 
     @field_validator("name")
     @classmethod
