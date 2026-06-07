@@ -7,6 +7,7 @@ from core.logger import log
 from core import db
 from core.queue_manager import queue_manager
 from core.yaml_store import store
+from core.watcher import watcher
 from app.routers import queue, presets, libraries
 
 
@@ -16,7 +17,9 @@ async def lifespan(app: FastAPI):
     await store.load()
     await db.init_db()
     await queue_manager.start()
+    await watcher.start(queue_manager.enqueue)
     yield
+    await watcher.stop()
     await queue_manager.stop()
     await db.close_db()
     log.info("Undarr stopped")
