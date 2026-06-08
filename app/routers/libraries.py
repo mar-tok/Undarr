@@ -4,8 +4,9 @@ from core.logger import log
 from app.models.requests import LibraryCreate, LibraryUpdate
 from app.models.responses import LibraryOut
 from core.yaml_store import store, Library
-from core.scanner import scan_library
+from core.scanner import scan_library, periodic_scanner
 from core.queue_manager import queue_manager
+from core.watcher import watcher
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
@@ -28,6 +29,8 @@ async def create_library(body: LibraryCreate):
                   scan_interval=body.scan_interval, scan_unit=body.scan_unit)
     await store.create_library(body.name, lib)
     log.info("Library created: '%s'", body.name)
+    await watcher.restart(queue_manager.enqueue)
+    await periodic_scanner.restart(queue_manager.enqueue)
     return LibraryOut(name=body.name, paths=lib.paths, preset=lib.preset, watch=lib.watch,
                       scan_interval=lib.scan_interval, scan_unit=lib.scan_unit)
 
@@ -50,6 +53,8 @@ async def update_library(name: str, body: LibraryUpdate):
         log.info("Library renamed: '%s' -> '%s'", name, new_name)
     else:
         log.info("Library updated: '%s'",  name)
+    await watcher.restart(queue_manager.enqueue)
+    await periodic_scanner.restart(queue_manager.enqueue)
     return LibraryOut(name=new_name, paths=lib.paths, preset=lib.preset, watch=lib.watch,
                       scan_interval=lib.scan_interval, scan_unit=lib.scan_unit)
 
@@ -59,6 +64,8 @@ async def delete_library(name: str):
     if not await store.delete_library(name):
         raise HTTPException(404, "Library not found")
     log.info("Library deleted: '%s'", name)
+    await watcher.restart(queue_manager.enqueue)
+    await periodic_scanner.restart(queue_manager.enqueue)
 
 @router.post("/{name}/scan")
 async def scan(name: str):

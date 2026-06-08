@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from pathlib import Path
 
 from watchdog.observers import Observer
@@ -9,6 +10,19 @@ from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifi
 from core.logger import log
 from core.ffprobe import is_video_file
 from core.yaml_store import store
+
+_suppressed: set[str] = set()
+_suppressed_lock = threading.Lock()
+
+
+def suppress_path(path: str) -> None:
+    with _suppressed_lock:
+        _suppressed.add(path)
+
+
+def unsuppress_path(path: str) -> None:
+    with _suppressed_lock:
+        _suppressed.discard(path)
 
 
 class _VideoHandler(FileSystemEventHandler):
@@ -22,6 +36,9 @@ class _VideoHandler(FileSystemEventHandler):
     def _schedule(self, path: str) -> None:
         if not is_video_file(path):
             return
+        with _suppressed_lock:
+            if path in _suppressed:
+                return
         handle = self._debounce.pop(path, None)
         if handle:
             handle.cancel()
@@ -31,6 +48,9 @@ class _VideoHandler(FileSystemEventHandler):
 
     def _fire(self, path: str) -> None:
         self._debounce.pop(path, None)
+        with _suppressed_lock:
+            if path in _suppressed:
+                return
         asyncio.run_coroutine_threadsafe(
             self._handle_file(path), self._loop
         )

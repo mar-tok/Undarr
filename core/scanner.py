@@ -83,6 +83,10 @@ class PeriodicScanner:
         await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
 
+    async def restart(self, enqueue_fn) -> None:
+        await self.stop()
+        await self.start(enqueue_fn)
+
     async def _run_loop(self, library_name: str, interval_secs: int, enqueue_fn) -> None:
         try:
             while True:

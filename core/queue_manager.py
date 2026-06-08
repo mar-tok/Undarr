@@ -9,10 +9,12 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
+import config
 from core.logger import log
 from core import db
 from core.ffprobe import probe_file, get_duration_us
 from core.ffmpeg import transcode
+from core.watcher import suppress_path, unsuppress_path
 
 
 class JobStatus(str, Enum):
@@ -180,24 +182,33 @@ class QueueManager:
 
             input_path = Path(job.file_path)
             container = job.output_container
-            if container and container != input_path.suffix.lstrip("."):
-                output_path = input_path.with_suffix("." + container + ".undarr.tmp")
-            else:
-                output_path = input_path
+            out_ext = "." + container if container else input_path.suffix
+
+            cache_dir = config.DATA_DIR / "cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            temp_output = cache_dir / f"{job.id}{out_ext}"
 
             result = await transcode(
                 input_path=job.file_path,
-                output_path=str(output_path),
+                output_path=str(temp_output),
                 ffmpeg_args=job.ffmpeg_args,
             )
             ffmpeg_log = result.ffmpeg_log
 
             if result.success:
-                if container and output_path != input_path:
-                    final_path = input_path.with_suffix("." + container)
-                    input_path.unlink()
-                    output_path.rename(final_path)
-                    job.file_path = str(final_path)
+                if out_ext != input_path.suffix:
+                    final_path = input_path.with_suffix(out_ext)
+                else:
+                    final_path = input_path
+                suppress_path(str(final_path))
+                try:
+                    temp_output.rename(final_path)
+                    if final_path != input_path:
+                        input_path.unlink(missing_ok=True)
+                except Exception:
+                    unsuppress_path(str(final_path))
+                    raise
+                job.file_path = str(final_path)
 
                 job.status = JobStatus.COMPLETED
                 try:
@@ -207,6 +218,7 @@ class QueueManager:
                 saved = job.old_size_bytes - (job.new_size_bytes or 0)
                 log.info("Completed: %s [%s] saved %s", job.file_path, job.id, _format_size(saved))
             else:
+                temp_output.unlink(missing_ok=True)
                 job.status = JobStatus.FAILED
                 job.error_message = result.error_message
                 log.warning("Failed: %s [%s] %s", job.file_path, job.id, result.error_message)
@@ -234,6 +246,10 @@ class QueueManager:
             )
             await self._broadcast("job_finished", job_to_dict(job))
             self._dispatch_event.set()
+            async def _delayed_unsuppress():
+                await asyncio.sleep(5)
+                unsuppress_path(job.file_path)
+            asyncio.create_task(_delayed_unsuppress())
 
 
 queue_manager = QueueManager()
