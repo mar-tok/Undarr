@@ -286,12 +286,16 @@
         let props = "";
         props += "<dt>Preset</dt><dd>" + esc(lib.preset) + "</dd>";
         props += "<dt>Watch</dt><dd>" + (lib.watch ? "Yes" : "No") + "</dd>";
+        if (lib.scan_interval > 0) {
+            props += "<dt>Scan</dt><dd>Every " + lib.scan_interval + " " + esc(lib.scan_unit) + "</dd>";
+        }
         props += "<dt>Paths</dt><dd>" + esc(lib.paths.join(", ")) + "</dd>";
 
-        return '<div class="library-card">'
+        return '<div class="library-card" data-name="' + esc(lib.name) + '">'
             + '<div class="library-card-header">'
             + '<span class="library-card-name">' + esc(lib.name) + '</span>'
             + '<div class="library-card-actions">'
+            + '<button class="btn" data-lib-action="scan" data-name="' + esc(lib.name) + '">Scan</button>'
             + '<button class="btn" data-lib-action="edit" data-name="' + esc(lib.name) + '">Edit</button>'
             + '<button class="btn btn-danger" data-lib-action="delete" data-name="' + esc(lib.name) + '">Delete</button>'
             + '</div></div>'
@@ -304,6 +308,8 @@
         const paths = lib ? lib.paths.join(", ") : "";
         const preset = lib ? lib.preset : "";
         const watch = lib ? lib.watch : true;
+        const scanInterval = lib ? (lib.scan_interval || 0) : 0;
+        const scanUnit = lib ? (lib.scan_unit || "minutes") : "minutes";
 
         return '<div class="library-card editing">'
             + '<div class="form-group"><label>Name</label>'
@@ -314,6 +320,14 @@
             + '<input type="text" class="lc-paths" value="' + esc(paths) + '" placeholder="/media/movies, /media/tv"></div>'
             + '<div class="form-group"><label>'
             + '<input type="checkbox" class="lc-watch"' + (watch ? " checked" : "") + '> Watch for new files</label></div>'
+            + '<div class="form-group"><label>Scan Interval</label>'
+            + '<div style="display:flex;gap:8px">'
+            + '<input type="number" class="lc-scan-interval" value="' + scanInterval + '" min="0" style="width:80px">'
+            + '<select class="lc-scan-unit">'
+            + '<option value="minutes"' + (scanUnit === "minutes" ? " selected" : "") + '>minutes</option>'
+            + '<option value="hours"' + (scanUnit === "hours" ? " selected" : "") + '>hours</option>'
+            + '<option value="days"' + (scanUnit === "days" ? " selected" : "") + '>days</option>'
+            + '</select></div></div>'
             + '<div class="form-actions">'
             + '<button class="btn lc-cancel">Cancel</button>'
             + '<button class="btn btn-primary lc-save">Save</button>'
@@ -329,6 +343,8 @@
             const paths = form.querySelector(".lc-paths").value
                 .split(",").map(p => p.trim()).filter(Boolean);
             const watch = form.querySelector(".lc-watch").checked;
+            const scan_interval = parseInt(form.querySelector(".lc-scan-interval").value) || 0;
+            const scan_unit = form.querySelector(".lc-scan-unit").value;
 
             if (!name || !preset || paths.length === 0) {
                 alert("Name, preset, and at least one path are required.");
@@ -337,10 +353,10 @@
 
             try {
                 if (isNew) {
-                    await api("POST", "/api/libraries", { name, paths, preset, watch });
+                    await api("POST", "/api/libraries", { name, paths, preset, watch, scan_interval, scan_unit });
                     showingNewLibraryForm = false;
                 } else {
-                    await api("PUT", "/api/libraries/" + encodeURIComponent(originalName), { name, paths, preset, watch });
+                    await api("PUT", "/api/libraries/" + encodeURIComponent(originalName), { name, paths, preset, watch, scan_interval, scan_unit });
                     editingLibrary = null;
                 }
                 loadLibraries();
@@ -356,12 +372,36 @@
         });
     }
 
+    function setScanningBadge(name, show) {
+        const card = document.querySelector('.library-card[data-name="' + CSS.escape(name) + '"]');
+        if (!card) return;
+        const header = card.querySelector(".library-card-header");
+        const existing = header.querySelector(".scanning-badge");
+        if (show && !existing) {
+            const badge = document.createElement("span");
+            badge.className = "scanning-badge";
+            badge.textContent = "SCANNING";
+            header.querySelector(".library-card-name").after(badge);
+        } else if (!show && existing) {
+            existing.remove();
+        }
+    }
+
     document.getElementById("library-grid").addEventListener("click", e => {
         const btn = e.target.closest("[data-lib-action]");
         if (!btn) return;
         const name = btn.dataset.name;
 
-        if (btn.dataset.libAction === "edit") {
+        if (btn.dataset.libAction === "scan") {
+            setScanningBadge(name, true);
+            api("POST", "/api/libraries/" + encodeURIComponent(name) + "/scan").then(result => {
+                setScanningBadge(name, false);
+                alert("Queued " + result.queued + " file" + (result.queued !== 1 ? "s" : "") + ".");
+            }).catch(err => {
+                setScanningBadge(name, false);
+                alert("Scan failed: " + err.message);
+            });
+        } else if (btn.dataset.libAction === "edit") {
             editingLibrary = name;
             showingNewLibraryForm = false;
             renderLibraries();
