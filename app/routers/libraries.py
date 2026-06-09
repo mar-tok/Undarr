@@ -34,6 +34,7 @@ async def create_library(body: LibraryCreate):
     return LibraryOut(name=body.name, paths=lib.paths, preset=lib.preset, watch=lib.watch,
                       scan_interval=lib.scan_interval, scan_unit=lib.scan_unit)
 
+
 @router.put("/{name}", response_model=LibraryOut)
 async def update_library(name: str, body: LibraryUpdate):
     if not await store.get_library(name):
@@ -52,7 +53,7 @@ async def update_library(name: str, body: LibraryUpdate):
         await store.delete_library(name)
         log.info("Library renamed: '%s' -> '%s'", name, new_name)
     else:
-        log.info("Library updated: '%s'",  name)
+        log.info("Library updated: '%s'", name)
     await watcher.restart(queue_manager.enqueue)
     await periodic_scanner.restart(queue_manager.enqueue)
     return LibraryOut(name=new_name, paths=lib.paths, preset=lib.preset, watch=lib.watch,
@@ -66,6 +67,7 @@ async def delete_library(name: str):
     log.info("Library deleted: '%s'", name)
     await watcher.restart(queue_manager.enqueue)
     await periodic_scanner.restart(queue_manager.enqueue)
+
 
 @router.post("/{name}/scan")
 async def scan(name: str):
