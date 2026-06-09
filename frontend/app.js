@@ -108,6 +108,7 @@
         eventSource.addEventListener("job_finished", e => {
             const job = JSON.parse(e.data);
             activeJobs = activeJobs.filter(j => j.id !== job.id);
+            renderQueue();
         });
 
         eventSource.addEventListener("queue_paused", e => {
