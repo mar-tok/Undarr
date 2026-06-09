@@ -211,7 +211,7 @@
                     await api("POST", "/api/presets", { name, ffmpeg_args: args, output_container: container });
                     showingNewForm = false;
                 } else {
-                    await api("POST", "/api/presets", { name, ffmpeg_args: args, output_container: container });
+                    await api("PUT", "/api/presets/" + encodeURIComponent(originalName), { name, ffmpeg_args: args, output_container: container });
                     editingPreset = null;
                 }
                 loadPresets();
