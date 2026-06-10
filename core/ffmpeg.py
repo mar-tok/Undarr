@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import shlex
 from dataclasses import dataclass
 
 import config
 from core.logger import log
+
+_CODEC_FAMILIES: dict[str, str] = {
+    "hevc": "HEVC (H.265)",
+    "h264": "H.264 (AVC)",
+    "av1": "AV1",
+    "vp9": "VP9",
+}
 
 
 @dataclass
@@ -59,3 +67,46 @@ async def transcode(
             ffmpeg_log=ffmpeg_log,
             error_message=error_msg,
         )
+
+
+_encoder_cache: dict[str, list[dict]] | None = None
+
+
+async def detect_encoders() -> dict[str, list[dict]]:
+    global _encoder_cache
+    if _encoder_cache is not None:
+        return _encoder_cache
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            config.FFMPEG_BIN, "-hide_banner", "-encoders",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+    except Exception as e:
+        log.error("Failed to detect encoders: [%s] %s", type(e).__name__, e)
+        return {}
+
+    result: dict[str, list[dict]] = {k: [] for k in _CODEC_FAMILIES}
+    codec_re = re.compile(r"\(codec (\w+)\)")
+
+    for raw in stdout.decode(errors="replace").splitlines():
+        line = raw.strip()
+        if not line or not line.startswith("V"):
+            continue
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            continue
+        name = parts[1]
+        desc = parts[2]
+
+        m = codec_re.search(desc)
+        codec = m.group(1) if m else name.split("_")[0]
+
+        if codec in result:
+            result[codec].append({"name": name, "description": desc})
+
+    result = {k: v for k, v in result.items() if v}
+    _encoder_cache = result
+    return result
