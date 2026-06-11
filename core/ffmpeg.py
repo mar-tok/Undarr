@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import config
 from core.logger import log
+from core.codecs import ENCODER_TO_CODEC
 
 _CODEC_FAMILIES: dict[str, str] = {
     "hevc": "HEVC (H.265)",
@@ -14,6 +15,27 @@ _CODEC_FAMILIES: dict[str, str] = {
     "av1": "AV1",
     "vp9": "VP9",
 }
+
+# Containers that can hold each codec. Keeping the source container when it
+# can't hold the target codec produces a broken file (AV1 in .avi).
+_CODEC_CONTAINERS: dict[str, set[str]] = {
+    "av1":  {".mp4", ".mkv", ".webm"},
+    "vp9":  {".mkv", ".webm"},
+    "hevc": {".mp4", ".mkv", ".mov", ".ts"},
+    "h264": {".mp4", ".mkv", ".mov", ".ts", ".avi"},
+}
+
+
+def compatible_container(encoder: str, source_ext: str) -> str | None:
+    codec = ENCODER_TO_CODEC.get(encoder)
+    if not codec:
+        return None
+    allowed = _CODEC_CONTAINERS.get(codec)
+    if not allowed:
+        return None
+    if source_ext in allowed:
+        return None
+    return ".mp4"
 
 
 @dataclass

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass
@@ -13,7 +14,8 @@ import config
 from core.logger import log
 from core import db
 from core.ffprobe import probe_file, get_duration_us
-from core.ffmpeg import transcode
+from core.ffmpeg import transcode, compatible_container
+from core.devices import encoder_to_device_id
 from core.watcher import suppress_path, unsuppress_path
 
 
@@ -28,6 +30,7 @@ class JobStatus(str, Enum):
 class Job:
     id: str
     file_path: str
+    device: str = "cpu"
     status: JobStatus = JobStatus.PENDING
     old_size_bytes: int = 0
     new_size_bytes: int | None = None
@@ -41,6 +44,7 @@ def job_to_dict(job: Job) -> dict:
     d = {
         "id": job.id,
         "file_path": job.file_path,
+        "device": job.device,
         "status": job.status.value,
         "old_size_bytes": job.old_size_bytes,
         "new_size_bytes": job.new_size_bytes,
@@ -64,7 +68,7 @@ def _format_size(size_bytes: int) -> str:
 class QueueManager:
     def __init__(self) -> None:
         self._pending: list[Job] = []
-        self._active: Job | None = None
+        self._active: dict[str, Job] = {}
         self._subscribers: list[asyncio.Queue[str]] = []
         self._lock = asyncio.Lock()
         self._known_paths: set[str] = set()
@@ -78,8 +82,8 @@ class QueueManager:
         return list(self._pending)
 
     @property
-    def active_job(self) -> Job | None:
-        return self._active
+    def active_jobs(self) -> list[Job]:
+        return list(self._active.values())
 
     @property
     def paused(self) -> bool:
@@ -120,9 +124,13 @@ class QueueManager:
                 self._known_paths.discard(file_path)
                 return None
 
+            m = re.search(r"-c:v\s+(\S+)", ffmpeg_args)
+            device = encoder_to_device_id(m.group(1)) if m else "cpu"
+
             job = Job(
                 id=uuid.uuid4().hex[:12],
                 file_path=file_path,
+                device=device,
                 old_size_bytes=size,
                 ffmpeg_args=ffmpeg_args,
                 output_container=output_container,
@@ -131,7 +139,7 @@ class QueueManager:
 
         await self._broadcast("job_queued", job_to_dict(job))
         self._dispatch_event.set()
-        log.info("Queued: %s [%s]", file_path, job.id)
+        log.info("Queued: %s [%s] device=%s", file_path, job.id, device)
         return job
 
     def subscribe(self) -> asyncio.Queue[str]:
@@ -160,12 +168,17 @@ class QueueManager:
             self._dispatch_event.clear()
 
             async with self._lock:
-                if self._active or not self._pending:
-                    continue
-                job = self._pending.pop(0)
-                self._active = job
-
-            asyncio.create_task(self._run_job(job))
+                # TODO: configurable per-device limits, one job each is ok for now
+                busy = {j.device for j in self._active.values()}
+                still_pending: list[Job] = []
+                for job in self._pending:
+                    if job.device in busy:
+                        still_pending.append(job)
+                        continue
+                    busy.add(job.device)
+                    self._active[job.id] = job
+                    asyncio.create_task(self._run_job(job))
+                self._pending = still_pending
 
     async def _run_job(self, job: Job) -> None:
         job.status = JobStatus.ACTIVE
@@ -178,11 +191,20 @@ class QueueManager:
 
         try:
             probe_data = await probe_file(job.file_path)
+            # progress tracking will need this
             duration_us = get_duration_us(probe_data) if probe_data else 0
 
             input_path = Path(job.file_path)
             container = job.output_container
             out_ext = "." + container if container else input_path.suffix
+
+            m = re.search(r"-c:v\s+(\S+)", job.ffmpeg_args)
+            if m:
+                fixed = compatible_container(m.group(1), out_ext)
+                if fixed:
+                    log.info("Container %s can't hold %s output, using %s",
+                             out_ext, m.group(1), fixed)
+                    out_ext = fixed
 
             cache_dir = config.DATA_DIR / "cache"
             cache_dir.mkdir(parents=True, exist_ok=True)
@@ -229,7 +251,7 @@ class QueueManager:
         finally:
             duration_secs = time.monotonic() - started
             async with self._lock:
-                self._active = None
+                self._active.pop(job.id, None)
                 self._known_paths.discard(job.file_path)
             await db.insert_job_history(
                 id=job.id,

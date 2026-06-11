@@ -13,12 +13,9 @@ router = APIRouter(tags=["queue"])
 
 @router.get("/api/queue")
 async def get_queue():
-    jobs = []
+    jobs = [job_to_dict(j) for j in queue_manager.active_jobs]
     for job in queue_manager.pending_jobs:
         jobs.append(job_to_dict(job))
-    active = queue_manager.active_job
-    if active:
-        jobs.insert(0, job_to_dict(active))
     return jobs
 
 
@@ -28,7 +25,7 @@ async def queue_events():
 
     async def stream():
         init_data = {
-            "active": [job_to_dict(queue_manager.active_job)] if queue_manager.active_job else [],
+            "active": [job_to_dict(j) for j in queue_manager.active_jobs],
             "pending": [job_to_dict(j) for j in queue_manager.pending_jobs],
             "paused": queue_manager.paused,
         }
