@@ -12,6 +12,17 @@ from core.logger import log
 
 
 @dataclass
+class DeviceConfig:
+    max_jobs: int = 1
+
+
+@dataclass
+class Settings:
+    cache_dir: str = "/tmp/undarr"
+    devices: dict[str, DeviceConfig] = field(default_factory=dict)
+
+
+@dataclass
 class Preset:
     ffmpeg_args: str
     output_container: str | None = None
@@ -28,11 +39,21 @@ class Library:
 
 @dataclass
 class Config:
+    settings: Settings = field(default_factory=Settings)
     presets: dict[str, Preset] = field(default_factory=dict)
     libraries: dict[str, Library] = field(default_factory=dict)
 
 
 def _config_from_dict(data: dict) -> Config:
+    raw_settings = data.get("settings") or {}
+    devices: dict[str, DeviceConfig] = {}
+    for dev_id, dev in (raw_settings.get("devices") or {}).items():
+        devices[dev_id] = DeviceConfig(max_jobs=dev.get("max_jobs", 1))
+    settings = Settings(
+        cache_dir=raw_settings.get("cache_dir", "/tmp/undarr"),
+        devices=devices,
+    )
+
     presets: dict[str, Preset] = {}
     for name, p in (data.get("presets") or {}).items():
         presets[name] = Preset(
@@ -50,11 +71,18 @@ def _config_from_dict(data: dict) -> Config:
             scan_unit=lib.get("scan_unit", "hours"),
         )
 
-    return Config(presets=presets, libraries=libraries)
+    return Config(settings=settings, presets=presets, libraries=libraries)
 
 
 def _config_to_dict(cfg: Config) -> dict:
     return {
+        "settings": {
+            "cache_dir": cfg.settings.cache_dir,
+            "devices": {
+                dev_id: {"max_jobs": dc.max_jobs}
+                for dev_id, dc in cfg.settings.devices.items()
+            },
+        },
         "presets": {
             name: {
                 "ffmpeg_args": p.ffmpeg_args,
@@ -107,6 +135,21 @@ class YamlStore:
         except Exception:
             Path(tmp).unlink(missing_ok=True)
             raise
+
+    async def get_settings(self) -> Settings:
+        return self._config.settings
+
+    async def set_cache_dir(self, cache_dir: str) -> Settings:
+        async with self._lock:
+            self._config.settings.cache_dir = cache_dir
+            await self._save()
+        return self._config.settings
+
+    async def update_device_config(self, device_id: str, max_jobs: int) -> DeviceConfig:
+        async with self._lock:
+            self._config.settings.devices[device_id] = DeviceConfig(max_jobs=max_jobs)
+            await self._save()
+        return self._config.settings.devices[device_id]
 
     async def get_presets(self) -> dict[str, Preset]:
         return dict(self._config.presets)

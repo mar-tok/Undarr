@@ -60,3 +60,11 @@ class LibraryUpdate(BaseModel):
     @classmethod
     def check_name(cls, v: str | None) -> str | None:
         return _validate_name(v) if v is not None else None
+
+
+class SettingsUpdate(BaseModel):
+    cache_dir: str | None = None
+
+
+class DeviceUpdate(BaseModel):
+    max_jobs: int

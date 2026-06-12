@@ -16,6 +16,7 @@ from core import db
 from core.ffprobe import probe_file, get_duration_us
 from core.ffmpeg import transcode, compatible_container
 from core.devices import encoder_to_device_id
+from core.yaml_store import store
 from core.watcher import suppress_path, unsuppress_path
 
 
@@ -76,6 +77,8 @@ class QueueManager:
         self._running.set()
         self._dispatcher_task: asyncio.Task | None = None
         self._dispatch_event = asyncio.Event()
+        self._device_limits: dict[str, int] = {}
+        self._device_active: dict[str, int] = {}
 
     @property
     def pending_jobs(self) -> list[Job]:
@@ -89,9 +92,18 @@ class QueueManager:
     def paused(self) -> bool:
         return not self._running.is_set()
 
-    async def start(self) -> None:
+    async def start(self, device_limits: dict[str, int]) -> None:
+        self._device_limits = dict(device_limits)
+        self._device_active = {dev: 0 for dev in device_limits}
         self._dispatcher_task = asyncio.create_task(self._dispatcher())
-        log.info("Queue started")
+        log.info("Queue started, device limits: %s", device_limits)
+
+    async def update_device_limit(self, device_id: str, max_jobs: int) -> None:
+        async with self._lock:
+            self._device_limits[device_id] = max_jobs
+            if device_id not in self._device_active:
+                self._device_active[device_id] = 0
+        log.info("Device %s limit set to %d", device_id, max_jobs)
 
     async def stop(self) -> None:
         if self._dispatcher_task:
@@ -168,15 +180,15 @@ class QueueManager:
             self._dispatch_event.clear()
 
             async with self._lock:
-                # TODO: configurable per-device limits, one job each is ok for now
-                busy = {j.device for j in self._active.values()}
                 still_pending: list[Job] = []
                 for job in self._pending:
-                    if job.device in busy:
+                    limit = self._device_limits.get(job.device, 1)
+                    active = self._device_active.get(job.device, 0)
+                    if active >= limit:
                         still_pending.append(job)
                         continue
-                    busy.add(job.device)
                     self._active[job.id] = job
+                    self._device_active[job.device] = active + 1
                     asyncio.create_task(self._run_job(job))
                 self._pending = still_pending
 
@@ -206,7 +218,8 @@ class QueueManager:
                              out_ext, m.group(1), fixed)
                     out_ext = fixed
 
-            cache_dir = config.DATA_DIR / "cache"
+            settings = await store.get_settings()
+            cache_dir = Path(settings.cache_dir)
             cache_dir.mkdir(parents=True, exist_ok=True)
             temp_output = cache_dir / f"{job.id}{out_ext}"
 
@@ -252,6 +265,7 @@ class QueueManager:
             duration_secs = time.monotonic() - started
             async with self._lock:
                 self._active.pop(job.id, None)
+                self._device_active[job.device] -= 1
                 self._known_paths.discard(job.file_path)
             await db.insert_job_history(
                 id=job.id,
