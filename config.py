@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 
 HOST: str = os.getenv("UNDARR_HOST", "0.0.0.0")
-PORT: int = int(os.getenv("UNDARR_PORT", "8080"))
+PORT: int = int(os.getenv("UNDARR_PORT", "6545"))
 DATA_DIR: Path = Path(os.getenv("UNDARR_DATA_DIR", "data"))
 LOG_DIR: Path = Path(os.getenv("UNDARR_LOG_DIR", "logs"))
 CONFIG_PATH: Path = Path(os.getenv("UNDARR_CONFIG", str(DATA_DIR / "config.yaml")))
