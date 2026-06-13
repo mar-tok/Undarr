@@ -357,6 +357,48 @@ button, button * {
     margin-right: 6px;
 }
 
+#view-settings h2 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+#device-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.device-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 16px;
+}
+
+.device-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.device-card-name {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.device-type {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+}
+
+.device-encoders {
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
 .scanning-badge {
     font-size: 11px;
     font-weight: 600;

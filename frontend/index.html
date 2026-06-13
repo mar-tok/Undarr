@@ -13,6 +13,7 @@
             <button class="nav-item active" data-view="queue">Queue</button>
             <button class="nav-item" data-view="presets">Presets</button>
             <button class="nav-item" data-view="libraries">Libraries</button>
+            <button class="nav-item" data-view="settings">Settings</button>
         </nav>
         <main id="content">
             <div id="view-queue" class="view active">
@@ -41,6 +42,16 @@
             <div id="view-libraries" class="view">
                 <button class="btn btn-primary" id="btn-new-library" style="margin-bottom:16px">New Library</button>
                 <div id="library-grid"></div>
+            </div>
+
+            <div id="view-settings" class="view">
+                <div class="form-group" style="max-width:420px">
+                    <label>Cache Directory</label>
+                    <input type="text" id="set-cache-dir">
+                </div>
+                <button class="btn btn-primary" id="btn-save-settings" style="margin-bottom:24px">Save</button>
+                <h2>Devices</h2>
+                <div id="device-grid"></div>
             </div>
         </main>
     </div>
