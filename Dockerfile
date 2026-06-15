@@ -33,14 +33,14 @@ COPY . .
 RUN chmod -R a+rX /app
 
 ENV UNDARR_HOST=0.0.0.0 \
-    UNDARR_PORT=8080 \
+    UNDARR_PORT=6545 \
     UNDARR_DATA_DIR=/data \
     UNDARR_LOG_DIR=/logs
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 8080
+EXPOSE 6545
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/opt/venv/bin/python", "main.py"]
