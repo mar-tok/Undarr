@@ -42,7 +42,8 @@
         if (viewId === "settings") loadSettings();
     }
 
-    navItems.forEach(n => n.addEventListener("click", () => navigate(n.dataset.view)));
+    navItems.forEach(n => n.addEventListener("click", () => { location.hash = n.dataset.view; }));
+    window.addEventListener("hashchange", () => navigate(location.hash.slice(1) || "queue"));
 
     let activeJobs = [];
     let pendingJobs = [];
@@ -461,5 +462,6 @@
             .catch(err => alert(err.message));
     });
 
+    navigate(location.hash.slice(1) || "queue");
     connectSSE();
 })();
