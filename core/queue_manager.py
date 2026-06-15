@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import shutil
 import time
 import uuid
 from dataclasses import dataclass
@@ -237,7 +238,18 @@ class QueueManager:
                     final_path = input_path
                 suppress_path(str(final_path))
                 try:
-                    temp_output.rename(final_path)
+                    try:
+                        temp_output.rename(final_path)
+                    except OSError:
+                        # cache dir and media can be on different filesystems (Docker)
+                        tmp_dest = final_path.with_suffix(final_path.suffix + ".undarr_tmp")
+                        try:
+                            shutil.copyfile(temp_output, tmp_dest)
+                            tmp_dest.rename(final_path)
+                        except Exception:
+                            tmp_dest.unlink(missing_ok=True)
+                            raise
+                        temp_output.unlink(missing_ok=True)
                     if final_path != input_path:
                         input_path.unlink(missing_ok=True)
                 except Exception:

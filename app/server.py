@@ -39,4 +39,9 @@ app.include_router(queue.router)
 app.include_router(presets.router)
 app.include_router(libraries.router)
 app.include_router(settings.router)
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
