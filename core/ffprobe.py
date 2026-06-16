@@ -48,6 +48,32 @@ async def probe_file(file_path: str) -> dict | None:
         return None
 
 
+async def verify_output(output_path: str, source_duration_us: int) -> tuple[bool, str]:
+    probe_data = await probe_file(output_path)
+    if not probe_data:
+        return False, "Output file is not readable by ffprobe"
+
+    has_video = any(
+        s.get("codec_type") == "video"
+        for s in probe_data.get("streams", [])
+    )
+    if not has_video:
+        return False, "Output file has no video stream"
+
+    if source_duration_us > 0:
+        output_duration_us = get_duration_us(probe_data)
+        if output_duration_us == 0:
+            return False, "Could not determine output file duration"
+        tolerance_us = max(1_000_000, int(source_duration_us * 0.005))
+        diff = abs(output_duration_us - source_duration_us)
+        if diff > tolerance_us:
+            src_s = source_duration_us / 1_000_000
+            out_s = output_duration_us / 1_000_000
+            return False, f"Output duration ({out_s:.1f}s) differs from source ({src_s:.1f}s)"
+
+    return True, ""
+
+
 def get_duration_us(probe_data: dict) -> int:
     fmt = probe_data.get("format", {})
     duration = fmt.get("duration")

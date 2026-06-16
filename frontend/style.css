@@ -99,11 +99,13 @@ table {
 }
 
 #queue-table th:nth-child(1),
-#queue-table td:nth-child(1) { width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#queue-table td:nth-child(1) { width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #queue-table th:nth-child(2),
 #queue-table td:nth-child(2) { width: 20%; }
 #queue-table th:nth-child(3),
-#queue-table td:nth-child(3) { width: 20%; }
+#queue-table td:nth-child(3) { width: 15%; }
+#queue-table th:nth-child(4),
+#queue-table td:nth-child(4) { width: 20%; }
 
 th, td {
     text-align: left;
@@ -198,8 +200,35 @@ button, button * {
 
 .status-completed { color: var(--success); }
 .status-failed { color: var(--error); }
+.status-blocked { color: #e8a735; }
 
-#queue-empty {
+.queue-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+}
+
+.queue-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    padding: 8px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.queue-tab:hover { color: var(--text); }
+.queue-tab.active {
+    color: var(--text);
+    border-bottom-color: var(--accent);
+}
+
+.queue-pane { display: none; }
+.queue-pane.active { display: block; }
+
+#queue-empty, #issues-empty {
     font-size: 13px;
 }
 

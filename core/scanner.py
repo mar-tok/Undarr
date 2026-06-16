@@ -27,12 +27,11 @@ async def scan_library(
     library: Library,
     enqueue_fn,
 ) -> int:
-    files = _collect_video_files(library)
-    preset = await store.get_preset(library.preset)
-    if not preset:
-        log.warning("Scan aborted for '%s': preset '%s' not found", library_name, library.preset)
+    if not library.preset:
+        log.warning("Scan skipped for '%s': no preset assigned", library_name)
         return 0
 
+    files = _collect_video_files(library)
     count = 0
     for file in files:
         file_str = str(file)
@@ -40,16 +39,7 @@ async def scan_library(
         if await db.has_completed_job(file_str):
             continue
 
-        try:
-            size = file.stat().st_size
-        except OSError:
-            continue
-
-        result = await enqueue_fn(
-            file_str,
-            preset.ffmpeg_args,
-            output_container=preset.output_container or "",
-        )
+        result = await enqueue_fn(file_str, library_name)
         if result is not None:
             count += 1
 

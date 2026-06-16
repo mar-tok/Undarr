@@ -11,10 +11,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
-import config
 from core.logger import log
 from core import db
-from core.ffprobe import probe_file, get_duration_us
+from core.ffprobe import probe_file, get_duration_us, verify_output
 from core.ffmpeg import transcode, compatible_container
 from core.devices import encoder_to_device_id
 from core.yaml_store import store
@@ -23,6 +22,7 @@ from core.watcher import suppress_path, unsuppress_path
 
 class JobStatus(str, Enum):
     PENDING = "pending"
+    BLOCKED = "blocked"
     ACTIVE = "active"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -32,6 +32,7 @@ class JobStatus(str, Enum):
 class Job:
     id: str
     file_path: str
+    library_name: str
     device: str = "cpu"
     status: JobStatus = JobStatus.PENDING
     old_size_bytes: int = 0
@@ -40,12 +41,14 @@ class Job:
     error_message: str | None = None
     ffmpeg_args: str = ""
     output_container: str = ""
+    block_reason: str | None = None
 
 
 def job_to_dict(job: Job) -> dict:
     d = {
         "id": job.id,
         "file_path": job.file_path,
+        "library_name": job.library_name,
         "device": job.device,
         "status": job.status.value,
         "old_size_bytes": job.old_size_bytes,
@@ -54,6 +57,8 @@ def job_to_dict(job: Job) -> dict:
     }
     if job.error_message:
         d["error_message"] = job.error_message
+    if job.block_reason:
+        d["block_reason"] = job.block_reason
     return d
 
 
@@ -70,6 +75,7 @@ def _format_size(size_bytes: int) -> str:
 class QueueManager:
     def __init__(self) -> None:
         self._pending: list[Job] = []
+        self._blocked: list[Job] = []
         self._active: dict[str, Job] = {}
         self._subscribers: list[asyncio.Queue[str]] = []
         self._lock = asyncio.Lock()
@@ -88,6 +94,10 @@ class QueueManager:
     @property
     def active_jobs(self) -> list[Job]:
         return list(self._active.values())
+
+    @property
+    def blocked_jobs(self) -> list[Job]:
+        return list(self._blocked)
 
     @property
     def paused(self) -> bool:
@@ -125,8 +135,21 @@ class QueueManager:
         await self._broadcast("queue_paused", {"paused": False})
         log.info("Queue resumed")
 
-    async def enqueue(self, file_path: str, ffmpeg_args: str,
-                      output_container: str = "") -> Job | None:
+    async def _resolve_device(self, library_name: str) -> tuple[str, str | None]:
+        library = await store.get_library(library_name)
+        if not library:
+            return "", "Library not found"
+        if not library.preset:
+            return "", "No preset assigned"
+        preset = await store.get_preset(library.preset)
+        if not preset:
+            return "", f"Preset '{library.preset}' not found"
+        m = re.search(r"-c:v\s+(\S+)", preset.ffmpeg_args)
+        if not m:
+            return "cpu", None
+        return encoder_to_device_id(m.group(1)), None
+
+    async def enqueue(self, file_path: str, library_name: str) -> Job | None:
         async with self._lock:
             if file_path in self._known_paths:
                 return None
@@ -138,23 +161,63 @@ class QueueManager:
                 self._known_paths.discard(file_path)
                 return None
 
-            m = re.search(r"-c:v\s+(\S+)", ffmpeg_args)
-            device = encoder_to_device_id(m.group(1)) if m else "cpu"
+        device_id, block_reason = await self._resolve_device(library_name)
 
+        ffmpeg_args = ""
+        output_container = ""
+        if not block_reason:
+            library = await store.get_library(library_name)
+            preset = await store.get_preset(library.preset)
+            ffmpeg_args = preset.ffmpeg_args
+            output_container = preset.output_container or ""
+
+        async with self._lock:
             job = Job(
                 id=uuid.uuid4().hex[:12],
                 file_path=file_path,
-                device=device,
+                library_name=library_name,
+                device=device_id,
                 old_size_bytes=size,
                 ffmpeg_args=ffmpeg_args,
                 output_container=output_container,
             )
-            self._pending.append(job)
-
-        await self._broadcast("job_queued", job_to_dict(job))
-        self._dispatch_event.set()
-        log.info("Queued: %s [%s] device=%s", file_path, job.id, device)
+            if block_reason:
+                job.status = JobStatus.BLOCKED
+                job.block_reason = block_reason
+                self._blocked.append(job)
+                await self._broadcast("job_blocked", job_to_dict(job))
+                log.info("Blocked: %s [%s] reason=%s", file_path, job.id, block_reason)
+            else:
+                self._pending.append(job)
+                await self._broadcast("job_queued", job_to_dict(job))
+                self._dispatch_event.set()
+                log.info("Queued: %s [%s] device=%s", file_path, job.id, device_id)
         return job
+
+    async def re_evaluate_blocked(self) -> None:
+        unblocked = False
+        async with self._lock:
+            still_blocked = []
+            for job in self._blocked:
+                device_id, reason = await self._resolve_device(job.library_name)
+                if reason:
+                    job.block_reason = reason
+                    still_blocked.append(job)
+                else:
+                    library = await store.get_library(job.library_name)
+                    preset = await store.get_preset(library.preset)
+                    job.status = JobStatus.PENDING
+                    job.device = device_id
+                    job.block_reason = None
+                    job.ffmpeg_args = preset.ffmpeg_args
+                    job.output_container = preset.output_container or ""
+                    self._pending.append(job)
+                    await self._broadcast("job_unblocked", job_to_dict(job))
+                    log.info("Unblocked: %s [%s]", job.file_path, job.id)
+                    unblocked = True
+            self._blocked = still_blocked
+        if unblocked:
+            self._dispatch_event.set()
 
     def subscribe(self) -> asyncio.Queue[str]:
         q: asyncio.Queue[str] = asyncio.Queue()
@@ -205,7 +268,6 @@ class QueueManager:
 
         try:
             probe_data = await probe_file(job.file_path)
-            # progress tracking will need this
             duration_us = get_duration_us(probe_data) if probe_data else 0
 
             input_path = Path(job.file_path)
@@ -233,38 +295,45 @@ class QueueManager:
             ffmpeg_log = result.ffmpeg_log
 
             if result.success:
-                if out_ext != input_path.suffix:
-                    final_path = input_path.with_suffix(out_ext)
+                ok, reason = await verify_output(str(temp_output), duration_us)
+                if not ok:
+                    temp_output.unlink(missing_ok=True)
+                    job.status = JobStatus.FAILED
+                    job.error_message = f"Post-encode verification failed: {reason}"
+                    log.warning("Job %s verification failed: %s", job.id, reason)
                 else:
-                    final_path = input_path
-                suppress_path(str(final_path))
-                try:
+                    if out_ext != input_path.suffix:
+                        final_path = input_path.with_suffix(out_ext)
+                    else:
+                        final_path = input_path
+                    suppress_path(str(final_path))
                     try:
-                        temp_output.rename(final_path)
-                    except OSError:
-                        # cache dir and media can be on different filesystems (Docker)
-                        tmp_dest = final_path.with_suffix(final_path.suffix + ".undarr_tmp")
                         try:
-                            shutil.copyfile(temp_output, tmp_dest)
-                            tmp_dest.rename(final_path)
-                        except Exception:
-                            tmp_dest.unlink(missing_ok=True)
-                            raise
-                        temp_output.unlink(missing_ok=True)
-                    if final_path != input_path:
-                        input_path.unlink(missing_ok=True)
-                except Exception:
-                    unsuppress_path(str(final_path))
-                    raise
-                job.file_path = str(final_path)
+                            temp_output.rename(final_path)
+                        except OSError:
+                            # cache dir and media can be on different filesystems (Docker)
+                            tmp_dest = final_path.with_suffix(final_path.suffix + ".undarr_tmp")
+                            try:
+                                shutil.copyfile(temp_output, tmp_dest)
+                                tmp_dest.rename(final_path)
+                            except Exception:
+                                tmp_dest.unlink(missing_ok=True)
+                                raise
+                            temp_output.unlink(missing_ok=True)
+                        if final_path != input_path:
+                            input_path.unlink(missing_ok=True)
+                    except Exception:
+                        unsuppress_path(str(final_path))
+                        raise
+                    job.file_path = str(final_path)
 
-                job.status = JobStatus.COMPLETED
-                try:
-                    job.new_size_bytes = Path(job.file_path).stat().st_size
-                except OSError:
-                    pass
-                saved = job.old_size_bytes - (job.new_size_bytes or 0)
-                log.info("Completed: %s [%s] saved %s", job.file_path, job.id, _format_size(saved))
+                    job.status = JobStatus.COMPLETED
+                    try:
+                        job.new_size_bytes = Path(job.file_path).stat().st_size
+                    except OSError:
+                        pass
+                    saved = job.old_size_bytes - (job.new_size_bytes or 0)
+                    log.info("Completed: %s [%s] saved %s", job.file_path, job.id, _format_size(saved))
             else:
                 temp_output.unlink(missing_ok=True)
                 job.status = JobStatus.FAILED
@@ -282,7 +351,7 @@ class QueueManager:
                 self._known_paths.discard(job.file_path)
             await db.insert_job_history(
                 id=job.id,
-                library_name="",
+                library_name=job.library_name,
                 file_path=job.file_path,
                 status=job.status.value,
                 old_size_bytes=job.old_size_bytes,

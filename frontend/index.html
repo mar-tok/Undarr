@@ -17,21 +17,43 @@
         </nav>
         <main id="content">
             <div id="view-queue" class="view active">
-                <div class="queue-controls" id="queue-controls" style="display:none">
-                    <button class="btn btn-primary" id="btn-pause">Pause Queue</button>
-                    <span id="pending-count"></span>
+                <div class="queue-tabs" id="queue-tabs">
+                    <button class="queue-tab active" data-qtab="queue">Queue</button>
+                    <button class="queue-tab" data-qtab="issues">Issues</button>
                 </div>
-                <table id="queue-table" style="display:none">
-                    <thead>
-                        <tr>
-                            <th>File</th>
-                            <th>Size</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="queue-body"></tbody>
-                </table>
-                <p id="queue-empty">No jobs in queue.</p>
+                <div class="queue-pane active" id="qtab-queue">
+                    <div class="queue-controls" id="queue-controls" style="display:none">
+                        <button class="btn btn-primary" id="btn-pause">Pause Queue</button>
+                        <span id="pending-count"></span>
+                    </div>
+                    <table id="queue-table" style="display:none">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Library</th>
+                                <th>Size</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="queue-body"></tbody>
+                    </table>
+                    <p id="queue-empty">No jobs in queue.</p>
+                </div>
+                <div class="queue-pane" id="qtab-issues">
+                    <table id="issues-table" style="display:none">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Library</th>
+                                <th>Size</th>
+                                <th>Status</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issues-body"></tbody>
+                    </table>
+                    <p id="issues-empty">No issues.</p>
+                </div>
             </div>
 
             <div id="view-presets" class="view">

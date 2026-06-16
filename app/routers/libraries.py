@@ -56,6 +56,7 @@ async def update_library(name: str, body: LibraryUpdate):
         log.info("Library updated: '%s'", name)
     await watcher.restart(queue_manager.enqueue)
     await periodic_scanner.restart(queue_manager.enqueue)
+    await queue_manager.re_evaluate_blocked()
     return LibraryOut(name=new_name, paths=lib.paths, preset=lib.preset, watch=lib.watch,
                       scan_interval=lib.scan_interval, scan_unit=lib.scan_unit)
 

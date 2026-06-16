@@ -47,6 +47,7 @@
 
     let activeJobs = [];
     let pendingJobs = [];
+    let blockedJobs = [];
     let paused = false;
     let eventSource = null;
 
@@ -70,8 +71,31 @@
             const statusClass = "status-" + job.status;
             html += "<tr>"
                 + "<td title=\"" + esc(job.file_path) + "\">" + esc(basename(job.file_path)) + "</td>"
+                + "<td>" + esc(job.library_name || "") + "</td>"
                 + "<td>" + formatBytes(job.old_size_bytes) + "</td>"
                 + "<td class=\"" + statusClass + "\">" + esc(job.status) + "</td>"
+                + "</tr>";
+        }
+        tbody.innerHTML = html;
+    }
+
+    function renderIssues() {
+        const table = document.getElementById("issues-table");
+        const tbody = document.getElementById("issues-body");
+        const emptyMsg = document.getElementById("issues-empty");
+
+        const hasIssues = blockedJobs.length > 0;
+        table.style.display = hasIssues ? "" : "none";
+        emptyMsg.style.display = hasIssues ? "none" : "";
+
+        let html = "";
+        for (const job of blockedJobs) {
+            html += "<tr>"
+                + "<td title=\"" + esc(job.file_path) + "\">" + esc(basename(job.file_path)) + "</td>"
+                + "<td>" + esc(job.library_name || "") + "</td>"
+                + "<td>" + formatBytes(job.old_size_bytes) + "</td>"
+                + "<td class=\"status-blocked\">blocked</td>"
+                + "<td>" + esc(job.block_reason || "") + "</td>"
                 + "</tr>";
         }
         tbody.innerHTML = html;
@@ -90,9 +114,11 @@
             const data = JSON.parse(e.data);
             activeJobs = data.active || [];
             pendingJobs = data.pending || [];
+            blockedJobs = data.blocked || [];
             paused = data.paused || false;
             updatePauseButton();
             renderQueue();
+            renderIssues();
         });
 
         eventSource.addEventListener("job_queued", e => {
@@ -111,7 +137,22 @@
         eventSource.addEventListener("job_finished", e => {
             const job = JSON.parse(e.data);
             activeJobs = activeJobs.filter(j => j.id !== job.id);
+            blockedJobs = blockedJobs.filter(j => j.id !== job.id);
             renderQueue();
+            renderIssues();
+        });
+
+        eventSource.addEventListener("job_blocked", e => {
+            blockedJobs.push(JSON.parse(e.data));
+            renderIssues();
+        });
+
+        eventSource.addEventListener("job_unblocked", e => {
+            const job = JSON.parse(e.data);
+            blockedJobs = blockedJobs.filter(j => j.id !== job.id);
+            pendingJobs.push(job);
+            renderQueue();
+            renderIssues();
         });
 
         eventSource.addEventListener("queue_paused", e => {
@@ -127,6 +168,15 @@
 
     document.getElementById("btn-pause").addEventListener("click", () => {
         api("POST", "/api/queue/pause", { paused: !paused });
+    });
+
+    document.querySelectorAll("#queue-tabs .queue-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll("#queue-tabs .queue-tab").forEach(t => t.classList.toggle("active", t === tab));
+            document.querySelectorAll("#view-queue .queue-pane").forEach(p => {
+                p.classList.toggle("active", p.id === "qtab-" + tab.dataset.qtab);
+            });
+        });
     });
 
     let presets = [];

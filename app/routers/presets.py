@@ -4,6 +4,7 @@ from core.logger import log
 from app.models.requests import PresetCreate, PresetUpdate
 from app.models.responses import PresetOut
 from core.yaml_store import store, Preset
+from core.queue_manager import queue_manager
 
 router = APIRouter(prefix="/api/presets", tags=["presets"])
 
@@ -32,6 +33,7 @@ async def create_preset(body: PresetCreate):
     )
     await store.create_preset(body.name, preset)
     log.info("Preset created: '%s'", body.name)
+    await queue_manager.re_evaluate_blocked()
     return _preset_out(body.name, preset)
 
 
@@ -52,6 +54,7 @@ async def update_preset(name: str, body: PresetUpdate):
     else:
         await store.update_preset(name, preset)
         log.info("Preset updated: '%s'", name)
+    await queue_manager.re_evaluate_blocked()
     return _preset_out(new_name, preset)
 
 

@@ -16,6 +16,8 @@ async def get_queue():
     jobs = [job_to_dict(j) for j in queue_manager.active_jobs]
     for job in queue_manager.pending_jobs:
         jobs.append(job_to_dict(job))
+    for job in queue_manager.blocked_jobs:
+        jobs.append(job_to_dict(job))
     return jobs
 
 
@@ -27,6 +29,7 @@ async def queue_events():
         init_data = {
             "active": [job_to_dict(j) for j in queue_manager.active_jobs],
             "pending": [job_to_dict(j) for j in queue_manager.pending_jobs],
+            "blocked": [job_to_dict(j) for j in queue_manager.blocked_jobs],
             "paused": queue_manager.paused,
         }
         yield f"event: init\ndata: {json.dumps(init_data)}\n\n"

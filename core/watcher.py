@@ -57,17 +57,7 @@ class _VideoHandler(FileSystemEventHandler):
 
     async def _handle_file(self, path: str) -> None:
         log.debug("File detected: %s", path)
-        library = await store.get_library(self._library_name)
-        if not library:
-            return
-        preset = await store.get_preset(library.preset)
-        if not preset:
-            return
-        await self._enqueue_fn(
-            path,
-            preset.ffmpeg_args,
-            output_container=preset.output_container or "",
-        )
+        await self._enqueue_fn(path, self._library_name)
 
     def on_created(self, event: FileCreatedEvent) -> None:
         if not event.is_directory:
