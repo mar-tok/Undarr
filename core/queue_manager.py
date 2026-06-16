@@ -104,6 +104,7 @@ class QueueManager:
             self._device_limits[device_id] = max_jobs
             if device_id not in self._device_active:
                 self._device_active[device_id] = 0
+        self._dispatch_event.set()
         log.info("Device %s limit set to %d", device_id, max_jobs)
 
     async def stop(self) -> None:

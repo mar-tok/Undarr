@@ -103,7 +103,8 @@
         eventSource.addEventListener("job_started", e => {
             const job = JSON.parse(e.data);
             pendingJobs = pendingJobs.filter(j => j.id !== job.id);
-            activeJobs = [job];
+            activeJobs = activeJobs.filter(j => j.id !== job.id);
+            activeJobs.push(job);
             renderQueue();
         });
 
@@ -457,7 +458,7 @@
     });
 
     document.getElementById("btn-save-settings").addEventListener("click", () => {
-        const dir = document.getElementById("set-cache-dir").value.trim();
+        const dir = document.getElementById("set-cache-dir").value.trim() || "/tmp/undarr";
         api("PATCH", "/api/settings", { cache_dir: dir })
             .catch(err => alert(err.message));
     });

@@ -21,6 +21,8 @@ async def get_settings():
 async def update_settings(body: SettingsUpdate):
     s = await store.get_settings()
     if body.cache_dir is not None:
+        if not body.cache_dir.strip():
+            raise HTTPException(400, "Cache directory cannot be empty")
         s = await store.set_cache_dir(body.cache_dir)
         log.info("Cache dir set to %s", s.cache_dir)
     return {"cache_dir": s.cache_dir}
