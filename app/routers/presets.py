@@ -60,6 +60,14 @@ async def update_preset(name: str, body: PresetUpdate):
 
 @router.delete("/{name}", status_code=204)
 async def delete_preset(name: str):
+    libraries = await store.get_libraries()
+    in_use = [n for n, lib in libraries.items() if lib.preset == name]
+    if in_use:
+        raise HTTPException(
+            409,
+            f"Cannot delete this preset because it is assigned to: {', '.join(in_use)}. "
+            "Reassign those libraries to a different preset first.",
+        )
     if not await store.delete_preset(name):
         raise HTTPException(404, "Preset not found")
     log.info("Preset deleted: '%s'", name)

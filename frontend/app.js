@@ -24,9 +24,12 @@
             opts.headers["Content-Type"] = "application/json";
             opts.body = JSON.stringify(body);
         }
-        return fetch(path, opts).then(res => {
+        return fetch(path, opts).then(async res => {
             if (res.status === 204) return null;
-            if (!res.ok) throw new Error(res.statusText);
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                throw new Error(data && data.detail ? data.detail : res.statusText);
+            }
             return res.json();
         });
     }
