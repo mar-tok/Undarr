@@ -48,6 +48,7 @@
     let activeJobs = [];
     let pendingJobs = [];
     let blockedJobs = [];
+    let failedJobs = [];
     let paused = false;
     let eventSource = null;
 
@@ -84,7 +85,8 @@
         const tbody = document.getElementById("issues-body");
         const emptyMsg = document.getElementById("issues-empty");
 
-        const hasIssues = blockedJobs.length > 0;
+        const all = blockedJobs.concat(failedJobs);
+        const hasIssues = all.length > 0;
         table.style.display = hasIssues ? "" : "none";
         emptyMsg.style.display = hasIssues ? "none" : "";
 
@@ -96,6 +98,20 @@
                 + "<td>" + formatBytes(job.old_size_bytes) + "</td>"
                 + "<td class=\"status-blocked\">blocked</td>"
                 + "<td>" + esc(job.block_reason || "") + "</td>"
+                + "<td></td>"
+                + "</tr>";
+        }
+        for (const job of failedJobs) {
+            html += "<tr>"
+                + "<td title=\"" + esc(job.file_path) + "\">" + esc(basename(job.file_path)) + "</td>"
+                + "<td>" + esc(job.library_name || "") + "</td>"
+                + "<td>" + formatBytes(job.old_size_bytes) + "</td>"
+                + "<td class=\"status-failed\">failed</td>"
+                + "<td>" + esc(job.error_message || "") + "</td>"
+                + "<td class=\"issue-actions\">"
+                + "<button class=\"btn btn-sm\" data-retry=\"" + esc(job.id) + "\">Retry</button>"
+                + "<button class=\"btn btn-sm\" data-dismiss=\"" + esc(job.id) + "\">Dismiss</button>"
+                + "</td>"
                 + "</tr>";
         }
         tbody.innerHTML = html;
@@ -138,6 +154,9 @@
             const job = JSON.parse(e.data);
             activeJobs = activeJobs.filter(j => j.id !== job.id);
             blockedJobs = blockedJobs.filter(j => j.id !== job.id);
+            if (job.status === "failed") {
+                failedJobs.push(job);
+            }
             renderQueue();
             renderIssues();
         });
@@ -177,6 +196,26 @@
                 p.classList.toggle("active", p.id === "qtab-" + tab.dataset.qtab);
             });
         });
+    });
+
+    document.getElementById("issues-body").addEventListener("click", e => {
+        const retryBtn = e.target.closest("[data-retry]");
+        if (retryBtn) {
+            const id = retryBtn.dataset.retry;
+            api("POST", "/api/queue/retry", { ids: [id] }).then(() => {
+                failedJobs = failedJobs.filter(j => j.id !== id);
+                renderIssues();
+            }).catch(err => alert(err.message));
+            return;
+        }
+        const dismissBtn = e.target.closest("[data-dismiss]");
+        if (dismissBtn) {
+            const id = dismissBtn.dataset.dismiss;
+            api("POST", "/api/history/dismiss", { ids: [id] }).then(() => {
+                failedJobs = failedJobs.filter(j => j.id !== id);
+                renderIssues();
+            }).catch(err => alert(err.message));
+        }
     });
 
     let presets = [];

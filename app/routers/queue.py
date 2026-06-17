@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from core.queue_manager import queue_manager, job_to_dict
+from core import db
 
 router = APIRouter(tags=["queue"])
 
@@ -55,3 +57,31 @@ async def pause_queue(body: dict):
     else:
         await queue_manager.resume()
     return {"paused": queue_manager.paused}
+
+
+@router.post("/api/queue/retry")
+async def retry_jobs(body: dict):
+    ids = body.get("ids", [])
+    retried = 0
+    to_dismiss = []
+    for job_id in ids:
+        entry = await db.get_history_entry(job_id)
+        if not entry or entry["status"] != "failed":
+            continue
+        if not Path(entry["file_path"]).exists():
+            continue
+        job = await queue_manager.enqueue(entry["file_path"], entry["library_name"])
+        if job is None:
+            continue
+        to_dismiss.append(job_id)
+        retried += 1
+    if to_dismiss:
+        await db.dismiss_history_entries(to_dismiss)
+    return {"retried": retried}
+
+
+@router.post("/api/history/dismiss")
+async def dismiss_history(body: dict):
+    ids = body.get("ids", [])
+    dismissed = await db.dismiss_history_entries(ids)
+    return {"dismissed": dismissed}

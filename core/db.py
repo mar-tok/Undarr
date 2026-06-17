@@ -19,9 +19,16 @@ CREATE TABLE IF NOT EXISTS job_history (
     finished_at      TEXT NOT NULL,
     duration_seconds REAL NOT NULL,
     ffmpeg_log       TEXT NOT NULL DEFAULT '',
-    error_message    TEXT
+    error_message    TEXT,
+    dismissed        INTEGER NOT NULL DEFAULT 0
 );
 """
+
+
+async def _column_names(conn: aiosqlite.Connection, table: str) -> set[str]:
+    cursor = await conn.execute(f"PRAGMA table_info({table})")
+    rows = await cursor.fetchall()
+    return {row[1] for row in rows}
 
 
 async def init_db() -> None:
@@ -32,6 +39,12 @@ async def init_db() -> None:
     _db.row_factory = aiosqlite.Row
     await _db.executescript(SCHEMA)
     await _db.commit()
+
+    cols = await _column_names(_db, "job_history")
+    if "dismissed" not in cols:
+        await _db.execute("ALTER TABLE job_history ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0")
+        await _db.commit()
+
     log.info("Database initialized at %s", db_path)
 
 
@@ -80,3 +93,26 @@ async def insert_job_history(
          started_at, finished_at, duration_seconds, ffmpeg_log, error_message),
     )
     await db.commit()
+
+
+async def get_history_entry(job_id: str) -> dict | None:
+    db = get_db()
+    cursor = await db.execute(
+        "SELECT id, library_name, file_path, status, old_size_bytes FROM job_history WHERE id = ?",
+        (job_id,),
+    )
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def dismiss_history_entries(job_ids: list[str]) -> int:
+    if not job_ids:
+        return 0
+    db = get_db()
+    placeholders = ",".join("?" for _ in job_ids)
+    cursor = await db.execute(
+        f"UPDATE job_history SET dismissed = 1 WHERE id IN ({placeholders})",
+        job_ids,
+    )
+    await db.commit()
+    return cursor.rowcount

@@ -187,6 +187,21 @@ button, button * {
     color: #000;
 }
 
+.btn-sm {
+    padding: 4px 12px;
+    height: 28px;
+    min-width: 0;
+    font-size: 12px;
+}
+
+.issue-actions {
+    white-space: nowrap;
+}
+
+.issue-actions .btn-sm {
+    margin-left: 4px;
+}
+
 .queue-controls {
     display: flex;
     align-items: center;
