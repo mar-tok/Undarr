@@ -4,11 +4,12 @@ import asyncio
 import json
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from core.queue_manager import queue_manager, job_to_dict
 from core import db
+from app.models.responses import HistoryOut
 
 router = APIRouter(tags=["queue"])
 
@@ -85,3 +86,17 @@ async def dismiss_history(body: dict):
     ids = body.get("ids", [])
     dismissed = await db.dismiss_history_entries(ids)
     return {"dismissed": dismissed}
+
+@router.get("/api/history", response_model=list[HistoryOut])
+async def get_history(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    status: str | None = Query(None),
+    sort_by: str = Query("finished_at"),
+    sort_dir: str = Query("desc"),
+):
+    rows = await db.get_history(
+        limit=limit, offset=offset, status=status,
+        sort_by=sort_by, sort_dir=sort_dir,
+    )
+    return [HistoryOut(**r) for r in rows]

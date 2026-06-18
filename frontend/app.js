@@ -18,6 +18,13 @@
         return path.split(/[\\/]/).pop() || path;
     }
 
+    function formatDate(iso) {
+        if (!iso) return "-";
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        return d.toLocaleString();
+    }
+
     function api(method, path, body) {
         const opts = { method, headers: {} };
         if (body !== undefined) {
@@ -198,6 +205,7 @@
             document.querySelectorAll("#view-queue .queue-pane").forEach(p => {
                 p.classList.toggle("active", p.id === "qtab-" + tab.dataset.qtab);
             });
+            if (tab.dataset.qtab === "history") loadHistory();
         });
     });
 
@@ -219,6 +227,105 @@
                 renderIssues();
             }).catch(err => alert(err.message));
         }
+    });
+
+    let historyData = [];
+    let historyPage = 0;
+    let historyPageSize = 50;
+    let historySortBy = "finished_at";
+    let historySortDir = "desc";
+    let historyStatusFilter = "";
+
+    function loadHistory() {
+        const params = new URLSearchParams();
+        params.set("limit", historyPageSize);
+        params.set("offset", historyPage * historyPageSize);
+        params.set("sort_by", historySortBy);
+        params.set("sort_dir", historySortDir);
+        if (historyStatusFilter) params.set("status", historyStatusFilter);
+        api("GET", "/api/history?" + params.toString()).then(rows => {
+            historyData = rows;
+            renderHistory();
+        });
+    }
+
+    function updateSortArrows() {
+        document.querySelectorAll("#history-table th.sortable").forEach(th => {
+            const existing = th.querySelector(".sort-arrow");
+            if (existing) existing.remove();
+            if (th.dataset.sort === historySortBy) {
+                const arrow = document.createElement("span");
+                arrow.className = "sort-arrow";
+                arrow.textContent = historySortDir === "asc" ? " ▲" : " ▼";
+                th.appendChild(arrow);
+            }
+        });
+    }
+
+    function renderHistory() {
+        const table = document.getElementById("history-table");
+        const tbody = document.getElementById("history-body");
+        const emptyMsg = document.getElementById("history-empty");
+
+        updateSortArrows();
+
+        const hasRows = historyData.length > 0;
+        table.style.display = hasRows ? "" : "none";
+        emptyMsg.style.display = hasRows ? "none" : "";
+
+        let html = "";
+        for (const r of historyData) {
+            html += "<tr>"
+                + "<td title=\"" + esc(r.file_path) + "\">" + esc(basename(r.file_path)) + "</td>"
+                + "<td>" + esc(r.library_name) + "</td>"
+                + "<td>" + formatBytes(r.old_size_bytes) + "</td>"
+                + "<td>" + formatBytes(r.new_size_bytes) + "</td>"
+                + "<td>" + formatDate(r.finished_at) + "</td>"
+                + "<td class=\"status-" + esc(r.status.replace(/\s+/g, "-")) + "\">" + esc(r.status) + "</td>"
+                + "</tr>";
+        }
+        tbody.innerHTML = html;
+
+        renderHistoryPagination();
+    }
+
+    function renderHistoryPagination() {
+        const el = document.getElementById("history-pagination");
+        const hasPrev = historyPage > 0;
+        const hasNext = historyData.length === historyPageSize;
+        const sizes = [25, 50, 100, 200].map(n =>
+            "<option value=\"" + n + "\"" + (n === historyPageSize ? " selected" : "") + ">" + n + " / page</option>"
+        ).join("");
+        el.innerHTML = "<button class=\"btn btn-sm\" id=\"hist-prev\"" + (hasPrev ? "" : " disabled") + ">Prev</button>"
+            + "<span class=\"hist-page-label\">Page " + (historyPage + 1) + "</span>"
+            + "<button class=\"btn btn-sm\" id=\"hist-next\"" + (hasNext ? "" : " disabled") + ">Next</button>"
+            + "<select id=\"hist-page-size\">" + sizes + "</select>";
+        if (hasPrev) document.getElementById("hist-prev").addEventListener("click", () => { historyPage--; loadHistory(); });
+        if (hasNext) document.getElementById("hist-next").addEventListener("click", () => { historyPage++; loadHistory(); });
+        document.getElementById("hist-page-size").addEventListener("change", e => {
+            historyPageSize = parseInt(e.target.value);
+            historyPage = 0;
+            loadHistory();
+        });
+    }
+
+    document.querySelectorAll("#history-table th.sortable").forEach(th => {
+        th.addEventListener("click", () => {
+            const col = th.dataset.sort;
+            if (historySortBy === col) {
+                historySortDir = historySortDir === "asc" ? "desc" : "asc";
+            } else {
+                historySortBy = col;
+                historySortDir = col === "finished_at" ? "desc" : "asc";
+            }
+            loadHistory();
+        });
+    });
+
+    document.getElementById("history-status-filter").addEventListener("change", e => {
+        historyStatusFilter = e.target.value;
+        historyPage = 0;
+        loadHistory();
     });
 
     let presets = [];

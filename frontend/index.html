@@ -20,6 +20,7 @@
                 <div class="queue-tabs" id="queue-tabs">
                     <button class="queue-tab active" data-qtab="queue">Queue</button>
                     <button class="queue-tab" data-qtab="issues">Issues</button>
+                    <button class="queue-tab" data-qtab="history">History</button>
                 </div>
                 <div class="queue-pane active" id="qtab-queue">
                     <div class="queue-controls" id="queue-controls" style="display:none">
@@ -54,6 +55,30 @@
                         <tbody id="issues-body"></tbody>
                     </table>
                     <p id="issues-empty">No issues.</p>
+                </div>
+                <div class="queue-pane" id="qtab-history">
+                    <div class="history-toolbar">
+                        <select id="history-status-filter">
+                            <option value="">All statuses</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <table id="history-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="file_path">File</th>
+                                <th class="sortable" data-sort="library_name">Library</th>
+                                <th class="sortable" data-sort="old_size_bytes">Original</th>
+                                <th class="sortable" data-sort="new_size_bytes">New</th>
+                                <th class="sortable" data-sort="finished_at">Finished</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-body"></tbody>
+                    </table>
+                    <p id="history-empty">No history yet.</p>
+                    <div class="history-pagination" id="history-pagination"></div>
                 </div>
             </div>
 

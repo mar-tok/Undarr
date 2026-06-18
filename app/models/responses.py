@@ -16,3 +16,16 @@ class LibraryOut(BaseModel):
     watch: bool
     scan_interval: int = 0
     scan_unit: str = "hours"
+
+
+class HistoryOut(BaseModel):
+    id: str
+    library_name: str
+    file_path: str
+    status: str
+    old_size_bytes: int
+    new_size_bytes: int | None = None
+    started_at: str
+    finished_at: str
+    duration_seconds: float
+    error_message: str | None = None

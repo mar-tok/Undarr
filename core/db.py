@@ -95,6 +95,40 @@ async def insert_job_history(
     await db.commit()
 
 
+HISTORY_SORT_COLUMNS = {
+    "finished_at", "file_path", "library_name",
+    "old_size_bytes","new_size_bytes",
+}
+
+
+async def get_history(
+    limit: int = 50,
+    offset: int = 0,
+    status: str | None = None,
+    sort_by: str = "finished_at",
+    sort_dir: str = "desc",
+) -> list[dict]:
+    db = get_db()
+    conditions: list[str] = []
+    params: list = []
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    col = sort_by if sort_by in HISTORY_SORT_COLUMNS else "finished_at"
+    direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
+
+    cursor = await db.execute(
+        f"""SELECT id, library_name, file_path, status, old_size_bytes, new_size_bytes,
+                   started_at, finished_at, duration_seconds, error_message
+            FROM job_history {where}
+            ORDER BY {col} {direction} LIMIT ? OFFSET ?""",
+        (*params, limit, offset),
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows]
+
 async def get_history_entry(job_id: str) -> dict | None:
     db = get_db()
     cursor = await db.execute(

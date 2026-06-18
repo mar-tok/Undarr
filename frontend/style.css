@@ -251,6 +251,46 @@ button, button * {
     background: #272727;
 }
 
+#history-table tbody tr:nth-child(even) {
+    background: #272727;
+}
+
+#history-table th:nth-child(1),
+#history-table td:nth-child(1) { width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+#history-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sort-arrow {
+    font-size: 10px;
+}
+
+.history-toolbar {
+    margin-bottom: 12px;
+}
+
+.history-toolbar select {
+    width: auto;
+    min-width: 160px;
+}
+
+.history-pagination {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.history-pagination select {
+    width: auto;
+}
+
+.hist-page-label {
+    font-size: 13px;
+}
+
 .form-group {
     display: flex;
     flex-direction: column;
