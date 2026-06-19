@@ -21,8 +21,23 @@
     function formatDate(iso) {
         if (!iso) return "-";
         const d = new Date(iso);
-        if (isNaN(d.getTime())) return iso;
-        return d.toLocaleString();
+        if (isNaN(d)) return "-";
+        const now = new Date();
+        const pad = n => String(n).padStart(2, "0");
+        const time = pad(d.getHours()) + ":" + pad(d.getMinutes());
+        const sameYear = d.getFullYear() === now.getFullYear();
+        const date = pad(d.getDate()) + "/" + pad(d.getMonth() + 1);
+        return sameYear ? date + " " + time : date + "/" + d.getFullYear() + " " + time;
+    }
+
+    function formatDuration(secs) {
+        if (secs == null || secs < 0) return "-";
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = Math.floor(secs % 60);
+        if (h > 0) return h + "h " + m + "m " + s + "s";
+        if (m > 0) return m + "m " + s + "s";
+        return s + "s";
     }
 
     function api(method, path, body) {
@@ -274,8 +289,9 @@
         emptyMsg.style.display = hasRows ? "none" : "";
 
         let html = "";
-        for (const r of historyData) {
-            html += "<tr>"
+        for (let i = 0; i < historyData.length; i++) {
+            const r = historyData[i];
+            html += "<tr class=\"clickable" + (i % 2 ? " stripe" : "") + "\" data-job-id=\"" + esc(r.id) + "\">"
                 + "<td title=\"" + esc(r.file_path) + "\">" + esc(basename(r.file_path)) + "</td>"
                 + "<td>" + esc(r.library_name) + "</td>"
                 + "<td>" + formatBytes(r.old_size_bytes) + "</td>"
@@ -308,6 +324,83 @@
             loadHistory();
         });
     }
+
+    function buildDetailMessage(r) {
+        const lines = [];
+        if (r.status === "completed") {
+            lines.push("Completed successfully.");
+            if (r.new_size_bytes != null && r.old_size_bytes > 0) {
+                const saved = r.old_size_bytes - r.new_size_bytes;
+                const pct = Math.round((saved / r.old_size_bytes) * 100);
+                lines.push("Saved: " + formatBytes(saved) + " (" + pct + "% smaller than original)");
+            }
+            lines.push("Duration: " + formatDuration(r.duration_seconds));
+        } else if (r.error_message) {
+            lines.push(r.error_message);
+        }
+        lines.push("Path: " + r.file_path);
+        if (r.preset_name) lines.push("Preset: " + r.preset_name);
+        if (r.device_name) lines.push("Device: " + r.device_name);
+        return lines.map(esc).join("<br>");
+    }
+
+    function expandHistoryRow(row) {
+        const jobId = row.dataset.jobId;
+        const r = historyData.find(x => x.id === jobId);
+        const detail = r ? buildDetailMessage(r) : "";
+        const expandRow = document.createElement("tr");
+        expandRow.className = "log-row";
+        expandRow.innerHTML = "<td colspan=\"6\">"
+            + (detail ? "<div class=\"history-detail\">" + detail + "</div>" : "")
+            + "<button class=\"btn btn-copy-log\" style=\"margin-bottom:8px\">Copy to Clipboard</button>"
+            + "<div class=\"log-expand\" id=\"log-" + jobId + "\">Loading...</div>"
+            + "</td>";
+        row.after(expandRow);
+        expandRow.querySelector(".btn-copy-log").addEventListener("click", e => {
+            e.stopPropagation();
+            const logEl = document.getElementById("log-" + jobId);
+            if (!logEl) return;
+            const btn = e.currentTarget;
+            const ta = document.createElement("textarea");
+            ta.value = logEl.textContent;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+            let msg = btn.nextElementSibling;
+            if (msg && msg.classList.contains("copy-confirm")) msg.remove();
+            msg = document.createElement("span");
+            msg.className = "copy-confirm";
+            msg.textContent = "Copied!";
+            btn.after(msg);
+            setTimeout(() => msg.remove(), 4000);
+        });
+        fetchLog(jobId);
+    }
+
+    function toggleLog(row) {
+        const next = row.nextElementSibling;
+        if (next && next.classList.contains("log-row")) {
+            next.remove();
+            return;
+        }
+        expandHistoryRow(row);
+    }
+
+    function fetchLog(jobId) {
+        const el = document.getElementById("log-" + jobId);
+        if (!el) return;
+        api("GET", "/api/history/" + encodeURIComponent(jobId) + "/log").then(data => {
+            el.textContent = data.log || "(empty)";
+        }).catch(() => { el.textContent = "(failed to load log)"; });
+    }
+
+    document.getElementById("history-body").addEventListener("click", e => {
+        const row = e.target.closest("tr.clickable");
+        if (row) toggleLog(row);
+    });
 
     document.querySelectorAll("#history-table th.sortable").forEach(th => {
         th.addEventListener("click", () => {

@@ -15,7 +15,7 @@ from core.logger import log
 from core import db
 from core.ffprobe import probe_file, get_duration_us, verify_output
 from core.ffmpeg import transcode, compatible_container
-from core.devices import encoder_to_device_id
+from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store
 from core.watcher import suppress_path, unsuppress_path
 
@@ -41,6 +41,7 @@ class Job:
     error_message: str | None = None
     ffmpeg_args: str = ""
     output_container: str = ""
+    preset_name: str = ""
     block_reason: str | None = None
 
 
@@ -165,11 +166,13 @@ class QueueManager:
 
         ffmpeg_args = ""
         output_container = ""
+        preset_name = ""
         if not block_reason:
             library = await store.get_library(library_name)
             preset = await store.get_preset(library.preset)
             ffmpeg_args = preset.ffmpeg_args
             output_container = preset.output_container or ""
+            preset_name = library.preset
 
         async with self._lock:
             job = Job(
@@ -180,6 +183,7 @@ class QueueManager:
                 old_size_bytes=size,
                 ffmpeg_args=ffmpeg_args,
                 output_container=output_container,
+                preset_name=preset_name,
             )
             if block_reason:
                 job.status = JobStatus.BLOCKED
@@ -211,6 +215,7 @@ class QueueManager:
                     job.block_reason = None
                     job.ffmpeg_args = preset.ffmpeg_args
                     job.output_container = preset.output_container or ""
+                    job.preset_name = library.preset
                     self._pending.append(job)
                     await self._broadcast("job_unblocked", job_to_dict(job))
                     log.info("Unblocked: %s [%s]", job.file_path, job.id)
@@ -361,6 +366,8 @@ class QueueManager:
                 duration_seconds=duration_secs,
                 ffmpeg_log=ffmpeg_log,
                 error_message=job.error_message,
+                preset_name=job.preset_name,
+                device_name=device_display_name(job.device),
             )
             await self._broadcast("job_finished", job_to_dict(job))
             self._dispatch_event.set()

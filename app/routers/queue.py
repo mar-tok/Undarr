@@ -4,7 +4,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from core.queue_manager import queue_manager, job_to_dict
@@ -100,3 +100,11 @@ async def get_history(
         sort_by=sort_by, sort_dir=sort_dir,
     )
     return [HistoryOut(**r) for r in rows]
+
+
+@router.get("/api/history/{job_id}/log")
+async def get_job_log(job_id: str):
+    log_text = await db.get_job_log(job_id)
+    if log_text is None:
+        raise HTTPException(404, "Job not found")
+    return {"log": log_text}

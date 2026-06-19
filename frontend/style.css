@@ -251,7 +251,7 @@ button, button * {
     background: #272727;
 }
 
-#history-table tbody tr:nth-child(even) {
+#history-table tbody tr.stripe {
     background: #272727;
 }
 
@@ -289,6 +289,42 @@ button, button * {
 
 .hist-page-label {
     font-size: 13px;
+}
+
+tr.clickable, tr.clickable * {
+    cursor: pointer;
+}
+
+tr.clickable:hover {
+    background: var(--bg-tertiary);
+}
+
+.history-detail {
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 8px;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.log-expand {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    padding: 12px;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
+    height: 300px;
+    overflow-y: auto;
+    resize: vertical;
+}
+
+.copy-confirm {
+    color: var(--success);
+    font-size: 13px;
+    margin-left: 8px;
 }
 
 .form-group {

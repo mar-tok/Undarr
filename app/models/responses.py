@@ -29,3 +29,5 @@ class HistoryOut(BaseModel):
     finished_at: str
     duration_seconds: float
     error_message: str | None = None
+    preset_name: str = ""
+    device_name: str = ""

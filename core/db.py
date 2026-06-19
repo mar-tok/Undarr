@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS job_history (
     duration_seconds REAL NOT NULL,
     ffmpeg_log       TEXT NOT NULL DEFAULT '',
     error_message    TEXT,
-    dismissed        INTEGER NOT NULL DEFAULT 0
+    dismissed        INTEGER NOT NULL DEFAULT 0,
+    preset_name      TEXT NOT NULL DEFAULT '',
+    device_name      TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -43,6 +45,10 @@ async def init_db() -> None:
     cols = await _column_names(_db, "job_history")
     if "dismissed" not in cols:
         await _db.execute("ALTER TABLE job_history ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0")
+        await _db.commit()
+    if "preset_name" not in cols:
+        await _db.execute("ALTER TABLE job_history ADD COLUMN preset_name TEXT NOT NULL DEFAULT ''")
+        await _db.execute("ALTER TABLE job_history ADD COLUMN device_name TEXT NOT NULL DEFAULT ''")
         await _db.commit()
 
     log.info("Database initialized at %s", db_path)
@@ -82,15 +88,19 @@ async def insert_job_history(
     duration_seconds: float,
     ffmpeg_log: str,
     error_message: str | None,
+    preset_name: str = "",
+    device_name: str = "",
 ) -> None:
     db = get_db()
     await db.execute(
         """INSERT INTO job_history
            (id, library_name, file_path, status, old_size_bytes, new_size_bytes,
-            started_at, finished_at, duration_seconds, ffmpeg_log, error_message)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            started_at, finished_at, duration_seconds, ffmpeg_log, error_message,
+            preset_name, device_name)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (id, library_name, file_path, status, old_size_bytes, new_size_bytes,
-         started_at, finished_at, duration_seconds, ffmpeg_log, error_message),
+         started_at, finished_at, duration_seconds, ffmpeg_log, error_message,
+         preset_name, device_name),
     )
     await db.commit()
 
@@ -121,7 +131,8 @@ async def get_history(
 
     cursor = await db.execute(
         f"""SELECT id, library_name, file_path, status, old_size_bytes, new_size_bytes,
-                   started_at, finished_at, duration_seconds, error_message
+                   started_at, finished_at, duration_seconds, error_message,
+                   preset_name, device_name
             FROM job_history {where}
             ORDER BY {col} {direction} LIMIT ? OFFSET ?""",
         (*params, limit, offset),
@@ -150,3 +161,12 @@ async def dismiss_history_entries(job_ids: list[str]) -> int:
     )
     await db.commit()
     return cursor.rowcount
+
+
+async def get_job_log(job_id: str) -> str | None:
+    db = get_db()
+    cursor = await db.execute(
+        "SELECT ffmpeg_log FROM job_history WHERE id = ?", (job_id,)
+    )
+    row = await cursor.fetchone()
+    return row["ffmpeg_log"] if row else None

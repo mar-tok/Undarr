@@ -151,3 +151,11 @@ def encoder_to_device_id(encoder_name: str) -> str:
         if encoder_name.endswith(suffix):
             return dev_id
     return "cpu"
+
+
+def device_display_name(device_id: str) -> str:
+    if _device_cache:
+        for dev in _device_cache:
+            if dev.id == device_id:
+                return dev.name
+    return device_id
