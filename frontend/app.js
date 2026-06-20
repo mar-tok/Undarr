@@ -250,6 +250,7 @@
     let historySortBy = "finished_at";
     let historySortDir = "desc";
     let historyStatusFilter = "";
+    const expandedHistoryIds = new Set();
 
     function loadHistory() {
         const params = new URLSearchParams();
@@ -301,6 +302,12 @@
                 + "</tr>";
         }
         tbody.innerHTML = html;
+
+        for (const id of expandedHistoryIds) {
+            const row = tbody.querySelector("tr[data-job-id=\"" + id + "\"]");
+            if (row) expandHistoryRow(row);
+            else expandedHistoryIds.delete(id);
+        }
 
         renderHistoryPagination();
     }
@@ -381,11 +388,14 @@
     }
 
     function toggleLog(row) {
+        const jobId = row.dataset.jobId;
         const next = row.nextElementSibling;
         if (next && next.classList.contains("log-row")) {
             next.remove();
+            expandedHistoryIds.delete(jobId);
             return;
         }
+        expandedHistoryIds.add(jobId);
         expandHistoryRow(row);
     }
 
