@@ -421,6 +421,7 @@
                 historySortBy = col;
                 historySortDir = col === "finished_at" ? "desc" : "asc";
             }
+            historyPage = 0;
             loadHistory();
         });
     });
