@@ -31,3 +31,14 @@ class HistoryOut(BaseModel):
     error_message: str | None = None
     preset_name: str = ""
     device_name: str = ""
+
+
+class SearchResultOut(BaseModel):
+    id: str
+    file_path: str
+    library_name: str
+    status: str
+    old_size_bytes: int
+    new_size_bytes: int | None = None
+    date: str | None = None
+    source: str

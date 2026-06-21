@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from core.queue_manager import queue_manager, job_to_dict
 from core import db
-from app.models.responses import HistoryOut
+from app.models.responses import HistoryOut, SearchResultOut
 
 router = APIRouter(tags=["queue"])
 
@@ -108,3 +108,52 @@ async def get_job_log(job_id: str):
     if log_text is None:
         raise HTTPException(404, "Job not found")
     return {"log": log_text}
+
+
+@router.get("/api/search")
+async def search_files(
+    q: str = Query(""),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    sort_by: str = Query("finished_at"),
+    sort_dir: str = Query("desc"),
+    status: str | None = Query(None),
+):
+    if len(q) < 2:
+        return {"results": [], "total": 0}
+
+    queue_results = []
+    for item in queue_manager.search_jobs(q):
+        if status and item["status"] != status:
+            continue
+        queue_results.append(SearchResultOut(
+            id=item["id"],
+            file_path=item["file_path"],
+            library_name=item["library_name"],
+            status=item["status"],
+            old_size_bytes=item["old_size_bytes"],
+            new_size_bytes=item.get("new_size_bytes"),
+            date=item.get("started_at"),
+            source="queue",
+        ))
+
+    history_rows, history_total = await db.search_files(
+        q, limit, offset, sort_by=sort_by, sort_dir=sort_dir, status=status,
+    )
+    history_results = []
+    for row in history_rows:
+        history_results.append(SearchResultOut(
+            id=row["id"],
+            file_path=row["file_path"],
+            library_name=row["library_name"],
+            status=row["status"],
+            old_size_bytes=row["old_size_bytes"],
+            new_size_bytes=row.get("new_size_bytes"),
+            date=row.get("finished_at"),
+            source="history",
+        ))
+
+    return {
+        "results": [r.model_dump() for r in queue_results + history_results],
+        "total": len(queue_results) + history_total,
+    }

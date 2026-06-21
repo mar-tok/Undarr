@@ -224,6 +224,14 @@ class QueueManager:
         if unblocked:
             self._dispatch_event.set()
 
+    def search_jobs(self, query: str) -> list[dict]:
+        q = query.lower()
+        results = []
+        for job in list(self._active.values()) + self._pending + self._blocked:
+            if q in job.file_path.lower():
+                results.append(job_to_dict(job))
+        return results
+
     def subscribe(self) -> asyncio.Queue[str]:
         q: asyncio.Queue[str] = asyncio.Queue()
         self._subscribers.append(q)

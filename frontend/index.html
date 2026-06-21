@@ -21,6 +21,7 @@
                     <button class="queue-tab active" data-qtab="queue">Queue</button>
                     <button class="queue-tab" data-qtab="issues">Issues</button>
                     <button class="queue-tab" data-qtab="history">History</button>
+                    <input type="text" id="queue-search" placeholder="Search...">
                 </div>
                 <div class="queue-pane active" id="qtab-queue">
                     <div class="queue-controls" id="queue-controls" style="display:none">
@@ -79,6 +80,22 @@
                     </table>
                     <p id="history-empty">No history yet.</p>
                     <div class="history-pagination" id="history-pagination"></div>
+                </div>
+                <div id="search-results" style="display:none">
+                    <table id="search-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="file_path">File</th>
+                                <th class="sortable" data-sort="library_name">Library</th>
+                                <th class="sortable" data-sort="old_size_bytes">Size</th>
+                                <th class="sortable" data-sort="finished_at">Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="search-body"></tbody>
+                    </table>
+                    <p id="search-empty" style="display:none">No results.</p>
+                    <div id="search-pagination"></div>
                 </div>
             </div>
 

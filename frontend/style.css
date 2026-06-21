@@ -240,6 +240,19 @@ button, button * {
     border-bottom-color: var(--accent);
 }
 
+#queue-search {
+    margin-left: 12px;
+    width: 220px;
+    align-self: center;
+}
+
+.queue-tab.dimmed {
+    color: var(--text-muted);
+    border-color: var(--border);
+    pointer-events: none;
+    cursor: default;
+}
+
 .queue-pane { display: none; }
 .queue-pane.active { display: block; }
 
@@ -251,17 +264,30 @@ button, button * {
     background: #272727;
 }
 
-#history-table tbody tr.stripe {
+#history-table tbody tr.stripe,
+#search-table tbody tr.stripe {
     background: #272727;
 }
 
 #history-table th:nth-child(1),
 #history-table td:nth-child(1) { width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-#history-table th.sortable {
+#history-table th.sortable,
+#search-table th.sortable {
     cursor: pointer;
     user-select: none;
 }
+
+#search-table th:nth-child(1),
+#search-table td:nth-child(1) { width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#search-table th:nth-child(2),
+#search-table td:nth-child(2) { width: 16%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#search-table th:nth-child(3),
+#search-table td:nth-child(3) { width: 18%; }
+#search-table th:nth-child(4),
+#search-table td:nth-child(4) { width: 14%; }
+#search-table th:nth-child(5),
+#search-table td:nth-child(5) { width: 12%; }
 
 .sort-arrow {
     font-size: 10px;

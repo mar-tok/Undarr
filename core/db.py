@@ -163,6 +163,40 @@ async def dismiss_history_entries(job_ids: list[str]) -> int:
     return cursor.rowcount
 
 
+async def search_files(
+    query: str,
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = "finished_at",
+    sort_dir: str = "desc",
+    status: str | None = None,
+) -> tuple[list[dict], int]:
+    db = get_db()
+    pattern = f"%{query}%"
+    conditions = ["file_path LIKE ?"]
+    params: list = [pattern]
+    if status:
+        conditions.append("status = ?")
+        params.append(status)
+    where = "WHERE " + " AND ".join(conditions)
+    cursor = await db.execute(
+        f"SELECT COUNT(*) FROM job_history {where}", params,
+    )
+    total = (await cursor.fetchone())[0]
+    col = sort_by if sort_by in HISTORY_SORT_COLUMNS else "finished_at"
+    direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
+    cursor = await db.execute(
+        f"""SELECT id, library_name, file_path, status, old_size_bytes, new_size_bytes,
+                  started_at, finished_at, duration_seconds, error_message,
+                  preset_name, device_name
+           FROM job_history {where}
+           ORDER BY {col} {direction} LIMIT ? OFFSET ?""",
+        (*params, limit, offset),
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows], total
+
+
 async def get_job_log(job_id: str) -> str | None:
     db = get_db()
     cursor = await db.execute(

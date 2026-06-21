@@ -432,6 +432,143 @@
         loadHistory();
     });
 
+    let searchQuery = "";
+    let searchPage = 0;
+    let searchPageSize = 25;
+    let searchSortBy = "finished_at";
+    let searchSortDir = "desc";
+    let searchTimer = null;
+    let searchResults = [];
+    let searchTotal = 0;
+
+    function sizeLabel(r) {
+        if (r.source === "history" && r.new_size_bytes != null) {
+            return formatBytes(r.old_size_bytes) + " → " + formatBytes(r.new_size_bytes);
+        }
+        return formatBytes(r.old_size_bytes);
+    }
+
+    function setSearchActive(active) {
+        const panel = document.getElementById("search-results");
+        const panes = document.querySelectorAll("#view-queue .queue-pane");
+        const tabs = document.querySelectorAll("#queue-tabs .queue-tab");
+        if (active) {
+            panes.forEach(p => { p.style.display = "none"; });
+            tabs.forEach(t => t.classList.add("dimmed"));
+            panel.style.display = "";
+        } else {
+            panel.style.display = "none";
+            tabs.forEach(t => t.classList.remove("dimmed"));
+            panes.forEach(p => { p.style.display = ""; });
+        }
+    }
+
+    function updateSearchSortArrows() {
+        document.querySelectorAll("#search-table th.sortable").forEach(th => {
+            const existing = th.querySelector(".sort-arrow");
+            if (existing) existing.remove();
+            if (th.dataset.sort === searchSortBy) {
+                const arrow = document.createElement("span");
+                arrow.className = "sort-arrow";
+                arrow.textContent = searchSortDir === "asc" ? " ▲" : " ▼";
+                th.appendChild(arrow);
+            }
+        });
+    }
+
+    async function runSearch() {
+        if (searchQuery.length < 2) {
+            searchResults = [];
+            searchTotal = 0;
+            setSearchActive(false);
+            renderSearch();
+            return;
+        }
+        setSearchActive(true);
+        const params = new URLSearchParams();
+        params.set("q", searchQuery);
+        params.set("limit", searchPageSize);
+        params.set("offset", searchPage * searchPageSize);
+        params.set("sort_by", searchSortBy);
+        params.set("sort_dir", searchSortDir);
+        const data = await api("GET", "/api/search?" + params.toString());
+        searchResults = data.results;
+        searchTotal = data.total;
+        renderSearch();
+    }
+
+    function renderSearch() {
+        const table = document.getElementById("search-table");
+        const tbody = document.getElementById("search-body");
+        const empty = document.getElementById("search-empty");
+        const pagEl = document.getElementById("search-pagination");
+
+        updateSearchSortArrows();
+
+        const active = searchQuery.length >= 2;
+        table.style.display = active ? "" : "none";
+        empty.style.display = active && !searchResults.length ? "" : "none";
+
+        if (!searchResults.length) {
+            tbody.innerHTML = "";
+            pagEl.innerHTML = "";
+            return;
+        }
+
+        let html = "";
+        for (let i = 0; i < searchResults.length; i++) {
+            const r = searchResults[i];
+            html += "<tr class=\"" + (i % 2 ? "stripe" : "") + "\">"
+                + "<td title=\"" + esc(r.file_path) + "\">" + esc(basename(r.file_path)) + "</td>"
+                + "<td>" + esc(r.library_name) + "</td>"
+                + "<td>" + sizeLabel(r) + "</td>"
+                + "<td>" + formatDate(r.date) + "</td>"
+                + "<td class=\"status-" + esc(r.status.replace(/\s+/g, "-")) + "\">" + esc(r.status) + "</td>"
+                + "</tr>";
+        }
+        tbody.innerHTML = html;
+
+        const hasPrev = searchPage > 0;
+        const hasNext = searchTotal > (searchPage + 1) * searchPageSize;
+        const sizes = [25, 50, 100, 200].map(n =>
+            "<option value=\"" + n + "\"" + (n === searchPageSize ? " selected" : "") + ">" + n + " / page</option>"
+        ).join("");
+        pagEl.innerHTML = "<button class=\"btn btn-sm\" id=\"search-prev\"" + (hasPrev ? "" : " disabled") + ">Prev</button>"
+            + "<span class=\"hist-page-label\">Page " + (searchPage + 1) + "</span>"
+            + "<button class=\"btn btn-sm\" id=\"search-next\"" + (hasNext ? "" : " disabled") + ">Next</button>"
+            + "<select id=\"search-page-size\">" + sizes + "</select>";
+        if (hasPrev) document.getElementById("search-prev").addEventListener("click", () => { searchPage--; runSearch(); });
+        if (hasNext) document.getElementById("search-next").addEventListener("click", () => { searchPage++; runSearch(); });
+        document.getElementById("search-page-size").addEventListener("change", e => {
+            searchPageSize = parseInt(e.target.value);
+            searchPage = 0;
+            runSearch();
+        });
+    }
+
+    document.getElementById("queue-search").addEventListener("input", e => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            searchQuery = e.target.value.trim();
+            searchPage = 0;
+            runSearch();
+        }, 300);
+    });
+
+    document.querySelectorAll("#search-table th.sortable").forEach(th => {
+        th.addEventListener("click", () => {
+            const col = th.dataset.sort;
+            if (searchSortBy === col) {
+                searchSortDir = searchSortDir === "asc" ? "desc" : "asc";
+            } else {
+                searchSortBy = col;
+                searchSortDir = col === "finished_at" ? "desc" : "asc";
+            }
+            searchPage = 0;
+            runSearch();
+        });
+    });
+
     let presets = [];
     let editingPreset = null;
     let showingNewForm = false;
