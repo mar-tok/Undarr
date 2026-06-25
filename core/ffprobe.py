@@ -8,8 +8,20 @@ import config
 from core.logger import log
 
 VIDEO_EXTENSIONS = {
-    ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm",
-    ".m4v", ".mpg", ".mpeg", ".ts", ".m2ts", ".vob", ".ogv",
+    ".mkv",
+    ".mp4",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg",
+    ".ts",
+    ".m2ts",
+    ".vob",
+    ".ogv",
 }
 
 
@@ -21,8 +33,10 @@ async def probe_file(file_path: str) -> dict | None:
     try:
         proc = await asyncio.create_subprocess_exec(
             config.FFPROBE_BIN,
-            "-v", "quiet",
-            "-print_format", "json",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
             "-show_format",
             "-show_streams",
             file_path,
@@ -48,14 +62,31 @@ async def probe_file(file_path: str) -> dict | None:
         return None
 
 
+def extract_audio_streams(probe_data: dict) -> list[dict]:
+    streams = []
+    for s in probe_data.get("streams", []):
+        if s.get("codec_type") != "audio":
+            continue
+        streams.append(
+            {
+                "index": s.get("index", 0),
+                "codec_name": s.get("codec_name", ""),
+                "channels": int(s.get("channels", 0)),
+                "bit_rate": int(s["bit_rate"]) if s.get("bit_rate") else None,
+                "language": s.get("tags", {}).get("language", "und"),
+                "is_commentary": bool(s.get("disposition", {}).get("comment", 0)),
+            }
+        )
+    return streams
+
+
 async def verify_output(output_path: str, source_duration_us: int) -> tuple[bool, str]:
     probe_data = await probe_file(output_path)
     if not probe_data:
         return False, "Output file is not readable by ffprobe"
 
     has_video = any(
-        s.get("codec_type") == "video"
-        for s in probe_data.get("streams", [])
+        s.get("codec_type") == "video" for s in probe_data.get("streams", [])
     )
     if not has_video:
         return False, "Output file has no video stream"
@@ -69,7 +100,10 @@ async def verify_output(output_path: str, source_duration_us: int) -> tuple[bool
         if diff > tolerance_us:
             src_s = source_duration_us / 1_000_000
             out_s = output_duration_us / 1_000_000
-            return False, f"Output duration ({out_s:.1f}s) differs from source ({src_s:.1f}s)"
+            return (
+                False,
+                f"Output duration ({out_s:.1f}s) differs from source ({src_s:.1f}s)",
+            )
 
     return True, ""
 

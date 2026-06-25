@@ -12,10 +12,25 @@ def _validate_name(v: str) -> str:
     return v
 
 
+class AudioTrackConfigIn(BaseModel):
+    codec: str = "copy"
+    bitrate: str | None = None
+
+
+class AudioConfigIn(BaseModel):
+    stereo: AudioTrackConfigIn | None = None
+    surround: AudioTrackConfigIn | None = None
+    languages: list[str] | None = None
+    remove_commentary: bool = False
+    add_stereo_downmix: str = "never"
+    downmix_bitrate: str | None = None
+
+
 class PresetCreate(BaseModel):
     name: str
     ffmpeg_args: str
     output_container: str | None = None
+    audio: AudioConfigIn | None = None
 
     @field_validator("name")
     @classmethod
@@ -27,6 +42,7 @@ class PresetUpdate(BaseModel):
     name: str | None = None
     ffmpeg_args: str
     output_container: str | None = None
+    audio: AudioConfigIn | None = None
 
     @field_validator("name")
     @classmethod

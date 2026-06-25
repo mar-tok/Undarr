@@ -13,8 +13,8 @@ from pathlib import Path
 
 from core.logger import log
 from core import db
-from core.ffprobe import probe_file, get_duration_us, verify_output
-from core.ffmpeg import transcode, compatible_container
+from core.ffprobe import probe_file, extract_audio_streams, get_duration_us, verify_output
+from core.ffmpeg import transcode, compatible_container, build_audio_args, strip_audio_flags
 from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store
 from core.watcher import suppress_path, unsuppress_path
@@ -300,10 +300,21 @@ class QueueManager:
             cache_dir.mkdir(parents=True, exist_ok=True)
             temp_output = cache_dir / f"{job.id}{out_ext}"
 
+            ffmpeg_args = job.ffmpeg_args
+            audio_maps = None
+            preset = await store.get_preset(job.preset_name)
+            if preset and preset.audio is not None:
+                ffmpeg_args = strip_audio_flags(ffmpeg_args)
+                audio_streams = extract_audio_streams(probe_data) if probe_data else []
+                audio_result = build_audio_args(preset.audio, audio_streams)
+                audio_maps = audio_result.map_args
+                ffmpeg_args = f"{audio_result.codec_args} {ffmpeg_args}".strip()
+
             result = await transcode(
                 input_path=job.file_path,
                 output_path=str(temp_output),
-                ffmpeg_args=job.ffmpeg_args,
+                ffmpeg_args=ffmpeg_args,
+                audio_maps=audio_maps,
             )
             ffmpeg_log = result.ffmpeg_log
 

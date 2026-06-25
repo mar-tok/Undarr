@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import config
 from core.logger import log
 from core.codecs import ENCODER_TO_CODEC
+from core.yaml_store import AudioConfig
 
 _CODEC_FAMILIES: dict[str, str] = {
     "hevc": "HEVC (H.265)",
@@ -19,8 +20,8 @@ _CODEC_FAMILIES: dict[str, str] = {
 # Containers that can hold each codec. Keeping the source container when it
 # can't hold the target codec produces a broken file (AV1 in .avi).
 _CODEC_CONTAINERS: dict[str, set[str]] = {
-    "av1":  {".mp4", ".mkv", ".webm"},
-    "vp9":  {".mkv", ".webm"},
+    "av1": {".mp4", ".mkv", ".webm"},
+    "vp9": {".mkv", ".webm"},
     "hevc": {".mp4", ".mkv", ".mov", ".ts"},
     "h264": {".mp4", ".mkv", ".mov", ".ts", ".avi"},
 }
@@ -38,6 +39,89 @@ def compatible_container(encoder: str, source_ext: str) -> str | None:
     return ".mp4"
 
 
+_AUDIO_CODEC_ALIASES: dict[str, str] = {
+    "libopus": "opus",
+    "aac": "aac",
+    "ac3": "ac3",
+    "eac3": "eac3",
+}
+
+
+def strip_audio_flags(ffmpeg_args: str) -> str:
+    result = re.sub(r"-c:a(?::\d+)?\s+\S+", "", ffmpeg_args)
+    result = re.sub(r"-b:a(?::\d+)?\s+\S+", "", result)
+    result = re.sub(r"-ac(?::a)?(?::\d+)?\s+\S+", "", result)
+    result = re.sub(r"-c\s+copy", "", result)
+    return re.sub(r"\s+", " ", result).strip()
+
+
+@dataclass
+class AudioBuildResult:
+    map_args: list[str] | None
+    codec_args: str
+
+
+def build_audio_args(
+    audio_config: AudioConfig,
+    audio_streams: list[dict],
+) -> AudioBuildResult:
+    track_config = audio_config.stereo or audio_config.surround
+
+    # No tiers configured
+    if track_config is None:
+        return AudioBuildResult(None, "-c:a copy")
+
+    if track_config.codec == "copy":
+        return AudioBuildResult(None, "-c:a copy")
+
+    if not audio_streams:
+        return AudioBuildResult(None, "")
+
+    # TODO: differentiate stereo/surround by channel count
+    map_args: list[str] = []
+    codec_parts: list[str] = []
+
+    for stream_idx, stream in enumerate(audio_streams):
+        map_args.extend(["-map", f"0:a:{stream_idx}"])
+
+        target_codec = _AUDIO_CODEC_ALIASES.get(track_config.codec, track_config.codec)
+        target_bitrate_k = (
+            _parse_bitrate_k(track_config.bitrate) if track_config.bitrate else None
+        )
+        if _audio_stream_matches(stream, target_codec, target_bitrate_k, None):
+            codec_parts.append(f"-c:a:{stream_idx} copy")
+        else:
+            codec_parts.append(f"-c:a:{stream_idx} {track_config.codec}")
+            if track_config.bitrate:
+                codec_parts.append(f"-b:a:{stream_idx} {track_config.bitrate}")
+
+    return AudioBuildResult(map_args if map_args else None, " ".join(codec_parts))
+
+
+def _audio_stream_matches(
+    stream: dict,
+    target_codec: str,
+    target_bitrate_k: int | None,
+    target_channels: int | None,
+) -> bool:
+    if stream["codec_name"] != target_codec:
+        return False
+    if target_channels is not None and stream["channels"] > target_channels:
+        return False
+    if target_bitrate_k is not None and stream["bit_rate"] is not None:
+        stream_bitrate_k = stream["bit_rate"] // 1000
+        if stream_bitrate_k > target_bitrate_k:
+            return False
+    return True
+
+
+def _parse_bitrate_k(bitrate_str: str) -> int:
+    s = bitrate_str.strip().lower()
+    if s.endswith("k"):
+        return int(s[:-1])
+    return int(s)
+
+
 @dataclass
 class TranscodeResult:
     success: bool
@@ -50,13 +134,22 @@ async def transcode(
     input_path: str,
     output_path: str,
     ffmpeg_args: str,
+    audio_maps: list[str] | None = None,
 ) -> TranscodeResult:
     # TODO: Needs progress parsing, duration tracking
+    map_flags = ["-map", "0:V?"]
+    if audio_maps is not None:
+        map_flags.extend(audio_maps)
+    else:
+        map_flags.extend(["-map", "0:a?"])
+    map_flags.extend(["-map", "0:s?"])
+
     args = [
         config.FFMPEG_BIN,
         "-y",
-        "-i", input_path,
-        "-map", "0",
+        "-i",
+        input_path,
+        *map_flags,
         *shlex.split(ffmpeg_args),
         output_path,
     ]
@@ -101,7 +194,9 @@ async def detect_encoders() -> dict[str, list[dict]]:
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            config.FFMPEG_BIN, "-hide_banner", "-encoders",
+            config.FFMPEG_BIN,
+            "-hide_banner",
+            "-encoders",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

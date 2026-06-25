@@ -12,6 +12,22 @@ from core.logger import log
 
 
 @dataclass
+class AudioTrackConfig:
+    codec: str = "copy"
+    bitrate: str | None = None
+
+
+@dataclass
+class AudioConfig:
+    stereo: AudioTrackConfig | None = None
+    surround: AudioTrackConfig | None = None
+    languages: list[str] | None = None
+    remove_commentary: bool = False
+    add_stereo_downmix: str = "never"
+    downmix_bitrate: str | None = None
+
+
+@dataclass
 class DeviceConfig:
     max_jobs: int = 1
 
@@ -26,6 +42,7 @@ class Settings:
 class Preset:
     ffmpeg_args: str
     output_container: str | None = None
+    audio: AudioConfig | None = None
 
 
 @dataclass
@@ -56,9 +73,36 @@ def _config_from_dict(data: dict) -> Config:
 
     presets: dict[str, Preset] = {}
     for name, p in (data.get("presets") or {}).items():
+        audio = None
+        raw_audio = p.get("audio")
+        if raw_audio:
+            stereo = None
+            raw_stereo = raw_audio.get("stereo")
+            if raw_stereo:
+                stereo = AudioTrackConfig(
+                    codec=raw_stereo.get("codec", "copy"),
+                    bitrate=raw_stereo.get("bitrate"),
+                )
+            surround = None
+            raw_surround = raw_audio.get("surround")
+            if raw_surround:
+                surround = AudioTrackConfig(
+                    codec=raw_surround.get("codec", "copy"),
+                    bitrate=raw_surround.get("bitrate"),
+                )
+            langs = raw_audio.get("languages")
+            audio = AudioConfig(
+                stereo=stereo,
+                surround=surround,
+                languages=langs if langs else None,
+                remove_commentary=bool(raw_audio.get("remove_commentary", False)),
+                add_stereo_downmix=raw_audio.get("add_stereo_downmix", "never"),
+                downmix_bitrate=raw_audio.get("downmix_bitrate"),
+            )
         presets[name] = Preset(
             ffmpeg_args=p.get("ffmpeg_args", ""),
             output_container=p.get("output_container"),
+            audio=audio,
         )
 
     libraries: dict[str, Library] = {}
@@ -74,6 +118,30 @@ def _config_from_dict(data: dict) -> Config:
     return Config(settings=settings, presets=presets, libraries=libraries)
 
 
+def _track_to_dict(t: AudioTrackConfig) -> dict:
+    d: dict = {"codec": t.codec}
+    if t.bitrate:
+        d["bitrate"] = t.bitrate
+    return d
+
+
+def _audio_config_to_dict(a: AudioConfig) -> dict:
+    d: dict = {}
+    if a.stereo:
+        d["stereo"] = _track_to_dict(a.stereo)
+    if a.surround:
+        d["surround"] = _track_to_dict(a.surround)
+    if a.add_stereo_downmix != "never":
+        d["add_stereo_downmix"] = a.add_stereo_downmix
+    if a.downmix_bitrate:
+        d["downmix_bitrate"] = a.downmix_bitrate
+    if a.languages:
+        d["languages"] = a.languages
+    if a.remove_commentary:
+        d["remove_commentary"] = True
+    return d
+
+
 def _config_to_dict(cfg: Config) -> dict:
     return {
         "settings": {
@@ -87,6 +155,7 @@ def _config_to_dict(cfg: Config) -> dict:
             name: {
                 "ffmpeg_args": p.ffmpeg_args,
                 "output_container": p.output_container,
+                **({"audio": _audio_config_to_dict(p.audio)} if p.audio else {}),
             }
             for name, p in cfg.presets.items()
         },

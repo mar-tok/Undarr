@@ -3,10 +3,25 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+class AudioTrackConfigOut(BaseModel):
+    codec: str
+    bitrate: str | None = None
+
+
+class AudioConfigOut(BaseModel):
+    stereo: AudioTrackConfigOut | None = None
+    surround: AudioTrackConfigOut | None = None
+    languages: list[str] | None = None
+    remove_commentary: bool = False
+    add_stereo_downmix: str = "never"
+    downmix_bitrate: str | None = None
+
+
 class PresetOut(BaseModel):
     name: str
     ffmpeg_args: str
     output_container: str | None = None
+    audio: AudioConfigOut | None = None
 
 
 class LibraryOut(BaseModel):

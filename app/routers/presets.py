@@ -1,12 +1,50 @@
 from fastapi import APIRouter, HTTPException
 
 from core.logger import log
-from app.models.requests import PresetCreate, PresetUpdate
-from app.models.responses import PresetOut
-from core.yaml_store import store, Preset
+from app.models.requests import PresetCreate, PresetUpdate, AudioConfigIn
+from app.models.responses import PresetOut, AudioConfigOut, AudioTrackConfigOut
+from core.yaml_store import store, Preset, AudioConfig, AudioTrackConfig
 from core.queue_manager import queue_manager
 
 router = APIRouter(prefix="/api/presets", tags=["presets"])
+
+
+def _track_from_body(t) -> AudioTrackConfig | None:
+    if t is None:
+        return None
+    return AudioTrackConfig(codec=t.codec, bitrate=t.bitrate)
+
+
+def _audio_from_body(body_audio: AudioConfigIn | None) -> AudioConfig | None:
+    if body_audio is None:
+        return None
+    return AudioConfig(
+        stereo=_track_from_body(body_audio.stereo),
+        surround=_track_from_body(body_audio.surround),
+        languages=body_audio.languages,
+        remove_commentary=body_audio.remove_commentary,
+        add_stereo_downmix=body_audio.add_stereo_downmix,
+        downmix_bitrate=body_audio.downmix_bitrate,
+    )
+
+
+def _track_to_out(t: AudioTrackConfig | None) -> AudioTrackConfigOut | None:
+    if t is None:
+        return None
+    return AudioTrackConfigOut(codec=t.codec, bitrate=t.bitrate)
+
+
+def _audio_to_out(audio: AudioConfig | None) -> AudioConfigOut | None:
+    if audio is None:
+        return None
+    return AudioConfigOut(
+        stereo=_track_to_out(audio.stereo),
+        surround=_track_to_out(audio.surround),
+        languages=audio.languages,
+        remove_commentary=audio.remove_commentary,
+        add_stereo_downmix=audio.add_stereo_downmix,
+        downmix_bitrate=audio.downmix_bitrate,
+    )
 
 
 def _preset_out(name: str, p: Preset) -> PresetOut:
@@ -14,6 +52,7 @@ def _preset_out(name: str, p: Preset) -> PresetOut:
         name=name,
         ffmpeg_args=p.ffmpeg_args,
         output_container=p.output_container,
+        audio=_audio_to_out(p.audio),
     )
 
 
@@ -30,6 +69,7 @@ async def create_preset(body: PresetCreate):
     preset = Preset(
         ffmpeg_args=body.ffmpeg_args,
         output_container=body.output_container,
+        audio=_audio_from_body(body.audio),
     )
     await store.create_preset(body.name, preset)
     log.info("Preset created: '%s'", body.name)
@@ -44,6 +84,7 @@ async def update_preset(name: str, body: PresetUpdate):
     preset = Preset(
         ffmpeg_args=body.ffmpeg_args,
         output_container=body.output_container,
+        audio=_audio_from_body(body.audio),
     )
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:
