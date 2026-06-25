@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import config
 from core.logger import log
 from core.codecs import ENCODER_TO_CODEC
-from core.yaml_store import AudioConfig
+from core.yaml_store import AudioConfig, AudioTrackConfig
 
 _CODEC_FAMILIES: dict[str, str] = {
     "hevc": "HEVC (H.265)",
@@ -65,35 +65,89 @@ def build_audio_args(
     audio_config: AudioConfig,
     audio_streams: list[dict],
 ) -> AudioBuildResult:
-    track_config = audio_config.stereo or audio_config.surround
+    stereo = audio_config.stereo
+    surround = audio_config.surround
 
-    # No tiers configured
-    if track_config is None:
+    if stereo is None and surround is None:
         return AudioBuildResult(None, "-c:a copy")
 
-    if track_config.codec == "copy":
+    has_filtering = (
+        audio_config.languages is not None
+        or audio_config.remove_commentary
+        or audio_config.add_stereo_downmix != "never"
+    )
+    both_copy = (stereo is None or stereo.codec == "copy") and (
+        surround is None or surround.codec == "copy"
+    )
+    if both_copy and not has_filtering:
         return AudioBuildResult(None, "-c:a copy")
 
     if not audio_streams:
         return AudioBuildResult(None, "")
 
-    # TODO: differentiate stereo/surround by channel count
+    allowed_langs = set(audio_config.languages) if audio_config.languages else None
+    downmix_mode = audio_config.add_stereo_downmix
+
+    do_downmix = downmix_mode == "always"
+    if downmix_mode == "if_no_stereo":
+        has_stereo_output = False
+        for stream in audio_streams:
+            if allowed_langs is not None:
+                lang = stream.get("language", "und")
+                if lang != "und" and lang not in allowed_langs:
+                    continue
+            if audio_config.remove_commentary and stream.get("is_commentary", False):
+                continue
+            if stream["channels"] <= 2:
+                has_stereo_output = True
+                break
+        do_downmix = not has_stereo_output
+
     map_args: list[str] = []
     codec_parts: list[str] = []
+    out_idx = 0
 
     for stream_idx, stream in enumerate(audio_streams):
+        if allowed_langs is not None:
+            lang = stream.get("language", "und")
+            if lang != "und" and lang not in allowed_langs:
+                continue
+
+        if audio_config.remove_commentary and stream.get("is_commentary", False):
+            continue
+
+        is_surround = stream["channels"] > 2
+        track_config = surround if is_surround else stereo
+
+        if track_config is None:
+            track_config = AudioTrackConfig(codec="copy")
+
         map_args.extend(["-map", f"0:a:{stream_idx}"])
 
-        target_codec = _AUDIO_CODEC_ALIASES.get(track_config.codec, track_config.codec)
-        target_bitrate_k = (
-            _parse_bitrate_k(track_config.bitrate) if track_config.bitrate else None
-        )
-        if _audio_stream_matches(stream, target_codec, target_bitrate_k, None):
-            codec_parts.append(f"-c:a:{stream_idx} copy")
+        if track_config.codec == "copy":
+            codec_parts.append(f"-c:a:{out_idx} copy")
         else:
-            codec_parts.append(f"-c:a:{stream_idx} {track_config.codec}")
-            if track_config.bitrate:
-                codec_parts.append(f"-b:a:{stream_idx} {track_config.bitrate}")
+            target_codec = _AUDIO_CODEC_ALIASES.get(
+                track_config.codec, track_config.codec
+            )
+            target_bitrate_k = (
+                _parse_bitrate_k(track_config.bitrate) if track_config.bitrate else None
+            )
+            if _audio_stream_matches(stream, target_codec, target_bitrate_k, None):
+                codec_parts.append(f"-c:a:{out_idx} copy")
+            else:
+                codec_parts.append(f"-c:a:{out_idx} {track_config.codec}")
+                if track_config.bitrate:
+                    codec_parts.append(f"-b:a:{out_idx} {track_config.bitrate}")
+        out_idx += 1
+
+        if is_surround and do_downmix:
+            map_args.extend(["-map", f"0:a:{stream_idx}"])
+            codec_parts.append(f"-c:a:{out_idx} aac")
+            if audio_config.downmix_bitrate:
+                codec_parts.append(f"-b:a:{out_idx} {audio_config.downmix_bitrate}")
+            codec_parts.append(f"-ac:a:{out_idx} 2")
+            out_idx += 1
 
     return AudioBuildResult(map_args if map_args else None, " ".join(codec_parts))
 
