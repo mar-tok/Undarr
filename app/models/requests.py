@@ -38,6 +38,7 @@ class PresetCreate(BaseModel):
     output_container: str | None = None
     audio: AudioConfigIn | None = None
     subtitle: SubtitleConfigIn | None = None
+    resolution_cap: int | None = None
 
     @field_validator("name")
     @classmethod
@@ -51,6 +52,7 @@ class PresetUpdate(BaseModel):
     output_container: str | None = None
     audio: AudioConfigIn | None = None
     subtitle: SubtitleConfigIn | None = None
+    resolution_cap: int | None = None
 
     @field_validator("name")
     @classmethod

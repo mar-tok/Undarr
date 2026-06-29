@@ -29,6 +29,7 @@ class PresetOut(BaseModel):
     output_container: str | None = None
     audio: AudioConfigOut | None = None
     subtitle: SubtitleConfigOut | None = None
+    resolution_cap: int | None = None
 
 
 class LibraryOut(BaseModel):

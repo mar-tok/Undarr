@@ -26,6 +26,7 @@ from core.ffmpeg import (
     build_audio_args,
     strip_audio_flags,
     build_subtitle_args,
+    build_scale_filter,
 )
 from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store
@@ -331,12 +332,19 @@ class QueueManager:
                 sub_streams = extract_subtitle_streams(probe_data) if probe_data else []
                 subtitle_maps = build_subtitle_args(preset.subtitle, sub_streams)
 
+            scale_filter = None
+            if preset and preset.resolution_cap and job.media_info:
+                source_height = job.media_info.get("resolution_height", 0)
+                if source_height > 0:
+                    scale_filter = build_scale_filter(preset.resolution_cap, source_height)
+
             result = await transcode(
                 input_path=job.file_path,
                 output_path=str(temp_output),
                 ffmpeg_args=ffmpeg_args,
                 audio_maps=audio_maps,
                 subtitle_maps=subtitle_maps,
+                scale_filter=scale_filter,
             )
             ffmpeg_log = result.ffmpeg_log
 

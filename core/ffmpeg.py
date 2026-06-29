@@ -207,6 +207,12 @@ def build_subtitle_args(
     return map_args
 
 
+def build_scale_filter(resolution_cap: int, source_height: int) -> str | None:
+    if source_height <= resolution_cap:
+        return None
+    return f"scale=-2:{resolution_cap}"
+
+
 @dataclass
 class TranscodeResult:
     success: bool
@@ -221,6 +227,7 @@ async def transcode(
     ffmpeg_args: str,
     audio_maps: list[str] | None = None,
     subtitle_maps: list[str] | None = None,
+    scale_filter: str | None = None,
 ) -> TranscodeResult:
     # TODO: Needs progress parsing, duration tracking
     map_flags = ["-map", "0:V?"]
@@ -233,12 +240,17 @@ async def transcode(
     else:
         map_flags.extend(["-map", "0:s?"])
 
+    vf_flags: list[str] = []
+    if scale_filter:
+        vf_flags = ["-vf", scale_filter]
+
     args = [
         config.FFMPEG_BIN,
         "-y",
         "-i",
         input_path,
         *map_flags,
+        *vf_flags,
         *shlex.split(ffmpeg_args),
         output_path,
     ]

@@ -51,6 +51,7 @@ class Preset:
     output_container: str | None = None
     audio: AudioConfig | None = None
     subtitle: SubtitleConfig | None = None
+    resolution_cap: int | None = None
 
 
 @dataclass
@@ -117,11 +118,15 @@ def _config_from_dict(data: dict) -> Config:
                 remove_commentary=bool(raw_subtitle.get("remove_commentary", False)),
             )
 
+        raw_res_cap = p.get("resolution_cap")
+        resolution_cap = int(raw_res_cap) if raw_res_cap is not None else None
+
         presets[name] = Preset(
             ffmpeg_args=p.get("ffmpeg_args", ""),
             output_container=p.get("output_container"),
             audio=audio,
             subtitle=subtitle,
+            resolution_cap=resolution_cap,
         )
 
     libraries: dict[str, Library] = {}
@@ -189,6 +194,7 @@ def _config_to_dict(cfg: Config) -> dict:
                     if p.subtitle
                     else {}
                 ),
+                **({"resolution_cap": p.resolution_cap} if p.resolution_cap is not None else {}),
             }
             for name, p in cfg.presets.items()
         },
