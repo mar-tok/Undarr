@@ -80,6 +80,21 @@ def extract_audio_streams(probe_data: dict) -> list[dict]:
     return streams
 
 
+def extract_subtitle_streams(probe_data: dict) -> list[dict]:
+    streams = []
+    for s in probe_data.get("streams", []):
+        if s.get("codec_type") != "subtitle":
+            continue
+        streams.append(
+            {
+                "codec_name": s.get("codec_name", ""),
+                "language": s.get("tags", {}).get("language", "und"),
+                "is_commentary": bool(s.get("disposition", {}).get("comment", 0)),
+            }
+        )
+    return streams
+
+
 async def verify_output(output_path: str, source_duration_us: int) -> tuple[bool, str]:
     probe_data = await probe_file(output_path)
     if not probe_data:

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import config
 from core.logger import log
 from core.codecs import ENCODER_TO_CODEC
-from core.yaml_store import AudioConfig, AudioTrackConfig
+from core.yaml_store import AudioConfig, AudioTrackConfig, SubtitleConfig
 
 _CODEC_FAMILIES: dict[str, str] = {
     "hevc": "HEVC (H.265)",
@@ -176,6 +176,37 @@ def _parse_bitrate_k(bitrate_str: str) -> int:
     return int(s)
 
 
+def build_subtitle_args(
+    subtitle_config: SubtitleConfig,
+    subtitle_streams: list[dict],
+) -> list[str] | None:
+    mode = subtitle_config.mode
+
+    if mode == "keep":
+        return None
+
+    if mode == "remove":
+        return []
+
+    allowed_langs = (
+        set(subtitle_config.languages) if subtitle_config.languages else None
+    )
+    map_args: list[str] = []
+
+    for stream_idx, stream in enumerate(subtitle_streams):
+        if allowed_langs is not None:
+            lang = stream.get("language", "und")
+            if lang != "und" and lang not in allowed_langs:
+                continue
+
+        if subtitle_config.remove_commentary and stream.get("is_commentary", False):
+            continue
+
+        map_args.extend(["-map", f"0:s:{stream_idx}"])
+
+    return map_args
+
+
 @dataclass
 class TranscodeResult:
     success: bool
@@ -189,6 +220,7 @@ async def transcode(
     output_path: str,
     ffmpeg_args: str,
     audio_maps: list[str] | None = None,
+    subtitle_maps: list[str] | None = None,
 ) -> TranscodeResult:
     # TODO: Needs progress parsing, duration tracking
     map_flags = ["-map", "0:V?"]
@@ -196,7 +228,10 @@ async def transcode(
         map_flags.extend(audio_maps)
     else:
         map_flags.extend(["-map", "0:a?"])
-    map_flags.extend(["-map", "0:s?"])
+    if subtitle_maps is not None:
+        map_flags.extend(subtitle_maps)
+    else:
+        map_flags.extend(["-map", "0:s?"])
 
     args = [
         config.FFMPEG_BIN,

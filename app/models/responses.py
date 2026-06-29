@@ -17,11 +17,18 @@ class AudioConfigOut(BaseModel):
     downmix_bitrate: str | None = None
 
 
+class SubtitleConfigOut(BaseModel):
+    mode: str = "keep"
+    languages: list[str] | None = None
+    remove_commentary: bool = False
+
+
 class PresetOut(BaseModel):
     name: str
     ffmpeg_args: str
     output_container: str | None = None
     audio: AudioConfigOut | None = None
+    subtitle: SubtitleConfigOut | None = None
 
 
 class LibraryOut(BaseModel):

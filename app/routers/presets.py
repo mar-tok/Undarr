@@ -1,9 +1,19 @@
 from fastapi import APIRouter, HTTPException
 
 from core.logger import log
-from app.models.requests import PresetCreate, PresetUpdate, AudioConfigIn
-from app.models.responses import PresetOut, AudioConfigOut, AudioTrackConfigOut
-from core.yaml_store import store, Preset, AudioConfig, AudioTrackConfig
+from app.models.requests import (
+    PresetCreate,
+    PresetUpdate,
+    AudioConfigIn,
+    SubtitleConfigIn,
+)
+from app.models.responses import (
+    PresetOut,
+    AudioConfigOut,
+    AudioTrackConfigOut,
+    SubtitleConfigOut,
+)
+from core.yaml_store import store, Preset, AudioConfig, AudioTrackConfig, SubtitleConfig
 from core.queue_manager import queue_manager
 
 router = APIRouter(prefix="/api/presets", tags=["presets"])
@@ -47,12 +57,33 @@ def _audio_to_out(audio: AudioConfig | None) -> AudioConfigOut | None:
     )
 
 
+def _subtitle_from_body(body_sub: SubtitleConfigIn | None) -> SubtitleConfig | None:
+    if body_sub is None:
+        return None
+    return SubtitleConfig(
+        mode=body_sub.mode,
+        languages=body_sub.languages,
+        remove_commentary=body_sub.remove_commentary,
+    )
+
+
+def _subtitle_to_out(sub: SubtitleConfig | None) -> SubtitleConfigOut | None:
+    if sub is None:
+        return None
+    return SubtitleConfigOut(
+        mode=sub.mode,
+        languages=sub.languages,
+        remove_commentary=sub.remove_commentary,
+    )
+
+
 def _preset_out(name: str, p: Preset) -> PresetOut:
     return PresetOut(
         name=name,
         ffmpeg_args=p.ffmpeg_args,
         output_container=p.output_container,
         audio=_audio_to_out(p.audio),
+        subtitle=_subtitle_to_out(p.subtitle),
     )
 
 
@@ -70,6 +101,7 @@ async def create_preset(body: PresetCreate):
         ffmpeg_args=body.ffmpeg_args,
         output_container=body.output_container,
         audio=_audio_from_body(body.audio),
+        subtitle=_subtitle_from_body(body.subtitle),
     )
     await store.create_preset(body.name, preset)
     log.info("Preset created: '%s'", body.name)
@@ -85,6 +117,7 @@ async def update_preset(name: str, body: PresetUpdate):
         ffmpeg_args=body.ffmpeg_args,
         output_container=body.output_container,
         audio=_audio_from_body(body.audio),
+        subtitle=_subtitle_from_body(body.subtitle),
     )
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:

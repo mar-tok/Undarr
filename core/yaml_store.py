@@ -28,6 +28,13 @@ class AudioConfig:
 
 
 @dataclass
+class SubtitleConfig:
+    mode: str = "keep"
+    languages: list[str] | None = None
+    remove_commentary: bool = False
+
+
+@dataclass
 class DeviceConfig:
     max_jobs: int = 1
 
@@ -43,6 +50,7 @@ class Preset:
     ffmpeg_args: str
     output_container: str | None = None
     audio: AudioConfig | None = None
+    subtitle: SubtitleConfig | None = None
 
 
 @dataclass
@@ -99,10 +107,21 @@ def _config_from_dict(data: dict) -> Config:
                 add_stereo_downmix=raw_audio.get("add_stereo_downmix", "never"),
                 downmix_bitrate=raw_audio.get("downmix_bitrate"),
             )
+        subtitle = None
+        raw_subtitle = p.get("subtitle")
+        if raw_subtitle:
+            langs = raw_subtitle.get("languages")
+            subtitle = SubtitleConfig(
+                mode=raw_subtitle.get("mode", "keep"),
+                languages=langs if langs else None,
+                remove_commentary=bool(raw_subtitle.get("remove_commentary", False)),
+            )
+
         presets[name] = Preset(
             ffmpeg_args=p.get("ffmpeg_args", ""),
             output_container=p.get("output_container"),
             audio=audio,
+            subtitle=subtitle,
         )
 
     libraries: dict[str, Library] = {}
@@ -142,6 +161,15 @@ def _audio_config_to_dict(a: AudioConfig) -> dict:
     return d
 
 
+def _subtitle_config_to_dict(s: SubtitleConfig) -> dict:
+    d: dict = {"mode": s.mode}
+    if s.languages:
+        d["languages"] = s.languages
+    if s.remove_commentary:
+        d["remove_commentary"] = True
+    return d
+
+
 def _config_to_dict(cfg: Config) -> dict:
     return {
         "settings": {
@@ -156,6 +184,11 @@ def _config_to_dict(cfg: Config) -> dict:
                 "ffmpeg_args": p.ffmpeg_args,
                 "output_container": p.output_container,
                 **({"audio": _audio_config_to_dict(p.audio)} if p.audio else {}),
+                **(
+                    {"subtitle": _subtitle_config_to_dict(p.subtitle)}
+                    if p.subtitle
+                    else {}
+                ),
             }
             for name, p in cfg.presets.items()
         },

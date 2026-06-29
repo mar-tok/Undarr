@@ -13,8 +13,20 @@ from pathlib import Path
 
 from core.logger import log
 from core import db
-from core.ffprobe import probe_file, extract_audio_streams, get_duration_us, verify_output
-from core.ffmpeg import transcode, compatible_container, build_audio_args, strip_audio_flags
+from core.ffprobe import (
+    probe_file,
+    extract_audio_streams,
+    extract_subtitle_streams,
+    get_duration_us,
+    verify_output,
+)
+from core.ffmpeg import (
+    transcode,
+    compatible_container,
+    build_audio_args,
+    strip_audio_flags,
+    build_subtitle_args,
+)
 from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store
 from core.watcher import suppress_path, unsuppress_path
@@ -291,8 +303,12 @@ class QueueManager:
             if m:
                 fixed = compatible_container(m.group(1), out_ext)
                 if fixed:
-                    log.info("Container %s can't hold %s output, using %s",
-                             out_ext, m.group(1), fixed)
+                    log.info(
+                        "Container %s can't hold %s output, using %s",
+                        out_ext,
+                        m.group(1),
+                        fixed,
+                    )
                     out_ext = fixed
 
             settings = await store.get_settings()
@@ -310,11 +326,17 @@ class QueueManager:
                 audio_maps = audio_result.map_args
                 ffmpeg_args = f"{audio_result.codec_args} {ffmpeg_args}".strip()
 
+            subtitle_maps = None
+            if preset and preset.subtitle is not None:
+                sub_streams = extract_subtitle_streams(probe_data) if probe_data else []
+                subtitle_maps = build_subtitle_args(preset.subtitle, sub_streams)
+
             result = await transcode(
                 input_path=job.file_path,
                 output_path=str(temp_output),
                 ffmpeg_args=ffmpeg_args,
                 audio_maps=audio_maps,
+                subtitle_maps=subtitle_maps,
             )
             ffmpeg_log = result.ffmpeg_log
 
@@ -336,7 +358,9 @@ class QueueManager:
                             temp_output.rename(final_path)
                         except OSError:
                             # cache dir and media can be on different filesystems (Docker)
-                            tmp_dest = final_path.with_suffix(final_path.suffix + ".undarr_tmp")
+                            tmp_dest = final_path.with_suffix(
+                                final_path.suffix + ".undarr_tmp"
+                            )
                             try:
                                 shutil.copyfile(temp_output, tmp_dest)
                                 tmp_dest.rename(final_path)
@@ -357,12 +381,19 @@ class QueueManager:
                     except OSError:
                         pass
                     saved = job.old_size_bytes - (job.new_size_bytes or 0)
-                    log.info("Completed: %s [%s] saved %s", job.file_path, job.id, _format_size(saved))
+                    log.info(
+                        "Completed: %s [%s] saved %s",
+                        job.file_path,
+                        job.id,
+                        _format_size(saved),
+                    )
             else:
                 temp_output.unlink(missing_ok=True)
                 job.status = JobStatus.FAILED
                 job.error_message = result.error_message
-                log.warning("Failed: %s [%s] %s", job.file_path, job.id, result.error_message)
+                log.warning(
+                    "Failed: %s [%s] %s", job.file_path, job.id, result.error_message
+                )
         except Exception as e:
             job.status = JobStatus.FAILED
             job.error_message = f"[{type(e).__name__}] {e}"
@@ -390,9 +421,11 @@ class QueueManager:
             )
             await self._broadcast("job_finished", job_to_dict(job))
             self._dispatch_event.set()
+
             async def _delayed_unsuppress():
                 await asyncio.sleep(5)
                 unsuppress_path(job.file_path)
+
             asyncio.create_task(_delayed_unsuppress())
 
 

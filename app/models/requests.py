@@ -26,11 +26,18 @@ class AudioConfigIn(BaseModel):
     downmix_bitrate: str | None = None
 
 
+class SubtitleConfigIn(BaseModel):
+    mode: str = "keep"
+    languages: list[str] | None = None
+    remove_commentary: bool = False
+
+
 class PresetCreate(BaseModel):
     name: str
     ffmpeg_args: str
     output_container: str | None = None
     audio: AudioConfigIn | None = None
+    subtitle: SubtitleConfigIn | None = None
 
     @field_validator("name")
     @classmethod
@@ -43,6 +50,7 @@ class PresetUpdate(BaseModel):
     ffmpeg_args: str
     output_container: str | None = None
     audio: AudioConfigIn | None = None
+    subtitle: SubtitleConfigIn | None = None
 
     @field_validator("name")
     @classmethod
