@@ -126,7 +126,7 @@ async def update_preset(name: str, body: PresetUpdate):
     if new_name != name:
         if await store.get_preset(new_name):
             raise HTTPException(409, "Preset with that name already exists")
-        await store.update_preset(new_name, preset)
+        await store.rename_preset(name, new_name, preset)
         log.info("Preset renamed: '%s' -> '%s'", name, new_name)
     else:
         await store.update_preset(name, preset)

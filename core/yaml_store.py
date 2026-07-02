@@ -275,6 +275,15 @@ class YamlStore:
             self._config.presets[name] = preset
             await self._save()
 
+    async def rename_preset(self, old_name: str, new_name: str, preset: Preset) -> None:
+        async with self._lock:
+            del self._config.presets[old_name]
+            self._config.presets[new_name] = preset
+            for lib in self._config.libraries.values():
+                if lib.preset == old_name:
+                    lib.preset = new_name
+            await self._save()
+
     async def delete_preset(self, name: str) -> bool:
         async with self._lock:
             if name not in self._config.presets:
