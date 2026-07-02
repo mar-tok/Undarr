@@ -366,6 +366,17 @@ tr.clickable:hover {
     letter-spacing: 0.5px;
 }
 
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 0;
+}
+
+.form-row .form-group {
+    margin-bottom: 12px;
+}
+
 .form-actions {
     display: flex;
     gap: 8px;
@@ -433,6 +444,99 @@ tr.clickable:hover {
 .preset-card-props dt:nth-of-type(odd),
 .preset-card-props dd:nth-of-type(odd) {
     background: var(--bg-tertiary);
+}
+
+.preset-card-section {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: none;
+}
+
+.preset-card-section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.section-label {
+    font-size: 12px;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preset-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.preset-tab {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--text-muted);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 20px;
+    height: 36px;
+    min-width: 100px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.preset-tab:hover {
+    background: var(--border);
+}
+
+.preset-tab.active {
+    border-color: var(--accent);
+}
+
+.pc-tab-audio .pc-audio-mode,
+.pc-tab-subtitle .pc-subtitle-mode {
+    max-width: 240px;
+}
+
+.pc-rescap-group {
+    max-width: 240px;
+}
+
+.audio-tier {
+    margin-bottom: 4px;
+}
+
+.audio-tier + .audio-tier {
+    margin-top: 16px;
+}
+
+.audio-tier .section-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.audio-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    align-self: center;
+}
+
+.audio-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
 }
 
 #library-grid {
