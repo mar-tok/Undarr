@@ -62,6 +62,43 @@ async def probe_file(file_path: str) -> dict | None:
         return None
 
 
+def extract_media_info(probe_data: dict) -> dict:
+    info: dict = {}
+
+    for stream in probe_data.get("streams", []):
+        codec_type = stream.get("codec_type")
+        if (
+            codec_type == "video"
+            and "video_codec" not in info
+            and not stream.get("disposition", {}).get("attached_pic", 0)
+        ):
+            info["video_codec"] = stream.get("codec_name", "")
+            info["resolution_width"] = int(stream.get("width", 0))
+            info["resolution_height"] = int(stream.get("height", 0))
+            bit_rate = stream.get("bit_rate")
+            if bit_rate:
+                info["bitrate_kbps"] = int(bit_rate) // 1000
+        elif codec_type == "audio" and "audio_codec" not in info:
+            info["audio_codec"] = stream.get("codec_name", "")
+            info["audio_channels"] = int(stream.get("channels", 0))
+
+    fmt = probe_data.get("format", {})
+    if "bitrate_kbps" not in info:
+        bit_rate = fmt.get("bit_rate")
+        if bit_rate:
+            info["bitrate_kbps"] = int(bit_rate) // 1000
+
+    duration = fmt.get("duration")
+    if duration:
+        info["duration_seconds"] = float(duration)
+
+    size = fmt.get("size")
+    if size:
+        info["file_size_mb"] = int(size) / (1024 * 1024)
+
+    return info
+
+
 def extract_audio_streams(probe_data: dict) -> list[dict]:
     streams = []
     for s in probe_data.get("streams", []):

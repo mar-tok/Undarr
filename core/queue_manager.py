@@ -15,6 +15,7 @@ from core.logger import log
 from core import db
 from core.ffprobe import (
     probe_file,
+    extract_media_info,
     extract_audio_streams,
     extract_subtitle_streams,
     get_duration_us,
@@ -56,6 +57,7 @@ class Job:
     output_container: str = ""
     preset_name: str = ""
     block_reason: str | None = None
+    media_info: dict | None = None
 
 
 def job_to_dict(job: Job) -> dict:
@@ -73,6 +75,8 @@ def job_to_dict(job: Job) -> dict:
         d["error_message"] = job.error_message
     if job.block_reason:
         d["block_reason"] = job.block_reason
+    if job.media_info:
+        d["media_info"] = job.media_info
     return d
 
 
@@ -187,6 +191,11 @@ class QueueManager:
             output_container = preset.output_container or ""
             preset_name = library.preset
 
+        probe_data = await probe_file(file_path)
+        media_info = None
+        if probe_data:
+            media_info = extract_media_info(probe_data)
+
         async with self._lock:
             job = Job(
                 id=uuid.uuid4().hex[:12],
@@ -197,6 +206,7 @@ class QueueManager:
                 ffmpeg_args=ffmpeg_args,
                 output_container=output_container,
                 preset_name=preset_name,
+                media_info=media_info,
             )
             if block_reason:
                 job.status = JobStatus.BLOCKED
@@ -336,7 +346,9 @@ class QueueManager:
             if preset and preset.resolution_cap and job.media_info:
                 source_height = job.media_info.get("resolution_height", 0)
                 if source_height > 0:
-                    scale_filter = build_scale_filter(preset.resolution_cap, source_height)
+                    scale_filter = build_scale_filter(
+                        preset.resolution_cap, source_height
+                    )
 
             result = await transcode(
                 input_path=job.file_path,
