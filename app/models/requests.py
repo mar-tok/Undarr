@@ -12,6 +12,16 @@ def _validate_name(v: str) -> str:
     return v
 
 
+class SkipConditionIn(BaseModel):
+    field: str
+    operator: str
+    value: str | int | float
+
+
+class SkipRuleIn(BaseModel):
+    conditions: list[SkipConditionIn]
+
+
 class AudioTrackConfigIn(BaseModel):
     codec: str = "copy"
     bitrate: str | None = None
@@ -65,6 +75,7 @@ class LibraryCreate(BaseModel):
     paths: list[str]
     preset: str
     watch: bool = True
+    skip_rules: list[SkipRuleIn] = []
     scan_interval: int = 0
     scan_unit: str = "hours"
 
@@ -79,6 +90,7 @@ class LibraryUpdate(BaseModel):
     paths: list[str]
     preset: str
     watch: bool = True
+    skip_rules: list[SkipRuleIn] = []
     scan_interval: int = 0
     scan_unit: str = "hours"
 

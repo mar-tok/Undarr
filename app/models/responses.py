@@ -3,6 +3,16 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+class SkipConditionOut(BaseModel):
+    field: str
+    operator: str
+    value: str | int | float
+
+
+class SkipRuleOut(BaseModel):
+    conditions: list[SkipConditionOut]
+
+
 class AudioTrackConfigOut(BaseModel):
     codec: str
     bitrate: str | None = None
@@ -37,6 +47,7 @@ class LibraryOut(BaseModel):
     paths: list[str]
     preset: str
     watch: bool
+    skip_rules: list[SkipRuleOut]
     scan_interval: int = 0
     scan_unit: str = "hours"
 

@@ -12,6 +12,18 @@ from core.logger import log
 
 
 @dataclass
+class SkipCondition:
+    field: str
+    operator: str
+    value: str | int | float
+
+
+@dataclass
+class SkipRule:
+    conditions: list[SkipCondition]
+
+
+@dataclass
 class AudioTrackConfig:
     codec: str = "copy"
     bitrate: str | None = None
@@ -59,6 +71,7 @@ class Library:
     paths: list[str]
     preset: str
     watch: bool = True
+    skip_rules: list[SkipRule] = field(default_factory=list)
     scan_interval: int = 0
     scan_unit: str = "hours"
 
@@ -131,10 +144,20 @@ def _config_from_dict(data: dict) -> Config:
 
     libraries: dict[str, Library] = {}
     for name, lib in (data.get("libraries") or {}).items():
+        skip_rules = []
+        for r in lib.get("skip_rules") or []:
+            conds = [
+                SkipCondition(
+                    field=c["field"], operator=c["operator"], value=c["value"]
+                )
+                for c in r["conditions"]
+            ]
+            skip_rules.append(SkipRule(conditions=conds))
         libraries[name] = Library(
             paths=lib.get("paths", []),
             preset=lib.get("preset", ""),
             watch=lib.get("watch", True),
+            skip_rules=skip_rules,
             scan_interval=lib.get("scan_interval", 0),
             scan_unit=lib.get("scan_unit", "hours"),
         )
@@ -194,7 +217,11 @@ def _config_to_dict(cfg: Config) -> dict:
                     if p.subtitle
                     else {}
                 ),
-                **({"resolution_cap": p.resolution_cap} if p.resolution_cap is not None else {}),
+                **(
+                    {"resolution_cap": p.resolution_cap}
+                    if p.resolution_cap is not None
+                    else {}
+                ),
             }
             for name, p in cfg.presets.items()
         },
@@ -203,6 +230,15 @@ def _config_to_dict(cfg: Config) -> dict:
                 "paths": lib.paths,
                 "preset": lib.preset,
                 "watch": lib.watch,
+                "skip_rules": [
+                    {
+                        "conditions": [
+                            {"field": c.field, "operator": c.operator, "value": c.value}
+                            for c in r.conditions
+                        ]
+                    }
+                    for r in lib.skip_rules
+                ],
                 "scan_interval": lib.scan_interval,
                 "scan_unit": lib.scan_unit,
             }
