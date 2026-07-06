@@ -134,5 +134,5 @@ async def scan(name: str):
     lib = await store.get_library(name)
     if not lib:
         raise HTTPException(404, "Library not found")
-    count = await scan_library(name, lib, queue_manager.enqueue)
-    return {"queued": count}
+    count, skipped = await scan_library(name, lib, queue_manager.enqueue)
+    return {"queued": count, "skipped": skipped}

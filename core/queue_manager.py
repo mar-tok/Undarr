@@ -167,7 +167,9 @@ class QueueManager:
             return "cpu", None
         return encoder_to_device_id(m.group(1)), None
 
-    async def enqueue(self, file_path: str, library_name: str) -> Job | None:
+    async def enqueue(
+        self, file_path: str, library_name: str, *, media_info: dict | None = None
+    ) -> Job | None:
         async with self._lock:
             if file_path in self._known_paths:
                 return None
@@ -191,10 +193,10 @@ class QueueManager:
             output_container = preset.output_container or ""
             preset_name = library.preset
 
-        probe_data = await probe_file(file_path)
-        media_info = None
-        if probe_data:
-            media_info = extract_media_info(probe_data)
+        if media_info is None:
+            probe_data = await probe_file(file_path)
+            if probe_data:
+                media_info = extract_media_info(probe_data)
 
         async with self._lock:
             job = Job(

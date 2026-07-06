@@ -1131,7 +1131,11 @@
             setScanningBadge(name, true);
             api("POST", "/api/libraries/" + encodeURIComponent(name) + "/scan").then(result => {
                 setScanningBadge(name, false);
-                alert("Queued " + result.queued + " file" + (result.queued !== 1 ? "s" : "") + ".");
+                let msg = "Queued " + result.queued + " file" + (result.queued !== 1 ? "s" : "") + ".";
+                if (result.skipped > 0) {
+                    msg += " Skipped " + result.skipped + " file" + (result.skipped !== 1 ? "s" : "") + " (matched rules).";
+                }
+                alert(msg);
             }).catch(err => {
                 setScanningBadge(name, false);
                 alert("Scan failed: " + err.message);

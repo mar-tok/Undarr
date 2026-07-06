@@ -25,7 +25,7 @@ def _compare(actual, operator: str, expected) -> bool:
             return False
 
 
-def should_skip(media_info: dict, rules: list[SkipRule]) -> bool:
+def should_skip(media_info: dict, rules: list[SkipRule]) -> SkipRule | None:
     for rule in rules:
         if not rule.conditions:
             continue
@@ -36,5 +36,10 @@ def should_skip(media_info: dict, rules: list[SkipRule]) -> bool:
                 matched = False
                 break
         if matched:
-            return True
-    return False
+            return rule
+    return None
+
+
+def format_rule(rule: SkipRule) -> str:
+    parts = [f"{c.field} {c.operator} {c.value}" for c in rule.conditions]
+    return " AND ".join(parts)

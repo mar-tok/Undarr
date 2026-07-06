@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from core.logger import log
-from core.ffprobe import is_video_file, probe_file
+from core.ffprobe import is_video_file, probe_file, extract_media_info
+from core.skip_rules import should_skip, format_rule
 from core.yaml_store import Library, store
 from core import db
 
@@ -26,25 +29,85 @@ async def scan_library(
     library_name: str,
     library: Library,
     enqueue_fn,
-) -> int:
+) -> tuple[int, int]:
     if not library.preset:
         log.warning("Scan skipped for '%s': no preset assigned", library_name)
-        return 0
+        return 0, 0
 
     files = _collect_video_files(library)
     count = 0
+    skipped = 0
     for file in files:
         file_str = str(file)
 
         if await db.has_completed_job(file_str):
             continue
 
-        result = await enqueue_fn(file_str, library_name)
-        if result is not None:
+        result = await scan_single_file(file_str, library_name, library, enqueue_fn)
+        if result == "queued":
             count += 1
+        elif result == "skipped":
+            skipped += 1
 
-    log.info("Scan of '%s': queued %d files", library_name, count)
-    return count
+    log.info("Scan of '%s': queued %d, skipped %d", library_name, count, skipped)
+    return count, skipped
+
+
+async def _log_skip(
+    file_path: str, library_name: str, preset: str, reason: str
+) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        st = Path(file_path).stat()
+        file_size = st.st_size
+    except OSError:
+        file_size = 0
+    await db.insert_job_history(
+        id=str(uuid.uuid4()),
+        library_name=library_name,
+        file_path=file_path,
+        status="skipped (rule)",
+        old_size_bytes=file_size,
+        new_size_bytes=None,
+        started_at=now,
+        finished_at=now,
+        duration_seconds=0,
+        ffmpeg_log="",
+        error_message=reason,
+        preset_name=preset,
+        device_name="",
+    )
+
+
+async def scan_single_file(
+    file_path: str,
+    library_name: str,
+    library: Library,
+    enqueue_fn,
+) -> str:
+    """Returns 'queued', 'skipped', or 'none'."""
+    media_info = None
+    probe_data = await probe_file(file_path)
+    if probe_data:
+        media_info = extract_media_info(probe_data)
+    if library.skip_rules and media_info:
+        matched_rule = should_skip(media_info, library.skip_rules)
+        if matched_rule:
+            log.debug(
+                "Skipping %s (matched skip rule: %s)",
+                file_path,
+                format_rule(matched_rule),
+            )
+            await _log_skip(
+                file_path,
+                library_name,
+                library.preset or "",
+                f"Matched skip rule: {format_rule(matched_rule)}",
+            )
+            return "skipped"
+
+    result = await enqueue_fn(file_path, library_name, media_info=media_info)
+    return "queued" if result is not None else "none"
 
 
 def _to_seconds(interval: int, unit: str) -> int:
@@ -77,13 +140,17 @@ class PeriodicScanner:
         await self.stop()
         await self.start(enqueue_fn)
 
-    async def _run_loop(self, library_name: str, interval_secs: int, enqueue_fn) -> None:
+    async def _run_loop(
+        self, library_name: str, interval_secs: int, enqueue_fn
+    ) -> None:
         try:
             while True:
                 await asyncio.sleep(interval_secs)
                 lib = await store.get_library(library_name)
                 if not lib:
-                    log.warning("Periodic scan: library '%s' no longer exists", library_name)
+                    log.warning(
+                        "Periodic scan: library '%s' no longer exists", library_name
+                    )
                     return
                 log.info("Periodic scan starting for '%s'", library_name)
                 await scan_library(library_name, lib, enqueue_fn)
