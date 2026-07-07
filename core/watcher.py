@@ -10,6 +10,7 @@ from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileModifi
 from core.logger import log
 from core.ffprobe import is_video_file
 from core.yaml_store import store
+from core.scanner import scan_single_file
 
 _suppressed: set[str] = set()
 _suppressed_lock = threading.Lock()
@@ -26,8 +27,9 @@ def unsuppress_path(path: str) -> None:
 
 
 class _VideoHandler(FileSystemEventHandler):
-    def __init__(self, library_name: str, loop: asyncio.AbstractEventLoop,
-                 enqueue_fn) -> None:
+    def __init__(
+        self, library_name: str, loop: asyncio.AbstractEventLoop, enqueue_fn
+    ) -> None:
         self._library_name = library_name
         self._loop = loop
         self._enqueue_fn = enqueue_fn
@@ -42,22 +44,21 @@ class _VideoHandler(FileSystemEventHandler):
         handle = self._debounce.pop(path, None)
         if handle:
             handle.cancel()
-        self._debounce[path] = self._loop.call_later(
-            2.0, self._fire, path
-        )
+        self._debounce[path] = self._loop.call_later(2.0, self._fire, path)
 
     def _fire(self, path: str) -> None:
         self._debounce.pop(path, None)
         with _suppressed_lock:
             if path in _suppressed:
                 return
-        asyncio.run_coroutine_threadsafe(
-            self._handle_file(path), self._loop
-        )
+        asyncio.run_coroutine_threadsafe(self._handle_file(path), self._loop)
 
     async def _handle_file(self, path: str) -> None:
         log.debug("File detected: %s", path)
-        await self._enqueue_fn(path, self._library_name)
+        library = await store.get_library(self._library_name)
+        if library is None:
+            return
+        await scan_single_file(path, self._library_name, library, self._enqueue_fn)
 
     def on_created(self, event: FileCreatedEvent) -> None:
         if not event.is_directory:
