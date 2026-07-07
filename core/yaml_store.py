@@ -72,6 +72,7 @@ class Library:
     preset: str
     watch: bool = True
     skip_rules: list[SkipRule] = field(default_factory=list)
+    path_patterns: list[str] = field(default_factory=list)
     scan_interval: int = 0
     scan_unit: str = "hours"
 
@@ -158,6 +159,7 @@ def _config_from_dict(data: dict) -> Config:
             preset=lib.get("preset", ""),
             watch=lib.get("watch", True),
             skip_rules=skip_rules,
+            path_patterns=lib.get("path_patterns", []),
             scan_interval=lib.get("scan_interval", 0),
             scan_unit=lib.get("scan_unit", "hours"),
         )
@@ -241,6 +243,7 @@ def _config_to_dict(cfg: Config) -> dict:
                 ],
                 "scan_interval": lib.scan_interval,
                 "scan_unit": lib.scan_unit,
+                **({"path_patterns": lib.path_patterns} if lib.path_patterns else {}),
             }
             for name, lib in cfg.libraries.items()
         },

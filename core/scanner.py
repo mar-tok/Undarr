@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core.logger import log
 from core.ffprobe import is_video_file, probe_file, extract_media_info
-from core.skip_rules import should_skip, format_rule
+from core.skip_rules import should_skip, match_path_pattern, format_rule
 from core.yaml_store import Library, store
 from core import db
 
@@ -53,6 +53,16 @@ async def scan_library(
     return count, skipped
 
 
+def _relative_to_library(file_path: str, library_paths: list[str]) -> str | None:
+    fp = Path(file_path)
+    for root in library_paths:
+        try:
+            return str(fp.relative_to(root))
+        except ValueError:
+            continue
+    return None
+
+
 async def _log_skip(
     file_path: str, library_name: str, preset: str, reason: str
 ) -> None:
@@ -86,6 +96,20 @@ async def scan_single_file(
     enqueue_fn,
 ) -> str:
     """Returns 'queued', 'skipped', or 'none'."""
+    if library.path_patterns:
+        rel_path = _relative_to_library(file_path, library.paths)
+        if rel_path:
+            matched = match_path_pattern(rel_path, library.path_patterns)
+            if matched:
+                log.debug("Skipping %s (matched path pattern: %s)", file_path, matched)
+                await _log_skip(
+                    file_path,
+                    library_name,
+                    library.preset or "",
+                    f"Matched path pattern: {matched}",
+                )
+                return "skipped"
+
     media_info = None
     probe_data = await probe_file(file_path)
     if probe_data:

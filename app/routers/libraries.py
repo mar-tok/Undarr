@@ -45,6 +45,7 @@ async def list_libraries():
             preset=l.preset,
             watch=l.watch,
             skip_rules=_skip_rules_out(l),
+            path_patterns=l.path_patterns,
             scan_interval=l.scan_interval,
             scan_unit=l.scan_unit,
         )
@@ -63,6 +64,7 @@ async def create_library(body: LibraryCreate):
         preset=body.preset,
         watch=body.watch,
         skip_rules=_to_skip_rules(body.skip_rules),
+        path_patterns=body.path_patterns,
         scan_interval=body.scan_interval,
         scan_unit=body.scan_unit,
     )
@@ -76,6 +78,7 @@ async def create_library(body: LibraryCreate):
         preset=lib.preset,
         watch=lib.watch,
         skip_rules=_skip_rules_out(lib),
+        path_patterns=lib.path_patterns,
         scan_interval=lib.scan_interval,
         scan_unit=lib.scan_unit,
     )
@@ -93,6 +96,7 @@ async def update_library(name: str, body: LibraryUpdate):
         preset=body.preset,
         watch=body.watch,
         skip_rules=_to_skip_rules(body.skip_rules),
+        path_patterns=body.path_patterns,
         scan_interval=body.scan_interval,
         scan_unit=body.scan_unit,
     )
@@ -115,6 +119,7 @@ async def update_library(name: str, body: LibraryUpdate):
         preset=lib.preset,
         watch=lib.watch,
         skip_rules=_skip_rules_out(lib),
+        path_patterns=lib.path_patterns,
         scan_interval=lib.scan_interval,
         scan_unit=lib.scan_unit,
     )

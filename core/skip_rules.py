@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fnmatch
+
 from core.yaml_store import SkipCondition, SkipRule
 
 
@@ -43,3 +45,11 @@ def should_skip(media_info: dict, rules: list[SkipRule]) -> SkipRule | None:
 def format_rule(rule: SkipRule) -> str:
     parts = [f"{c.field} {c.operator} {c.value}" for c in rule.conditions]
     return " AND ".join(parts)
+
+
+def match_path_pattern(rel_path: str, patterns: list[str]) -> str | None:
+    lower = "/" + rel_path.lower()
+    for pattern in patterns:
+        if fnmatch.fnmatch(lower, pattern.lower()):
+            return pattern
+    return None

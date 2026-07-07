@@ -48,6 +48,7 @@ class LibraryOut(BaseModel):
     preset: str
     watch: bool
     skip_rules: list[SkipRuleOut]
+    path_patterns: list[str] = []
     scan_interval: int = 0
     scan_unit: str = "hours"
 

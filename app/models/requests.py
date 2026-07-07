@@ -76,6 +76,7 @@ class LibraryCreate(BaseModel):
     preset: str
     watch: bool = True
     skip_rules: list[SkipRuleIn] = []
+    path_patterns: list[str] = []
     scan_interval: int = 0
     scan_unit: str = "hours"
 
@@ -91,6 +92,7 @@ class LibraryUpdate(BaseModel):
     preset: str
     watch: bool = True
     skip_rules: list[SkipRuleIn] = []
+    path_patterns: list[str] = []
     scan_interval: int = 0
     scan_unit: str = "hours"
 
