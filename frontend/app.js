@@ -984,6 +984,9 @@
         renderPresets();
     });
 
+    const SKIP_FIELDS = ["video_codec", "audio_codec", "resolution_width", "resolution_height", "bitrate_kbps", "file_size_mb", "duration_seconds"];
+    const SKIP_OPS = ["equals", "not_equals", "less_than", "greater_than", "contains"];
+
     let libraries = [];
     let editingLibrary = null;
     let showingNewLibraryForm = false;
@@ -1046,6 +1049,34 @@
         const scanInterval = lib ? (lib.scan_interval || 0) : 0;
         const scanUnit = lib ? (lib.scan_unit || "minutes") : "minutes";
 
+        const skipRulesHtml = (lib ? (lib.skip_rules || []) : []).map((rule, ri) => {
+            const condsHtml = (rule.conditions || []).map(c =>
+                '<div class="skip-cond-row">'
+                + '<select class="cond-field">' + SKIP_FIELDS.map(f => '<option value="' + f + '"' + (f === c.field ? " selected" : "") + '>' + f + '</option>').join("") + '</select>'
+                + '<select class="cond-op">' + SKIP_OPS.map(o => '<option value="' + o + '"' + (o === c.operator ? " selected" : "") + '>' + o + '</option>').join("") + '</select>'
+                + '<input class="cond-value" value="' + esc(c.value != null ? String(c.value) : "") + '" placeholder="value">'
+                + '<button class="btn btn-sm btn-remove-cond" type="button">Remove</button>'
+                + '</div>'
+            ).join("");
+            return '<div class="skip-rule-group">'
+                + '<div class="skip-rule-header">'
+                + '<span class="skip-rule-label">Rule ' + (ri + 1) + '</span>'
+                + '<span class="skip-rule-actions">'
+                + '<button class="btn btn-sm btn-remove-rule" type="button">Remove Rule</button>'
+                + '</span>'
+                + '</div>'
+                + '<div class="skip-rule-conds">' + condsHtml + '</div>'
+                + '<button class="btn skip-add-cond" type="button">Add Condition</button>'
+                + '</div>';
+        }).join("");
+
+        const pathPatternsHtml = (lib ? (lib.path_patterns || []) : []).map(p =>
+            '<div class="path-pattern-row">'
+            + '<input class="pattern-value" value="' + esc(p) + '" placeholder="e.g. *trailer*">'
+            + '<button class="btn btn-sm btn-remove-pattern" type="button">Remove</button>'
+            + '</div>'
+        ).join("");
+
         return '<div class="library-card editing">'
             + '<div class="form-group"><label>Name</label>'
             + '<input type="text" class="lc-name" value="' + esc(name) + '"></div>'
@@ -1063,14 +1094,134 @@
             + '<option value="hours"' + (scanUnit === "hours" ? " selected" : "") + '>hours</option>'
             + '<option value="days"' + (scanUnit === "days" ? " selected" : "") + '>days</option>'
             + '</select></div></div>'
+            + '<div>'
+            + '<label class="section-label">Path Patterns</label>'
+            + '<div class="lc-path-patterns">' + pathPatternsHtml + '</div>'
+            + '<button class="btn lc-add-pattern" type="button" style="margin-top:6px">Add Pattern</button>'
+            + '</div>'
+            + '<div style="margin-top:12px">'
+            + '<label class="section-label">Skip Rules</label>'
+            + '<div class="lc-skip-rules">' + skipRulesHtml + '</div>'
+            + '<button class="btn lc-add-rule" type="button" style="margin-top:6px">Add Rule</button>'
+            + '</div>'
             + '<div class="form-actions">'
             + '<button class="btn lc-cancel">Cancel</button>'
             + '<button class="btn btn-primary lc-save">Save</button>'
             + '</div></div>';
     }
 
+    function addCondRow(condsEl, fieldVal, opVal, valVal) {
+        const row = document.createElement("div");
+        row.className = "skip-cond-row";
+        row.innerHTML = '<select class="cond-field">' + SKIP_FIELDS.map(f => '<option value="' + f + '"' + (f === fieldVal ? " selected" : "") + '>' + f + '</option>').join("") + '</select>'
+            + '<select class="cond-op">' + SKIP_OPS.map(o => '<option value="' + o + '"' + (o === opVal ? " selected" : "") + '>' + o + '</option>').join("") + '</select>'
+            + '<input class="cond-value" value="' + esc(valVal != null ? String(valVal) : "") + '" placeholder="value">'
+            + '<button class="btn btn-sm btn-remove-cond" type="button">Remove</button>';
+        row.querySelector(".btn-remove-cond").addEventListener("click", () => {
+            const group = row.closest(".skip-rule-group");
+            row.remove();
+            if (!group.querySelector(".skip-cond-row")) {
+                group.remove();
+                renumberRuleGroups(group.parentElement);
+            }
+        });
+        condsEl.appendChild(row);
+    }
+
+    function addRuleGroup(rulesEl) {
+        const idx = rulesEl.querySelectorAll(".skip-rule-group").length + 1;
+        const group = document.createElement("div");
+        group.className = "skip-rule-group";
+        group.innerHTML = '<div class="skip-rule-header">'
+            + '<span class="skip-rule-label">Rule ' + idx + '</span>'
+            + '<span class="skip-rule-actions">'
+            + '<button class="btn btn-sm btn-remove-rule" type="button">Remove Rule</button>'
+            + '</span>'
+            + '</div>'
+            + '<div class="skip-rule-conds"></div>'
+            + '<button class="btn skip-add-cond" type="button">Add Condition</button>';
+        group.querySelector(".btn-remove-rule").addEventListener("click", () => {
+            group.remove();
+            renumberRuleGroups(rulesEl);
+        });
+        const condsEl = group.querySelector(".skip-rule-conds");
+        group.querySelector(".skip-add-cond").addEventListener("click", () => {
+            addCondRow(condsEl, "video_codec", "equals", "");
+        });
+        addCondRow(condsEl, "video_codec", "equals", "");
+        rulesEl.appendChild(group);
+    }
+
+    function renumberRuleGroups(container) {
+        if (!container) return;
+        container.querySelectorAll(".skip-rule-group").forEach((g, i) => {
+            const label = g.querySelector(".skip-rule-label");
+            if (label) label.textContent = "Rule " + (i + 1);
+        });
+    }
+
+    function collectSkipRules(container) {
+        return Array.from(container.querySelectorAll(".skip-rule-group")).map(group => ({
+            conditions: Array.from(group.querySelectorAll(".skip-cond-row")).map(row => ({
+                field: row.querySelector(".cond-field").value,
+                operator: row.querySelector(".cond-op").value,
+                value: row.querySelector(".cond-value").value,
+            }))
+        })).filter(rule => rule.conditions.length > 0);
+    }
+
+    function addPathPatternRow(container, value) {
+        const row = document.createElement("div");
+        row.className = "path-pattern-row";
+        row.innerHTML = '<input class="pattern-value" value="' + esc(value || "") + '" placeholder="e.g. *trailer*">'
+            + '<button class="btn btn-sm btn-remove-pattern" type="button">Remove</button>';
+        row.querySelector(".btn-remove-pattern").addEventListener("click", () => { row.remove(); });
+        container.appendChild(row);
+    }
+
+    function collectPathPatterns(container) {
+        return Array.from(container.querySelectorAll(".path-pattern-row"))
+            .map(row => row.querySelector(".pattern-value").value.trim())
+            .filter(v => v);
+    }
+
     function attachLibraryFormListeners(form, originalName) {
         const isNew = originalName === null;
+
+        const rulesEl = form.querySelector(".lc-skip-rules");
+        form.querySelectorAll(".skip-rule-group").forEach(group => {
+            group.querySelector(".btn-remove-rule").addEventListener("click", () => {
+                group.remove();
+                renumberRuleGroups(rulesEl);
+            });
+            const condsEl = group.querySelector(".skip-rule-conds");
+            group.querySelector(".skip-add-cond").addEventListener("click", () => {
+                addCondRow(condsEl, "video_codec", "equals", "");
+            });
+            group.querySelectorAll(".btn-remove-cond").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const row = btn.closest(".skip-cond-row");
+                    const grp = row.closest(".skip-rule-group");
+                    row.remove();
+                    if (!grp.querySelector(".skip-cond-row")) {
+                        grp.remove();
+                        renumberRuleGroups(rulesEl);
+                    }
+                });
+            });
+        });
+
+        form.querySelector(".lc-add-rule").addEventListener("click", () => {
+            addRuleGroup(rulesEl);
+        });
+
+        form.querySelectorAll(".btn-remove-pattern").forEach(btn => {
+            btn.addEventListener("click", () => { btn.closest(".path-pattern-row").remove(); });
+        });
+
+        form.querySelector(".lc-add-pattern").addEventListener("click", () => {
+            addPathPatternRow(form.querySelector(".lc-path-patterns"), "");
+        });
 
         form.querySelector(".lc-save").addEventListener("click", async () => {
             const name = form.querySelector(".lc-name").value.trim();
@@ -1080,18 +1231,27 @@
             const watch = form.querySelector(".lc-watch").checked;
             const scan_interval = parseInt(form.querySelector(".lc-scan-interval").value) || 0;
             const scan_unit = form.querySelector(".lc-scan-unit").value;
+            const skip_rules = collectSkipRules(form.querySelector(".lc-skip-rules"));
+            const path_patterns = collectPathPatterns(form.querySelector(".lc-path-patterns"));
 
             if (!name || !preset || paths.length === 0) {
                 alert("Name, preset, and at least one path are required.");
                 return;
             }
 
+            let valid = true;
+            form.querySelectorAll(".skip-cond-row").forEach(row => {
+                const valInput = row.querySelector(".cond-value");
+                if (!valInput.value.trim()) { alert("Value is required"); valid = false; }
+            });
+            if (!valid) return;
+
             try {
                 if (isNew) {
-                    await api("POST", "/api/libraries", { name, paths, preset, watch, scan_interval, scan_unit });
+                    await api("POST", "/api/libraries", { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit });
                     showingNewLibraryForm = false;
                 } else {
-                    await api("PUT", "/api/libraries/" + encodeURIComponent(originalName), { name, paths, preset, watch, scan_interval, scan_unit });
+                    await api("PUT", "/api/libraries/" + encodeURIComponent(originalName), { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit });
                     editingLibrary = null;
                 }
                 loadLibraries();

@@ -607,6 +607,57 @@ tr.clickable:hover {
     margin-right: 6px;
 }
 
+.skip-rule-group {
+    background: var(--bg-tertiary);
+    padding: 10px;
+    margin-bottom: 8px;
+}
+
+.skip-rule-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.skip-rule-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.skip-rule-actions {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.skip-cond-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.skip-cond-row select, .skip-cond-row input {
+    width: auto;
+    flex: 1;
+}
+
+.skip-add-cond {
+    font-size: 12px;
+    padding: 4px 8px;
+}
+
+.path-pattern-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.path-pattern-row input { flex: 1; }
+
 #view-settings h2 {
     font-size: 16px;
     font-weight: 600;
