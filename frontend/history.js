@@ -1,4 +1,4 @@
-import { api, formatBytes, basename, esc, formatDate } from "./helpers.js";
+import { api, formatBytes, basename, esc, formatDuration, formatDate } from "./helpers.js";
 
 const HISTORY_PAGE_SIZES = [25, 50, 100, 200];
 let historyPageSize = 50;
