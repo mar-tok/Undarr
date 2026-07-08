@@ -65,10 +65,12 @@
         if (viewId === "presets") loadPresets();
         if (viewId === "libraries") loadLibraries();
         if (viewId === "settings") loadSettings();
+        const hash = viewId === "queue" ? "" : viewId;
+        if (location.hash.replace("#", "") !== hash)
+            history.replaceState(null, "", hash ? "#" + hash : location.pathname);
     }
 
-    navItems.forEach(n => n.addEventListener("click", () => { location.hash = n.dataset.view; }));
-    window.addEventListener("hashchange", () => navigate(location.hash.slice(1) || "queue"));
+    navItems.forEach(n => n.addEventListener("click", () => navigate(n.dataset.view)));
 
     let activeJobs = [];
     let pendingJobs = [];
@@ -1358,6 +1360,8 @@
             .catch(err => alert(err.message));
     });
 
-    navigate(location.hash.slice(1) || "queue");
+    const validViews = ["queue", "presets", "libraries", "settings"];
+    const hashView = location.hash.replace("#", "");
+    navigate(validViews.includes(hashView) ? hashView : "queue");
     connectSSE();
 })();
