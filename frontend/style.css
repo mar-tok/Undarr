@@ -125,7 +125,7 @@ td {
     font-size: 13px;
 }
 
-input, select {
+input, textarea, select {
     background: var(--bg-input);
     border: 1px solid var(--text-muted);
     border-radius: 0;
@@ -136,9 +136,14 @@ input, select {
     width: 100%;
 }
 
-input:focus, select:focus {
+input:focus, textarea:focus, select:focus {
     outline: none;
     border-color: var(--accent);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 60px;
 }
 
 select {

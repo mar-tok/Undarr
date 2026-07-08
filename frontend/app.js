@@ -1043,7 +1043,7 @@
 
     function renderLibraryForm(lib) {
         const name = lib ? lib.name : "";
-        const paths = lib ? lib.paths.join(", ") : "";
+        const paths = lib ? lib.paths.join("\n") : "";
         const preset = lib ? lib.preset : "";
         const watch = lib ? lib.watch : true;
         const scanInterval = lib ? (lib.scan_interval || 0) : 0;
@@ -1082,8 +1082,8 @@
             + '<input type="text" class="lc-name" value="' + esc(name) + '"></div>'
             + '<div class="form-group"><label>Preset</label>'
             + '<input type="text" class="lc-preset" value="' + esc(preset) + '" placeholder="Preset name"></div>'
-            + '<div class="form-group"><label>Paths (comma-separated)</label>'
-            + '<input type="text" class="lc-paths" value="' + esc(paths) + '" placeholder="/media/movies, /media/tv"></div>'
+            + '<div class="form-group"><label>Paths (one per line)</label>'
+            + '<textarea class="lc-paths" placeholder="/media/movies">' + esc(paths) + '</textarea></div>'
             + '<div class="form-group"><label>'
             + '<input type="checkbox" class="lc-watch"' + (watch ? " checked" : "") + '> Watch for new files</label></div>'
             + '<div class="form-group"><label>Scan Interval</label>'
@@ -1227,7 +1227,7 @@
             const name = form.querySelector(".lc-name").value.trim();
             const preset = form.querySelector(".lc-preset").value.trim();
             const paths = form.querySelector(".lc-paths").value
-                .split(",").map(p => p.trim()).filter(Boolean);
+                .split("\n").map(p => p.trim()).filter(Boolean);
             const watch = form.querySelector(".lc-watch").checked;
             const scan_interval = parseInt(form.querySelector(".lc-scan-interval").value) || 0;
             const scan_unit = form.querySelector(".lc-scan-unit").value;
