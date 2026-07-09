@@ -1,17 +1,24 @@
 import { api, esc } from "./helpers.js";
 
 let libraries = [];
+let presets = [];
 let editingLibraryName = null;
 let creatingNewLibrary = false;
+let librariesGeneration = 0;
 
 const SKIP_FIELDS = ["video_codec", "audio_codec", "resolution_width", "resolution_height", "bitrate_kbps", "file_size_mb", "duration_seconds"];
 const SKIP_OPS = ["equals", "not_equals", "less_than", "greater_than", "contains"];
 
-export function loadLibraries() {
-    return api("GET", "/api/libraries").then(data => {
-        libraries = data;
-        renderLibraries();
-    });
+export async function loadLibraries() {
+    const gen = ++librariesGeneration;
+    const [libs, pres] = await Promise.all([
+        api("GET", "/api/libraries"),
+        api("GET", "/api/presets"),
+    ]);
+    if (gen !== librariesGeneration) return;
+    libraries = libs;
+    presets = pres;
+    renderLibraries();
 }
 
 function renderLibraries() {
@@ -60,6 +67,9 @@ function renderLibraryFormCard(lib) {
     const scanInterval = lib ? (lib.scan_interval || 0) : 0;
     const scanUnit = lib ? (lib.scan_unit || "minutes") : "minutes";
 
+    const presetOptionsHtml = presets.map(p =>
+        `<option value="${esc(p.name)}"${p.name === preset ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+
     const skipRulesHtml = (lib ? (lib.skip_rules || []) : []).map((rule, ri) => {
         const condsHtml = (rule.conditions || []).map(c => `
             <div class="skip-cond-row">
@@ -95,7 +105,7 @@ function renderLibraryFormCard(lib) {
         </div>
         <div class="form-group">
             <label>Preset</label>
-            <input type="text" class="lc-preset" value="${esc(preset)}" placeholder="Preset name">
+            <select class="lc-preset">${presetOptionsHtml}</select>
         </div>
         <div class="form-group">
             <label>Paths (one per line)</label>
@@ -253,7 +263,7 @@ function attachLibFormCardListeners(card, originalName) {
 
     card.querySelector(".lc-save").addEventListener("click", async () => {
         const name = card.querySelector(".lc-name").value.trim();
-        const preset = card.querySelector(".lc-preset").value.trim();
+        const preset = card.querySelector(".lc-preset").value;
         const paths = card.querySelector(".lc-paths").value
             .split("\n").map(p => p.trim()).filter(Boolean);
         const watch = card.querySelector(".lc-watch").checked;
