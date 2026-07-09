@@ -1,4 +1,4 @@
-import { api, formatBytes, basename, esc, formatDate } from "./helpers.js";
+import { api, formatBytes, basename, esc, escAttr, formatDate } from "./helpers.js";
 
 const PAGE_SIZES = [25, 50, 100, 200];
 let pageSize = 25;
@@ -87,8 +87,8 @@ function render() {
     updateSortHeaders();
 
     tbody.innerHTML = lastResults.map((r, i) =>
-        `<tr class="${i % 2 ? "stripe" : ""}">
-            <td title="${esc(r.file_path)}">${esc(basename(r.file_path))}</td>
+        `<tr class="${i % 2 ? "stripe" : ""}" data-tooltip="${escAttr(r.file_path)}">
+            <td>${esc(basename(r.file_path))}</td>
             <td>${esc(r.library_name)}</td>
             <td>${sizeLabel(r)}</td>
             <td>${formatDate(r.date)}</td>

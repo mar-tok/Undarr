@@ -5,6 +5,27 @@ import { initPresets, loadPresets } from "./presets.js";
 import { initLibraries, loadLibraries } from "./libraries.js";
 import { initSettings, loadSettings } from "./settings.js";
 
+const tooltip = document.getElementById("tooltip");
+let tipTarget = null;
+
+document.addEventListener("mousemove", e => {
+    const el = e.target.closest("[data-tooltip]");
+    if (el) {
+        if (el !== tipTarget) {
+            tipTarget = el;
+            tooltip.innerHTML = el.getAttribute("data-tooltip");
+            tooltip.style.display = "block";
+        }
+        const nearRight = e.clientX + tooltip.offsetWidth + 12 > window.innerWidth;
+        const nearBottom = e.clientY + tooltip.offsetHeight + 16 > window.innerHeight;
+        tooltip.style.left = (nearRight ? e.clientX - tooltip.offsetWidth - 8 : e.clientX + 12) + "px";
+        tooltip.style.top = (nearBottom ? e.clientY - tooltip.offsetHeight - 8 : e.clientY + 16) + "px";
+    } else if (tipTarget) {
+        tipTarget = null;
+        tooltip.style.display = "none";
+    }
+});
+
 const navItems = document.querySelectorAll(".nav-item");
 const views = document.querySelectorAll(".view");
 

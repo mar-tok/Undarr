@@ -32,6 +32,10 @@ export function esc(s) {
     return d.innerHTML;
 }
 
+export function escAttr(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/'/g, "&#39;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
 export function formatDuration(secs) {
     if (secs == null || secs < 0) return "-";
     const h = Math.floor(secs / 3600);

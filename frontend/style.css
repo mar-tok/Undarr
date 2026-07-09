@@ -712,3 +712,33 @@ tr.clickable:hover {
     color: var(--accent);
     margin-left: 10px;
 }
+
+/* Tooltip */
+#tooltip {
+    display: none;
+    position: fixed;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    color: var(--text);
+    overflow-wrap: break-word;
+    font-size: 13px;
+    font-weight: 400;
+    width: max-content;
+    max-width: 500px;
+    padding: 4px 8px;
+    pointer-events: none;
+    z-index: 2000;
+    line-height: 1.4;
+}
+
+#tooltip em {
+    font-style: normal;
+    color: var(--accent);
+}
+
+#tooltip code {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--text-muted);
+    padding: 1px 4px;
+    font-size: 12px;
+}

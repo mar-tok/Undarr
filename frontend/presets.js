@@ -1,4 +1,4 @@
-import { api, esc } from "./helpers.js";
+import { api, esc, escAttr } from "./helpers.js";
 
 let presets = [];
 let editingPresetName = null;
@@ -122,8 +122,8 @@ function renderPresetViewCard(p) {
         <div class="preset-card-header">
             <span class="preset-card-name">${esc(p.name)}</span>
             <div class="preset-card-actions">
-                <button class="btn" data-action="edit" data-name="${esc(p.name)}">Edit</button>
-                <button class="btn btn-danger" data-action="delete" data-name="${esc(p.name)}">Delete</button>
+                <button class="btn" data-action="edit" data-name="${escAttr(p.name)}">Edit</button>
+                <button class="btn btn-danger" data-action="delete" data-name="${escAttr(p.name)}">Delete</button>
             </div>
         </div>
         <div class="preset-card-section"><span class="preset-card-section-label">Video</span><dl class="preset-card-props">${videoHtml}</dl></div>
@@ -134,25 +134,25 @@ function renderPresetViewCard(p) {
 
 function buildSubtitleModeOptionsHTML(selected) {
     return SUBTITLE_MODE_OPTIONS.map(c =>
-        `<option value="${c.value}"${c.value === selected ? " selected" : ""}>${esc(c.label)}</option>`
+        `<option value="${escAttr(c.value)}"${c.value === selected ? " selected" : ""}>${esc(c.label)}</option>`
     ).join("");
 }
 
 function buildResolutionCapOptionsHTML(selected) {
     return RESOLUTION_CAP_OPTIONS.map(c =>
-        `<option value="${c.value}"${c.value === (selected || "") ? " selected" : ""}>${esc(c.label)}</option>`
+        `<option value="${escAttr(c.value)}"${c.value === (selected || "") ? " selected" : ""}>${esc(c.label)}</option>`
     ).join("");
 }
 
 function buildAudioModeOptionsHTML(selected) {
     return AUDIO_MODE_OPTIONS.map(c =>
-        `<option value="${c.value}"${c.value === selected ? " selected" : ""}>${esc(c.label)}</option>`
+        `<option value="${escAttr(c.value)}"${c.value === selected ? " selected" : ""}>${esc(c.label)}</option>`
     ).join("");
 }
 
 function buildAudioTierCodecOptionsHTML(selected) {
     return AUDIO_TIER_CODEC_OPTIONS.map(c =>
-        `<option value="${c.value}"${c.value === selected ? " selected" : ""}>${esc(c.label)}</option>`
+        `<option value="${escAttr(c.value)}"${c.value === selected ? " selected" : ""}>${esc(c.label)}</option>`
     ).join("");
 }
 
@@ -186,8 +186,8 @@ function renderPresetFormCard(preset) {
 
     return `<div class="preset-card editing">
         <div class="form-group">
-            <label>Name</label>
-            <input type="text" class="pc-name" value="${esc(name)}">
+            <label data-tooltip="A display name for this preset.<br>Used to identify it when assigning to libraries. Does not affect encoding.">Name</label>
+            <input type="text" class="pc-name" value="${escAttr(name)}">
         </div>
         <div class="preset-tabs">
             <button class="preset-tab active" data-tab="video" type="button">Video</button>
@@ -204,44 +204,44 @@ function renderPresetFormCard(preset) {
                 <input type="text" class="pc-container" value="${esc(container)}" placeholder="Leave empty to keep original">
             </div>
             <div class="form-group pc-rescap-group">
-                <label>Resolution Cap</label>
+                <label data-tooltip="Maximum output resolution (height).<br>Files above the cap are downscaled while preserving aspect ratio.<br>Files at or below the cap pass through at original resolution.">Resolution Cap</label>
                 <select class="pc-rescap">${buildResolutionCapOptionsHTML(resCap)}</select>
             </div>
         </div>
         <div class="preset-tab-panel pc-tab-audio" style="display:none">
             <div class="form-group">
-                <label>Mode</label>
+                <label data-tooltip="Audio handling mode.<br><em>Copy</em> passes through all audio streams unchanged.<br><em>Configure</em> lets you set per-tier codec, filtering, and downmix options.">Mode</label>
                 <select class="pc-audio-mode">${buildAudioModeOptionsHTML(audioMode)}</select>
             </div>
             <div class="pc-audio-config"${configHidden}>
                 <div class="audio-tier">
-                    <label class="section-label">Stereo, 1-2 channels</label>
+                    <label class="section-label" data-tooltip="Rules for audio streams with 1-2 channels (mono, stereo).<br>Streams already matching the target codec and bitrate are copied automatically.">Stereo, 1-2 channels</label>
                     <div class="form-row form-row-2">
                         <div class="form-group">
-                            <label>Codec</label>
+                            <label data-tooltip="Codec for stereo audio streams (1-2 channels).<br><em>Copy</em> keeps the original codec.<br>Other codecs re-encode streams that don't already match.">Codec</label>
                             <select class="pc-stereo-codec">${buildAudioTierCodecOptionsHTML(stereoCodec)}</select>
                         </div>
                         <div class="form-group pc-stereo-bitrate-group"${stereoBitrateHidden}>
-                            <label>Bitrate</label>
-                            <input type="text" class="pc-stereo-bitrate" value="${esc(stereoBitrate)}" placeholder="e.g. 160k">
+                            <label data-tooltip="Maximum bitrate for stereo streams.<br>Streams at or below this bitrate (in the target codec) are copied.<br>Streams above are re-encoded at this bitrate.<br>If left empty, streams already in the target codec are always copied at their original bitrate. Re-encoded streams use FFmpeg's codec default.">Bitrate</label>
+                            <input type="text" class="pc-stereo-bitrate" value="${escAttr(stereoBitrate)}" placeholder="e.g. 160k">
                         </div>
                     </div>
                 </div>
                 <div class="audio-tier">
-                    <label class="section-label">Surround, 3+ channels</label>
+                    <label class="section-label" data-tooltip="Rules for audio streams with 3 or more channels (5.1, 7.1, etc).<br>Streams already matching the target codec and bitrate are copied automatically.">Surround, 3+ channels</label>
                     <div class="form-row form-row-2">
                         <div class="form-group">
-                            <label>Codec</label>
+                            <label data-tooltip="Codec for surround audio streams (more than 2 channels).<br><em>Copy</em> keeps the original codec.<br>Other codecs re-encode streams that don't already match.">Codec</label>
                             <select class="pc-surround-codec">${buildAudioTierCodecOptionsHTML(surroundCodec)}</select>
                         </div>
                         <div class="form-group pc-surround-bitrate-group"${surroundBitrateHidden}>
-                            <label>Bitrate</label>
-                            <input type="text" class="pc-surround-bitrate" value="${esc(surroundBitrate)}" placeholder="e.g. 640k">
+                            <label data-tooltip="Maximum bitrate for surround streams.<br>Streams at or below this bitrate (in the target codec) are copied.<br>Streams above are re-encoded at this bitrate.<br>If left empty, streams already in the target codec are always copied at their original bitrate. Re-encoded streams use FFmpeg's codec default.">Bitrate</label>
+                            <input type="text" class="pc-surround-bitrate" value="${escAttr(surroundBitrate)}" placeholder="e.g. 640k">
                         </div>
                     </div>
                     <div class="form-row form-row-2">
                         <div class="form-group">
-                            <label>Stereo downmix</label>
+                            <label data-tooltip="Add a stereo AAC track alongside each surround stream for device compatibility.<br><em>Always</em> adds a downmix regardless of existing stereo tracks.<br><em>If no stereo track exists</em> only adds a downmix when the file has no stereo streams after filtering.">Stereo downmix</label>
                             <select class="pc-downmix">
                                 <option value="never"${downmixMode === "never" ? " selected" : ""}>Never</option>
                                 <option value="always"${downmixMode === "always" ? " selected" : ""}>Always</option>
@@ -249,35 +249,35 @@ function renderPresetFormCard(preset) {
                             </select>
                         </div>
                         <div class="form-group pc-downmix-bitrate-group"${downmixBitrateHidden}>
-                            <label>Bitrate</label>
-                            <input type="text" class="pc-downmix-bitrate" value="${esc(downmixBitrate)}" placeholder="e.g. 160k">
+                            <label data-tooltip="Bitrate for the stereo AAC downmix track added alongside each surround stream.">Bitrate</label>
+                            <input type="text" class="pc-downmix-bitrate" value="${escAttr(downmixBitrate)}" placeholder="e.g. 160k">
                         </div>
                     </div>
                 </div>
                 <div class="audio-tier">
-                    <label class="section-label">Filtering</label>
+                    <label class="section-label" data-tooltip="Filter out unwanted audio streams before encoding.<br>Filtered streams are removed entirely from the output file.">Filtering</label>
                     <div class="form-row form-row-2">
                         <div class="form-group">
-                            <label>Languages</label>
-                            <input type="text" class="pc-languages" value="${esc(languages)}" placeholder="e.g. eng, jpn, spa">
+                            <label data-tooltip="Comma-separated ISO 639 language codes (e.g. <code>eng</code>, <code>jpn</code>, <code>spa</code>).<br>Only streams tagged with these languages are kept.<br>Streams tagged <code>und</code> (undefined) are always kept.<br>Leave empty to keep all languages.">Languages</label>
+                            <input type="text" class="pc-languages" value="${escAttr(languages)}" placeholder="e.g. eng, jpn, spa">
                         </div>
-                        <label class="audio-checkbox"><input type="checkbox" class="pc-remove-commentary"${commentaryChecked}> Remove commentary</label>
+                        <label class="audio-checkbox" data-tooltip="Drop audio streams with the <em>commentary</em> disposition flag set by the source."><input type="checkbox" class="pc-remove-commentary"${commentaryChecked}> Remove commentary</label>
                     </div>
                 </div>
             </div>
         </div>
         <div class="preset-tab-panel pc-tab-subtitle" style="display:none">
             <div class="form-group">
-                <label>Mode</label>
+                <label data-tooltip="Subtitle handling mode.<br><em>Keep all</em> passes through all subtitle streams.<br><em>Remove all</em> strips all subtitle streams from the output.<br><em>Keep by language</em> lets you filter by language and remove commentary tracks.">Mode</label>
                 <select class="pc-subtitle-mode">${buildSubtitleModeOptionsHTML(subtitleMode)}</select>
             </div>
             <div class="pc-subtitle-config"${subConfigHidden}>
                 <div class="form-row form-row-2">
                     <div class="form-group">
-                        <label>Languages</label>
-                        <input type="text" class="pc-sub-languages" value="${esc(subLanguages)}" placeholder="e.g. eng, jpn, spa">
+                        <label data-tooltip="Comma-separated ISO 639 language codes (e.g. <code>eng</code>, <code>jpn</code>, <code>spa</code>).<br>Only subtitle streams tagged with these languages are kept.<br>Streams tagged <code>und</code> (undefined) are always kept.<br>Leave empty to keep all languages.">Languages</label>
+                        <input type="text" class="pc-sub-languages" value="${escAttr(subLanguages)}" placeholder="e.g. eng, jpn, spa">
                     </div>
-                    <label class="audio-checkbox"><input type="checkbox" class="pc-sub-remove-commentary"${subCommentaryChecked}> Remove commentary</label>
+                    <label class="audio-checkbox" data-tooltip="Drop subtitle streams with the <em>commentary</em> disposition flag set by the source."><input type="checkbox" class="pc-sub-remove-commentary"${subCommentaryChecked}> Remove commentary</label>
                 </div>
             </div>
         </div>

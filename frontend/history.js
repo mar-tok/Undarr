@@ -1,4 +1,4 @@
-import { api, formatBytes, basename, esc, formatDuration, formatDate } from "./helpers.js";
+import { api, formatBytes, basename, esc, escAttr, formatDuration, formatDate } from "./helpers.js";
 
 const HISTORY_PAGE_SIZES = [25, 50, 100, 200];
 let historyPageSize = 50;
@@ -120,7 +120,7 @@ export async function loadHistory() {
     const tbody = document.getElementById("history-body");
     tbody.innerHTML = rows.map((r, i) =>
         `<tr class="clickable${i % 2 ? " stripe" : ""}" data-job-id="${r.id}">
-            <td title="${esc(r.file_path)}">${esc(basename(r.file_path))}</td>
+            <td data-tooltip="${escAttr(r.file_path)}">${esc(basename(r.file_path))}</td>
             <td>${esc(r.library_name)}</td>
             <td>${formatBytes(r.old_size_bytes)}</td>
             <td>${formatBytes(r.new_size_bytes)}</td>

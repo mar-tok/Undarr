@@ -1,4 +1,4 @@
-import { api, esc } from "./helpers.js";
+import { api, esc, escAttr } from "./helpers.js";
 
 let libraries = [];
 let presets = [];
@@ -46,13 +46,13 @@ function renderLibraryViewCard(lib) {
     }
     propsHtml += `<dt>Paths</dt><dd>${esc(lib.paths.join(", "))}</dd>`;
 
-    return `<div class="library-card" data-name="${esc(lib.name)}">
+    return `<div class="library-card" data-name="${escAttr(lib.name)}">
         <div class="library-card-header">
             <span class="library-card-name">${esc(lib.name)}</span>
             <div class="library-card-actions">
-                <button class="btn" data-lib-action="scan" data-name="${esc(lib.name)}">Scan</button>
-                <button class="btn" data-lib-action="edit" data-name="${esc(lib.name)}">Edit</button>
-                <button class="btn btn-danger" data-lib-action="delete" data-name="${esc(lib.name)}">Delete</button>
+                <button class="btn" data-lib-action="scan" data-name="${escAttr(lib.name)}">Scan</button>
+                <button class="btn" data-lib-action="edit" data-name="${escAttr(lib.name)}">Edit</button>
+                <button class="btn btn-danger" data-lib-action="delete" data-name="${escAttr(lib.name)}">Delete</button>
             </div>
         </div>
         <dl class="library-card-props">${propsHtml}</dl>
@@ -68,14 +68,14 @@ function renderLibraryFormCard(lib) {
     const scanUnit = lib ? (lib.scan_unit || "minutes") : "minutes";
 
     const presetOptionsHtml = presets.map(p =>
-        `<option value="${esc(p.name)}"${p.name === preset ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+        `<option value="${escAttr(p.name)}"${p.name === preset ? " selected" : ""}>${esc(p.name)}</option>`).join("");
 
     const skipRulesHtml = (lib ? (lib.skip_rules || []) : []).map((rule, ri) => {
         const condsHtml = (rule.conditions || []).map(c => `
             <div class="skip-cond-row">
                 <select class="cond-field">${SKIP_FIELDS.map(f => `<option value="${f}"${f === c.field ? " selected" : ""}>${f}</option>`).join("")}</select>
                 <select class="cond-op">${SKIP_OPS.map(o => `<option value="${o}"${o === c.operator ? " selected" : ""}>${o}</option>`).join("")}</select>
-                <input class="cond-value" value="${esc(c.value != null ? String(c.value) : "")}" placeholder="value">
+                <input class="cond-value" value="${escAttr(c.value != null ? String(c.value) : "")}" placeholder="value">
                 <button class="btn btn-sm btn-remove-cond" type="button">Remove</button>
             </div>
         `).join("");
@@ -93,29 +93,29 @@ function renderLibraryFormCard(lib) {
 
     const pathPatternsHtml = (lib ? (lib.path_patterns || []) : []).map(p => `
         <div class="path-pattern-row">
-            <input class="pattern-value" value="${esc(p)}" placeholder="e.g. *trailer*">
+            <input class="pattern-value" value="${escAttr(p)}" placeholder="e.g. *trailer*">
             <button class="btn btn-sm btn-remove-pattern" type="button">Remove</button>
         </div>
     `).join("");
 
     return `<div class="library-card editing">
         <div class="form-group">
-            <label>Name</label>
-            <input type="text" class="lc-name" value="${esc(name)}">
+            <label data-tooltip="A display name for this library.<br>Used for identification only. Does not affect file paths or processing.">Name</label>
+            <input type="text" class="lc-name" value="${escAttr(name)}">
         </div>
         <div class="form-group">
-            <label>Preset</label>
+            <label data-tooltip="The preset defines how files in this library are transcoded.<br>It controls the <em>encoder</em>, <em>quality</em>, <em>speed</em>, <em>container</em>, and any extra FFmpeg flags.">Preset</label>
             <select class="lc-preset">${presetOptionsHtml}</select>
         </div>
         <div class="form-group">
-            <label>Paths (one per line)</label>
+            <label data-tooltip="Directories to scan for media files.<br>All video files found in these paths (and subdirectories) will be evaluated for transcoding.">Paths (one per line)</label>
             <textarea class="lc-paths" placeholder="/media/movies">${esc(paths)}</textarea>
         </div>
         <div class="form-group">
-            <label><input type="checkbox" class="lc-watch"${watch ? " checked" : ""}> Watch for new files</label>
+            <label data-tooltip="Monitors this library's paths for newly added or modified files using filesystem events.<br>Unlike <em>Scan Interval</em>, file watching detects changes continuously."><input type="checkbox" class="lc-watch"${watch ? " checked" : ""}> Watch for new files</label>
         </div>
         <div class="form-group">
-            <label>Scan Interval</label>
+            <label data-tooltip="How often to automatically re-scan this library's paths for new or changed files.<br>Already processed files are skipped.<br>Useful as a safety net alongside <em>Watch for new files</em>, catching files added while the app was down or on network mounts where filesystem events may not fire.<br>Set to 0 to disable (default). You can still scan manually.">Scan Interval</label>
             <div style="display:flex;gap:8px">
                 <input type="number" class="lc-scan-interval" value="${scanInterval}" min="0" style="width:80px">
                 <select class="lc-scan-unit">
@@ -126,12 +126,12 @@ function renderLibraryFormCard(lib) {
             </div>
         </div>
         <div>
-            <label class="section-label">Path Patterns</label>
+            <label class="section-label" data-tooltip="Glob patterns matched against each file's path relative to the library root.<br>Case-insensitive. <code>*</code> matches any characters including directory separators.<br>Files matching any pattern are skipped before probing.<br><br>Examples:<br><code>*trailer*</code> (files with 'trailer' in the name)<br><code>*/Extras/*</code> (files inside an Extras folder)<br><code>*sample*</code> (files with 'sample' in the name)">Path Patterns</label>
             <div class="lc-path-patterns">${pathPatternsHtml}</div>
             <button class="btn lc-add-pattern" type="button" style="margin-top:6px">Add Pattern</button>
         </div>
         <div style="margin-top:12px">
-            <label class="section-label">Skip Rules</label>
+            <label class="section-label" data-tooltip="Rules that prevent specific files from being queued.<br>Each rule can have multiple conditions, all of which must match (AND).<br>If any rule matches, the file is skipped (OR between rules).<br><br>Example: skip HEVC files below 3000 kbps by adding both conditions to one rule.">Skip Rules</label>
             <div class="lc-skip-rules">${skipRulesHtml}</div>
             <button class="btn lc-add-rule" type="button" style="margin-top:6px">Add Rule</button>
         </div>
@@ -148,7 +148,7 @@ function addCondRow(condsEl, fieldVal, opVal, valVal) {
     row.innerHTML = `
         <select class="cond-field">${SKIP_FIELDS.map(f => `<option value="${f}"${f === fieldVal ? " selected" : ""}>${f}</option>`).join("")}</select>
         <select class="cond-op">${SKIP_OPS.map(o => `<option value="${o}"${o === opVal ? " selected" : ""}>${o}</option>`).join("")}</select>
-        <input class="cond-value" value="${esc(valVal != null ? String(valVal) : "")}" placeholder="value">
+        <input class="cond-value" value="${escAttr(valVal != null ? String(valVal) : "")}" placeholder="value">
         <button class="btn btn-sm btn-remove-cond" type="button">Remove</button>
     `;
     row.querySelector(".btn-remove-cond").addEventListener("click", () => {
@@ -210,7 +210,7 @@ function addPathPatternRow(container, value) {
     const row = document.createElement("div");
     row.className = "path-pattern-row";
     row.innerHTML = `
-        <input class="pattern-value" value="${esc(value || "")}" placeholder="e.g. *trailer*">
+        <input class="pattern-value" value="${escAttr(value || "")}" placeholder="e.g. *trailer*">
         <button class="btn btn-sm btn-remove-pattern" type="button">Remove</button>
     `;
     row.querySelector(".btn-remove-pattern").addEventListener("click", () => { row.remove(); });

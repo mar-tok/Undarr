@@ -112,7 +112,7 @@
 
             <div id="view-settings" class="view">
                 <div class="form-group" style="max-width:420px">
-                    <label>Cache Directory</label>
+                    <label data-tooltip="Temporary files are stored here during transcoding.<br>Requires enough free space for the largest file being processed.<br>Cleaned up automatically after each job.">Cache Directory</label>
                     <input type="text" id="set-cache-dir">
                 </div>
                 <button class="btn btn-primary" id="btn-save-settings" style="margin-bottom:24px">Save</button>
@@ -121,6 +121,7 @@
             </div>
         </main>
     </div>
+    <div id="tooltip"></div>
     <script type="module" src="app.js"></script>
 </body>
 </html>
