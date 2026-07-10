@@ -1,4 +1,4 @@
-import { api, esc, escAttr } from "./helpers.js";
+import { api, esc, escAttr, getFormSnapshot, clearValidation, setError } from "./helpers.js";
 
 let presets = [];
 let editingPresetName = null;
@@ -261,7 +261,7 @@ function renderPresetFormCard(preset) {
                             <label data-tooltip="Comma-separated ISO 639 language codes (e.g. <code>eng</code>, <code>jpn</code>, <code>spa</code>).<br>Only streams tagged with these languages are kept.<br>Streams tagged <code>und</code> (undefined) are always kept.<br>Leave empty to keep all languages.">Languages</label>
                             <input type="text" class="pc-languages" value="${escAttr(languages)}" placeholder="e.g. eng, jpn, spa">
                         </div>
-                        <label class="audio-checkbox" data-tooltip="Drop audio streams with the <em>commentary</em> disposition flag set by the source."><input type="checkbox" class="pc-remove-commentary"${commentaryChecked}> Remove commentary</label>
+                        <label class="audio-checkbox" data-tooltip="Drop audio streams with the <em>commentary</em> disposition flag set by the source."><input type="checkbox" role="switch" class="pc-remove-commentary"${commentaryChecked}> Remove commentary</label>
                     </div>
                 </div>
             </div>
@@ -277,7 +277,7 @@ function renderPresetFormCard(preset) {
                         <label data-tooltip="Comma-separated ISO 639 language codes (e.g. <code>eng</code>, <code>jpn</code>, <code>spa</code>).<br>Only subtitle streams tagged with these languages are kept.<br>Streams tagged <code>und</code> (undefined) are always kept.<br>Leave empty to keep all languages.">Languages</label>
                         <input type="text" class="pc-sub-languages" value="${escAttr(subLanguages)}" placeholder="e.g. eng, jpn, spa">
                     </div>
-                    <label class="audio-checkbox" data-tooltip="Drop subtitle streams with the <em>commentary</em> disposition flag set by the source."><input type="checkbox" class="pc-sub-remove-commentary"${subCommentaryChecked}> Remove commentary</label>
+                    <label class="audio-checkbox" data-tooltip="Drop subtitle streams with the <em>commentary</em> disposition flag set by the source."><input type="checkbox" role="switch" class="pc-sub-remove-commentary"${subCommentaryChecked}> Remove commentary</label>
                 </div>
             </div>
         </div>
@@ -291,6 +291,9 @@ function renderPresetFormCard(preset) {
 function attachFormCardListeners(card, originalName) {
     const isNew = originalName === null;
 
+    const saveBtn = card.querySelector(".pc-save");
+    saveBtn.disabled = true;
+
     card.querySelectorAll(".preset-tab").forEach(tab => {
         tab.addEventListener("click", () => {
             card.querySelectorAll(".preset-tab").forEach(t => t.classList.toggle("active", t === tab));
@@ -299,6 +302,11 @@ function attachFormCardListeners(card, originalName) {
             card.querySelector(".pc-tab-subtitle").style.display = tab.dataset.tab === "subtitle" ? "" : "none";
         });
     });
+
+    const initialSnapshot = getFormSnapshot(card);
+    function checkChanged() { saveBtn.disabled = getFormSnapshot(card) === initialSnapshot; }
+    card.addEventListener("input", checkChanged);
+    card.addEventListener("change", checkChanged);
 
     const audioModeSel = card.querySelector(".pc-audio-mode");
     const audioConfigDiv = card.querySelector(".pc-audio-config");
@@ -331,21 +339,21 @@ function attachFormCardListeners(card, originalName) {
     });
 
     card.querySelector(".pc-save").addEventListener("click", async () => {
+        clearValidation(card);
         const newName = card.querySelector(".pc-name").value.trim();
-        const args = card.querySelector(".pc-args").value.trim();
+        const argsEl = card.querySelector(".pc-args");
+        let valid = true;
+        if (!newName) { setError(card.querySelector(".pc-name"), "Name is required"); valid = false; }
+        if (!argsEl.value.trim()) { setError(argsEl, "Arguments are required"); valid = false; }
+        if (!valid) return;
+        const args = argsEl.value.trim();
         const container = card.querySelector(".pc-container").value.trim() || null;
 
-        if (!newName || !args) {
-            alert("Name and arguments are required.");
-            return;
-        }
-
-        let valid = true;
         function validateBitrate(input) {
             const v = input.value.trim();
             if (!v) return true;
             if (/^\d+k$/i.test(v)) return true;
-            alert("Use format like 160k, 320k, 640k");
+            setError(input, "Use format like 160k, 320k, 640k");
             valid = false;
             return false;
         }
@@ -410,7 +418,7 @@ function attachFormCardListeners(card, originalName) {
             }
             loadPresets();
         } catch (e) {
-            alert(e.message);
+            setError(card.querySelector(".pc-name"), e.message);
         }
     });
 

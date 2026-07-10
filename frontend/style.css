@@ -141,6 +141,16 @@ input:focus, textarea:focus, select:focus {
     border-color: var(--accent);
 }
 
+input.invalid, textarea.invalid, select.invalid {
+    border-color: var(--error);
+}
+
+.field-error {
+    font-size: 11px;
+    color: var(--error);
+    margin-top: 2px;
+}
+
 textarea {
     resize: vertical;
     min-height: 60px;
@@ -148,6 +158,66 @@ textarea {
 
 select {
     cursor: pointer;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    text-align: center;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.number-wrap {
+    display: inline-flex;
+    align-items: stretch;
+}
+
+.form-group .number-wrap {
+    display: flex;
+}
+
+.number-wrap input {
+    width: 32px;
+    min-width: 32px;
+    margin-left: -1px;
+    margin-right: -1px;
+    position: relative;
+}
+
+.number-wrap input:focus {
+    z-index: 1;
+}
+
+.number-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-width: 32px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--text-muted);
+    color: var(--text);
+    font-family: inherit;
+    cursor: pointer;
+    user-select: none;
+    padding: 0;
+}
+
+.number-btn img {
+    width: 14px;
+    height: 14px;
+}
+
+.number-btn:hover {
+    background: var(--border);
+}
+
+.number-btn:active {
+    background: var(--bg-input);
 }
 
 button, button * {
@@ -172,6 +242,18 @@ button, button * {
 
 .btn:hover {
     background: var(--border);
+}
+
+.btn:disabled {
+    color: var(--text-muted);
+    border-color: var(--border);
+    cursor: default;
+}
+
+.btn:disabled:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+    border-color: var(--border);
 }
 
 .btn-primary {
@@ -537,7 +619,7 @@ tr.clickable:hover {
     align-self: center;
 }
 
-.audio-checkbox input[type="checkbox"] {
+.audio-checkbox input[type="checkbox"]:not([role="switch"]) {
     width: 18px;
     height: 18px;
     cursor: pointer;
@@ -610,6 +692,46 @@ tr.clickable:hover {
 .form-group input[type="checkbox"] {
     width: auto;
     margin-right: 6px;
+}
+
+/* Toggle switch */
+input[type="checkbox"][role="switch"] {
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    width: 36px;
+    height: 20px;
+    min-width: 36px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--text-muted);
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+input[type="checkbox"][role="switch"]::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--text-muted);
+    transition: transform 0.15s, background 0.15s;
+}
+
+input[type="checkbox"][role="switch"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+input[type="checkbox"][role="switch"]:checked::before {
+    transform: translateX(16px);
+    background: var(--bg-primary);
+}
+
+input[type="checkbox"][role="switch"]:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 1px;
 }
 
 .skip-rule-group {

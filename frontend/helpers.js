@@ -57,3 +57,52 @@ export function formatDate(iso) {
     const date = pad(d.getDate()) + "/" + pad(d.getMonth() + 1);
     return sameYear ? date + " " + time : date + "/" + d.getFullYear() + " " + time;
 }
+
+export function getFormSnapshot(container) {
+    const vals = [];
+    container.querySelectorAll("input, select, textarea").forEach(el => {
+        if (el.type === "checkbox") vals.push(el.checked ? "1" : "0");
+        else vals.push(el.value);
+    });
+    return vals.join("\0");
+}
+
+function sizeNumberInput(input) {
+    const digits = Math.max((input.value || input.placeholder || "0").length, 1);
+    input.style.width = (digits * 12 + 16) + "px";
+}
+
+export function wrapNumberInputs(container) {
+    container.querySelectorAll('input[type="number"]').forEach(input => {
+        if (input.parentElement.classList.contains("number-wrap")) return;
+        sizeNumberInput(input);
+        input.addEventListener("input", () => sizeNumberInput(input));
+        const wrap = document.createElement("span");
+        wrap.className = "number-wrap";
+        input.parentNode.insertBefore(wrap, input);
+        const btnDec = document.createElement("button");
+        btnDec.type = "button";
+        btnDec.className = "number-btn";
+        btnDec.innerHTML = '<img src="minus.svg" alt="-">';
+        const btnInc = document.createElement("button");
+        btnInc.type = "button";
+        btnInc.className = "number-btn";
+        btnInc.innerHTML = '<img src="plus.svg" alt="+">';
+        wrap.append(btnDec, input, btnInc);
+        btnDec.addEventListener("click", () => { input.stepDown(); input.dispatchEvent(new Event("input", { bubbles: true })); });
+        btnInc.addEventListener("click", () => { input.stepUp(); input.dispatchEvent(new Event("input", { bubbles: true })); });
+    });
+}
+
+export function clearValidation(container) {
+    container.querySelectorAll(".invalid").forEach(el => el.classList.remove("invalid"));
+    container.querySelectorAll(".field-error").forEach(el => el.remove());
+}
+
+export function setError(input, msg) {
+    input.classList.add("invalid");
+    const err = document.createElement("div");
+    err.className = "field-error";
+    err.textContent = msg;
+    input.parentElement.appendChild(err);
+}

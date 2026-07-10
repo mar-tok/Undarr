@@ -1,4 +1,4 @@
-import { api, esc, escAttr } from "./helpers.js";
+import { api, esc, escAttr, getFormSnapshot, wrapNumberInputs, clearValidation, setError } from "./helpers.js";
 
 let libraries = [];
 let presets = [];
@@ -34,7 +34,10 @@ function renderLibraries() {
     grid.innerHTML = html;
 
     const editCard = grid.querySelector(".library-card.editing");
-    if (editCard) attachLibFormCardListeners(editCard, creatingNewLibrary ? null : editingLibraryName);
+    if (editCard) {
+        attachLibFormCardListeners(editCard, creatingNewLibrary ? null : editingLibraryName);
+        wrapNumberInputs(editCard);
+    }
 }
 
 function renderLibraryViewCard(lib) {
@@ -112,7 +115,7 @@ function renderLibraryFormCard(lib) {
             <textarea class="lc-paths" placeholder="/media/movies">${esc(paths)}</textarea>
         </div>
         <div class="form-group">
-            <label data-tooltip="Monitors this library's paths for newly added or modified files using filesystem events.<br>Unlike <em>Scan Interval</em>, file watching detects changes continuously."><input type="checkbox" class="lc-watch"${watch ? " checked" : ""}> Watch for new files</label>
+            <label data-tooltip="Monitors this library's paths for newly added or modified files using filesystem events.<br>Unlike <em>Scan Interval</em>, file watching detects changes continuously."><input type="checkbox" role="switch" class="lc-watch"${watch ? " checked" : ""}> Watch for new files</label>
         </div>
         <div class="form-group">
             <label data-tooltip="How often to automatically re-scan this library's paths for new or changed files.<br>Already processed files are skipped.<br>Useful as a safety net alongside <em>Watch for new files</em>, catching files added while the app was down or on network mounts where filesystem events may not fire.<br>Set to 0 to disable (default). You can still scan manually.">Scan Interval</label>
@@ -158,6 +161,7 @@ function addCondRow(condsEl, fieldVal, opVal, valVal) {
             group.remove();
             renumberRuleGroups(group.parentElement);
         }
+        condsEl.dispatchEvent(new Event("input", { bubbles: true }));
     });
     condsEl.appendChild(row);
 }
@@ -179,10 +183,12 @@ function addRuleGroup(rulesEl) {
     group.querySelector(".btn-remove-rule").addEventListener("click", () => {
         group.remove();
         renumberRuleGroups(rulesEl);
+        rulesEl.dispatchEvent(new Event("input", { bubbles: true }));
     });
     const condsEl = group.querySelector(".skip-rule-conds");
     group.querySelector(".skip-add-cond").addEventListener("click", () => {
         addCondRow(condsEl, "video_codec", "equals", "");
+        rulesEl.dispatchEvent(new Event("input", { bubbles: true }));
     });
     addCondRow(condsEl, "video_codec", "equals", "");
     rulesEl.appendChild(group);
@@ -213,7 +219,7 @@ function addPathPatternRow(container, value) {
         <input class="pattern-value" value="${escAttr(value || "")}" placeholder="e.g. *trailer*">
         <button class="btn btn-sm btn-remove-pattern" type="button">Remove</button>
     `;
-    row.querySelector(".btn-remove-pattern").addEventListener("click", () => { row.remove(); });
+    row.querySelector(".btn-remove-pattern").addEventListener("click", () => { row.remove(); container.dispatchEvent(new Event("input", { bubbles: true })); });
     container.appendChild(row);
 }
 
@@ -225,16 +231,24 @@ function collectPathPatterns(container) {
 
 function attachLibFormCardListeners(card, originalName) {
     const isNew = originalName === null;
+    const saveBtn = card.querySelector(".lc-save");
+    saveBtn.disabled = true;
+    const initialSnapshot = getFormSnapshot(card);
+    function checkChanged() { saveBtn.disabled = getFormSnapshot(card) === initialSnapshot; }
+    card.addEventListener("input", checkChanged);
+    card.addEventListener("change", checkChanged);
 
     const rulesEl = card.querySelector(".lc-skip-rules");
     card.querySelectorAll(".skip-rule-group").forEach(group => {
         group.querySelector(".btn-remove-rule").addEventListener("click", () => {
             group.remove();
             renumberRuleGroups(rulesEl);
+            checkChanged();
         });
         const condsEl = group.querySelector(".skip-rule-conds");
         group.querySelector(".skip-add-cond").addEventListener("click", () => {
             addCondRow(condsEl, "video_codec", "equals", "");
+            checkChanged();
         });
         group.querySelectorAll(".btn-remove-cond").forEach(btn => {
             btn.addEventListener("click", () => {
@@ -245,42 +259,47 @@ function attachLibFormCardListeners(card, originalName) {
                     grp.remove();
                     renumberRuleGroups(rulesEl);
                 }
+                checkChanged();
             });
         });
     });
 
     card.querySelector(".lc-add-rule").addEventListener("click", () => {
         addRuleGroup(rulesEl);
+        checkChanged();
     });
 
     card.querySelectorAll(".btn-remove-pattern").forEach(btn => {
-        btn.addEventListener("click", () => { btn.closest(".path-pattern-row").remove(); });
+        btn.addEventListener("click", () => { btn.closest(".path-pattern-row").remove(); checkChanged(); });
     });
 
     card.querySelector(".lc-add-pattern").addEventListener("click", () => {
         addPathPatternRow(card.querySelector(".lc-path-patterns"), "");
+        checkChanged();
     });
 
     card.querySelector(".lc-save").addEventListener("click", async () => {
-        const name = card.querySelector(".lc-name").value.trim();
-        const preset = card.querySelector(".lc-preset").value;
-        const paths = card.querySelector(".lc-paths").value
+        clearValidation(card);
+        const nameEl = card.querySelector(".lc-name");
+        const presetEl = card.querySelector(".lc-preset");
+        const pathsEl = card.querySelector(".lc-paths");
+        const name = nameEl.value.trim();
+        const paths = pathsEl.value
             .split("\n").map(p => p.trim()).filter(Boolean);
+        const preset = presetEl.value;
         const watch = card.querySelector(".lc-watch").checked;
         const scan_interval = parseInt(card.querySelector(".lc-scan-interval").value) || 0;
         const scan_unit = card.querySelector(".lc-scan-unit").value;
         const skip_rules = collectSkipRules(card.querySelector(".lc-skip-rules"));
         const path_patterns = collectPathPatterns(card.querySelector(".lc-path-patterns"));
 
-        if (!name || !preset || paths.length === 0) {
-            alert("Name, preset, and at least one path are required.");
-            return;
-        }
-
         let valid = true;
+        if (!name) { setError(nameEl, "Name is required"); valid = false; }
+        if (!preset) { setError(presetEl, "Preset is required"); valid = false; }
+        if (!paths.length) { setError(pathsEl, "At least one path is required"); valid = false; }
         card.querySelectorAll(".skip-cond-row").forEach(row => {
             const valInput = row.querySelector(".cond-value");
-            if (!valInput.value.trim()) { alert("Value is required"); valid = false; }
+            if (!valInput.value.trim()) { setError(valInput, "Value is required"); valid = false; }
         });
         if (!valid) return;
 
@@ -294,7 +313,7 @@ function attachLibFormCardListeners(card, originalName) {
             }
             loadLibraries();
         } catch (e) {
-            alert(e.message);
+            setError(nameEl, e.message);
         }
     });
 
