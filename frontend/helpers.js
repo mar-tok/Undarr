@@ -61,9 +61,11 @@ export function formatDate(iso) {
 export function getFormSnapshot(container) {
     const vals = [];
     container.querySelectorAll("input, select, textarea").forEach(el => {
+        if (el.closest(".path-manual-row")) return;
         if (el.type === "checkbox") vals.push(el.checked ? "1" : "0");
         else vals.push(el.value);
     });
+    container.querySelectorAll(".path-chip").forEach(chip => vals.push(chip.dataset.path));
     return vals.join("\0");
 }
 

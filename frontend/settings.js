@@ -1,4 +1,5 @@
 import { api, esc, escAttr, wrapNumberInputs } from "./helpers.js";
+import { openDirBrowser } from "./dir-browser.js";
 
 let settingsOriginal = {};
 let settingsSaveBtn = null;
@@ -66,6 +67,12 @@ export function initSettings() {
     settingsSaveBtn.disabled = true;
 
     document.getElementById("set-cache-dir").addEventListener("input", checkSettingsChanged);
+
+    document.getElementById("btn-browse-cache").addEventListener("click", () => {
+        const cacheEl = document.getElementById("set-cache-dir");
+        const startPath = cacheEl.value.trim() || null;
+        openDirBrowser(startPath, (path) => { cacheEl.value = path; checkSettingsChanged(); });
+    });
 
     document.getElementById("btn-save-settings").addEventListener("click", () => {
         const dir = document.getElementById("set-cache-dir").value.trim() || "/tmp/undarr";

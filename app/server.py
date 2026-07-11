@@ -10,7 +10,7 @@ from core.yaml_store import store
 from core.watcher import watcher
 from core.scanner import periodic_scanner
 from core.devices import detect_devices
-from app.routers import queue, presets, libraries, settings
+from app.routers import queue, presets, libraries, settings, filesystem
 
 
 @asynccontextmanager
@@ -34,14 +34,18 @@ async def lifespan(app: FastAPI):
     await db.close_db()
     log.info("Undarr stopped")
 
+
 app = FastAPI(title="Undarr", lifespan=lifespan)
 app.include_router(queue.router)
 app.include_router(presets.router)
 app.include_router(libraries.router)
 app.include_router(settings.router)
+app.include_router(filesystem.router)
+
 
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
 
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

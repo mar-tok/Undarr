@@ -141,7 +141,7 @@ input:focus, textarea:focus, select:focus {
     border-color: var(--accent);
 }
 
-input.invalid, textarea.invalid, select.invalid {
+input.invalid, textarea.invalid, select.invalid, .path-chips.invalid {
     border-color: var(--error);
 }
 
@@ -784,6 +784,194 @@ input[type="checkbox"][role="switch"]:focus-visible {
     margin-bottom: 6px;
 }
 .path-pattern-row input { flex: 1; }
+
+.path-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 36px;
+    margin-bottom: 8px;
+    padding: 6px;
+    border: 1px solid transparent;
+}
+
+.path-chip {
+    display: inline-flex;
+    align-items: center;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--text);
+    height: 28px;
+    max-width: 100%;
+}
+
+.path-chip .browse-chip {
+    padding: 0 8px;
+    font-size: 12px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 300px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    height: 100%;
+}
+
+.path-chip .browse-chip:hover {
+    color: var(--accent);
+}
+
+.path-chip .remove-chip {
+    padding: 0 6px;
+    height: 100%;
+    background: none;
+    border: none;
+    border-left: 1px solid var(--text);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.path-chip .remove-chip:hover {
+    background: var(--border);
+}
+
+.path-empty {
+    font-size: 13px;
+    color: var(--text);
+    padding: 4px 0;
+}
+
+.path-manual-row {
+    display: flex;
+    gap: 6px;
+}
+
+.path-manual-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+.path-manual-row .btn {
+    white-space: nowrap;
+}
+
+/* Directory browser */
+.dir-browser-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dir-browser {
+    width: 460px;
+    max-height: 70vh;
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent);
+    box-shadow: 0 4px 24px #111;
+    display: flex;
+    flex-direction: column;
+}
+
+.dir-browser.flash {
+    border-color: var(--text);
+}
+
+.dir-browser-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.dir-browser-path {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.dir-browser-entries {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.dir-browser-entry {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    border-left: 3px solid transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dir-browser-entry:hover {
+    background: var(--bg-tertiary);
+}
+
+.dir-browser-entry.selected {
+    border-left-color: var(--accent);
+    background: var(--bg-tertiary);
+}
+
+.dir-browser-entry-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.dir-browser-entry .entry-nav {
+    flex-shrink: 0;
+    visibility: hidden;
+    display: flex;
+    align-items: center;
+}
+
+.dir-browser-entry:hover .entry-nav {
+    visibility: visible;
+}
+
+.dir-browser-empty {
+    padding: 16px 12px;
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.dir-browser-empty code {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
+    background: var(--bg-primary);
+    padding: 2px 5px;
+    border: 1px solid var(--border);
+}
+
+.dir-browser-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+}
 
 #view-settings h2 {
     font-size: 16px;

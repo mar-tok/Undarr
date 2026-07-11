@@ -1,4 +1,5 @@
 import { api, esc, escAttr, getFormSnapshot, wrapNumberInputs, clearValidation, setError } from "./helpers.js";
+import { openDirBrowser } from "./dir-browser.js";
 
 let libraries = [];
 let presets = [];
@@ -64,7 +65,7 @@ function renderLibraryViewCard(lib) {
 
 function renderLibraryFormCard(lib) {
     const name = lib ? lib.name : "";
-    const paths = lib ? lib.paths.join("\n") : "";
+    const paths = lib ? lib.paths : [];
     const preset = lib ? lib.preset : "";
     const watch = lib ? lib.watch : true;
     const scanInterval = lib ? (lib.scan_interval || 0) : 0;
@@ -111,8 +112,15 @@ function renderLibraryFormCard(lib) {
             <select class="lc-preset">${presetOptionsHtml}</select>
         </div>
         <div class="form-group">
-            <label data-tooltip="Directories to scan for media files.<br>All video files found in these paths (and subdirectories) will be evaluated for transcoding.">Paths (one per line)</label>
-            <textarea class="lc-paths" placeholder="/media/movies">${esc(paths)}</textarea>
+            <label data-tooltip="Directories to scan for media files.<br>All video files found in these paths (and subdirectories) will be evaluated for transcoding.">Paths</label>
+            <div class="path-chips lc-path-chips">${paths.length ? paths.map(p =>
+                `<span class="path-chip" data-path="${escAttr(p)}"><button class="browse-chip" type="button">${esc(p)}</button><button class="remove-chip" type="button">&times;</button></span>`
+            ).join("") : `<span class="path-empty">No paths added.</span>`}</div>
+            <div class="path-manual-row">
+                <input class="lc-path-input" placeholder="/media/movies">
+                <button class="btn lc-add-path" type="button">Add</button>
+                <button class="btn lc-browse-path" type="button">Browse</button>
+            </div>
         </div>
         <div class="form-group">
             <label data-tooltip="Monitors this library's paths for newly added or modified files using filesystem events.<br>Unlike <em>Scan Interval</em>, file watching detects changes continuously."><input type="checkbox" role="switch" class="lc-watch"${watch ? " checked" : ""}> Watch for new files</label>
@@ -238,6 +246,9 @@ function attachLibFormCardListeners(card, originalName) {
     card.addEventListener("input", checkChanged);
     card.addEventListener("change", checkChanged);
 
+    const chipsContainer = card.querySelector(".lc-path-chips");
+    const pathInput = card.querySelector(".lc-path-input");
+
     const rulesEl = card.querySelector(".lc-skip-rules");
     card.querySelectorAll(".skip-rule-group").forEach(group => {
         group.querySelector(".btn-remove-rule").addEventListener("click", () => {
@@ -278,14 +289,112 @@ function attachLibFormCardListeners(card, originalName) {
         checkChanged();
     });
 
+    function updatePathEmpty() {
+        const empty = chipsContainer.querySelector(".path-empty");
+        if (chipsContainer.querySelectorAll(".path-chip").length) {
+            if (empty) empty.remove();
+        } else if (!empty) {
+            chipsContainer.innerHTML = `<span class="path-empty">No paths added.</span>`;
+        }
+    }
+
+    function addPathChip(path) {
+        path = path.trim();
+        if (!path) return;
+        const existing = chipsContainer.querySelectorAll(".path-chip");
+        for (const chip of existing) {
+            if (chip.dataset.path === path) return;
+        }
+        const chip = document.createElement("span");
+        chip.className = "path-chip";
+        chip.dataset.path = path;
+        chip.innerHTML = `<button class="browse-chip" type="button">${esc(path)}</button><button class="remove-chip" type="button">&times;</button>`;
+        chipsContainer.appendChild(chip);
+        updatePathEmpty();
+        checkChanged();
+    }
+
+    function getPathsFromChips() {
+        return Array.from(chipsContainer.querySelectorAll(".path-chip")).map(c => c.dataset.path);
+    }
+
+    chipsContainer.addEventListener("click", (e) => {
+        const removeBtn = e.target.closest(".remove-chip");
+        if (removeBtn) {
+            removeBtn.closest(".path-chip").remove();
+            updatePathEmpty();
+            checkChanged();
+            return;
+        }
+        const browseBtn = e.target.closest(".browse-chip");
+        if (browseBtn) {
+            const chip = browseBtn.closest(".path-chip");
+            const oldPath = chip.dataset.path;
+            openDirBrowser(oldPath, (newPath) => {
+                chip.dataset.path = newPath;
+                checkChanged();
+                browseBtn.textContent = newPath;
+            });
+        }
+    });
+
+    const addPathBtn = card.querySelector(".lc-add-path");
+    addPathBtn.disabled = true;
+
+    function clearPathError() {
+        pathInput.classList.remove("invalid");
+        const existing = pathInput.parentElement.parentElement.querySelector(".path-input-error");
+        if (existing) existing.remove();
+    }
+
+    function showPathError(msg) {
+        clearPathError();
+        pathInput.classList.add("invalid");
+        const err = document.createElement("div");
+        err.className = "field-error path-input-error";
+        err.textContent = msg;
+        pathInput.parentElement.after(err);
+    }
+
+    pathInput.addEventListener("input", () => {
+        clearPathError();
+        addPathBtn.disabled = !pathInput.value.trim();
+    });
+
+    async function validateAndAddPath() {
+        const path = pathInput.value.trim();
+        if (!path) return;
+        if (!path.startsWith("/")) {
+            showPathError("Path must be absolute (start with /)");
+            return;
+        }
+        try {
+            await api("GET", `/api/filesystem/browse?path=${encodeURIComponent(path)}`);
+            clearPathError();
+            addPathChip(path);
+            pathInput.value = "";
+            addPathBtn.disabled = true;
+        } catch (e) {
+            showPathError(e.message);
+        }
+    }
+
+    pathInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); validateAndAddPath(); }
+    });
+
+    addPathBtn.addEventListener("click", validateAndAddPath);
+
+    card.querySelector(".lc-browse-path").addEventListener("click", () => {
+        openDirBrowser(null, addPathChip);
+    });
+
     card.querySelector(".lc-save").addEventListener("click", async () => {
         clearValidation(card);
         const nameEl = card.querySelector(".lc-name");
         const presetEl = card.querySelector(".lc-preset");
-        const pathsEl = card.querySelector(".lc-paths");
         const name = nameEl.value.trim();
-        const paths = pathsEl.value
-            .split("\n").map(p => p.trim()).filter(Boolean);
+        const paths = getPathsFromChips();
         const preset = presetEl.value;
         const watch = card.querySelector(".lc-watch").checked;
         const scan_interval = parseInt(card.querySelector(".lc-scan-interval").value) || 0;
@@ -296,7 +405,7 @@ function attachLibFormCardListeners(card, originalName) {
         let valid = true;
         if (!name) { setError(nameEl, "Name is required"); valid = false; }
         if (!preset) { setError(presetEl, "Preset is required"); valid = false; }
-        if (!paths.length) { setError(pathsEl, "At least one path is required"); valid = false; }
+        if (!paths.length) { setError(chipsContainer, "At least one path is required"); valid = false; }
         card.querySelectorAll(".skip-cond-row").forEach(row => {
             const valInput = row.querySelector(".cond-value");
             if (!valInput.value.trim()) { setError(valInput, "Value is required"); valid = false; }
