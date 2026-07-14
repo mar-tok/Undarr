@@ -54,9 +54,9 @@ function renderLibraryViewCard(lib) {
         <div class="library-card-header">
             <span class="library-card-name">${esc(lib.name)}</span>
             <div class="library-card-actions">
-                <button class="btn" data-lib-action="scan" data-name="${escAttr(lib.name)}">Scan</button>
-                <button class="btn" data-lib-action="edit" data-name="${escAttr(lib.name)}">Edit</button>
-                <button class="btn btn-danger" data-lib-action="delete" data-name="${escAttr(lib.name)}">Delete</button>
+                <button class="btn" data-action="scan-library" data-name="${escAttr(lib.name)}">Scan</button>
+                <button class="btn-icon" data-action="edit-library" data-name="${escAttr(lib.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
+                <button class="btn-icon" data-action="delete-library" data-name="${escAttr(lib.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
             </div>
         </div>
         <dl class="library-card-props">${propsHtml}</dl>
@@ -80,14 +80,16 @@ function renderLibraryFormCard(lib) {
                 <select class="cond-field">${SKIP_FIELDS.map(f => `<option value="${f}"${f === c.field ? " selected" : ""}>${f}</option>`).join("")}</select>
                 <select class="cond-op">${SKIP_OPS.map(o => `<option value="${o}"${o === c.operator ? " selected" : ""}>${o}</option>`).join("")}</select>
                 <input class="cond-value" value="${escAttr(c.value != null ? String(c.value) : "")}" placeholder="value">
-                <button class="btn btn-sm btn-remove-cond" type="button">Remove</button>
+                <button class="btn-icon btn-remove-cond" type="button"><img src="close.svg" alt="Remove"></button>
             </div>
         `).join("");
         return `<div class="skip-rule-group">
             <div class="skip-rule-header">
                 <span class="skip-rule-label">Rule ${ri + 1}</span>
                 <span class="skip-rule-actions">
-                    <button class="btn btn-sm btn-remove-rule" type="button">Remove Rule</button>
+                    <button class="btn-icon btn-move-rule-up" type="button"><img src="arrow-up.svg" alt="Move up"></button>
+                    <button class="btn-icon btn-move-rule-down" type="button"><img src="arrow-down.svg" alt="Move down"></button>
+                    <button class="btn-icon btn-remove-rule" type="button"><img src="trash.svg" alt="Remove rule"></button>
                 </span>
             </div>
             <div class="skip-rule-conds">${condsHtml}</div>
@@ -98,7 +100,7 @@ function renderLibraryFormCard(lib) {
     const pathPatternsHtml = (lib ? (lib.path_patterns || []) : []).map(p => `
         <div class="path-pattern-row">
             <input class="pattern-value" value="${escAttr(p)}" placeholder="e.g. *trailer*">
-            <button class="btn btn-sm btn-remove-pattern" type="button">Remove</button>
+            <button class="btn-icon btn-remove-pattern" type="button"><img src="close.svg" alt="Remove"></button>
         </div>
     `).join("");
 
@@ -114,7 +116,7 @@ function renderLibraryFormCard(lib) {
         <div class="form-group">
             <label data-tooltip="Directories to scan for media files.<br>All video files found in these paths (and subdirectories) will be evaluated for transcoding.">Paths</label>
             <div class="path-chips lc-path-chips">${paths.length ? paths.map(p =>
-                `<span class="path-chip" data-path="${escAttr(p)}"><button class="browse-chip" type="button">${esc(p)}</button><button class="remove-chip" type="button">&times;</button></span>`
+                `<span class="path-chip" data-path="${escAttr(p)}"><button class="browse-chip" type="button">${esc(p)}</button><button class="remove-chip" type="button"><img src="close.svg" alt="Remove"></button></span>`
             ).join("") : `<span class="path-empty">No paths added.</span>`}</div>
             <div class="path-manual-row">
                 <input class="lc-path-input" placeholder="/media/movies">
@@ -160,7 +162,7 @@ function addCondRow(condsEl, fieldVal, opVal, valVal) {
         <select class="cond-field">${SKIP_FIELDS.map(f => `<option value="${f}"${f === fieldVal ? " selected" : ""}>${f}</option>`).join("")}</select>
         <select class="cond-op">${SKIP_OPS.map(o => `<option value="${o}"${o === opVal ? " selected" : ""}>${o}</option>`).join("")}</select>
         <input class="cond-value" value="${escAttr(valVal != null ? String(valVal) : "")}" placeholder="value">
-        <button class="btn btn-sm btn-remove-cond" type="button">Remove</button>
+        <button class="btn-icon btn-remove-cond" type="button"><img src="close.svg" alt="Remove"></button>
     `;
     row.querySelector(".btn-remove-cond").addEventListener("click", () => {
         const group = row.closest(".skip-rule-group");
@@ -182,7 +184,9 @@ function addRuleGroup(rulesEl) {
         <div class="skip-rule-header">
             <span class="skip-rule-label">Rule ${idx}</span>
             <span class="skip-rule-actions">
-                <button class="btn btn-sm btn-remove-rule" type="button">Remove Rule</button>
+                <button class="btn-icon btn-move-rule-up" type="button"><img src="arrow-up.svg" alt="Move up"></button>
+                <button class="btn-icon btn-move-rule-down" type="button"><img src="arrow-down.svg" alt="Move down"></button>
+                <button class="btn-icon btn-remove-rule" type="button"><img src="trash.svg" alt="Remove rule"></button>
             </span>
         </div>
         <div class="skip-rule-conds"></div>
@@ -193,6 +197,14 @@ function addRuleGroup(rulesEl) {
         renumberRuleGroups(rulesEl);
         rulesEl.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    group.querySelector(".btn-move-rule-up").addEventListener("click", () => {
+        moveRuleGroup(group, -1, rulesEl);
+        rulesEl.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    group.querySelector(".btn-move-rule-down").addEventListener("click", () => {
+        moveRuleGroup(group, 1, rulesEl);
+        rulesEl.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     const condsEl = group.querySelector(".skip-rule-conds");
     group.querySelector(".skip-add-cond").addEventListener("click", () => {
         addCondRow(condsEl, "video_codec", "equals", "");
@@ -200,6 +212,7 @@ function addRuleGroup(rulesEl) {
     });
     addCondRow(condsEl, "video_codec", "equals", "");
     rulesEl.appendChild(group);
+    updateRuleArrows(rulesEl);
 }
 
 function renumberRuleGroups(container) {
@@ -208,6 +221,26 @@ function renumberRuleGroups(container) {
         const label = g.querySelector(".skip-rule-label");
         if (label) label.textContent = `Rule ${i + 1}`;
     });
+    updateRuleArrows(container);
+}
+
+function updateRuleArrows(container) {
+    if (!container) return;
+    const groups = container.querySelectorAll(".skip-rule-group");
+    groups.forEach((g, i) => {
+        const up = g.querySelector(".btn-move-rule-up");
+        const down = g.querySelector(".btn-move-rule-down");
+        if (up) up.style.visibility = i === 0 ? "hidden" : "";
+        if (down) down.style.visibility = i === groups.length - 1 ? "hidden" : "";
+    });
+}
+
+function moveRuleGroup(group, dir, container) {
+    const sibling = dir === -1 ? group.previousElementSibling : group.nextElementSibling;
+    if (!sibling || !sibling.classList.contains("skip-rule-group")) return;
+    if (dir === -1) container.insertBefore(group, sibling);
+    else container.insertBefore(sibling, group);
+    renumberRuleGroups(container);
 }
 
 function collectSkipRules(container) {
@@ -225,7 +258,7 @@ function addPathPatternRow(container, value) {
     row.className = "path-pattern-row";
     row.innerHTML = `
         <input class="pattern-value" value="${escAttr(value || "")}" placeholder="e.g. *trailer*">
-        <button class="btn btn-sm btn-remove-pattern" type="button">Remove</button>
+        <button class="btn-icon btn-remove-pattern" type="button"><img src="close.svg" alt="Remove"></button>
     `;
     row.querySelector(".btn-remove-pattern").addEventListener("click", () => { row.remove(); container.dispatchEvent(new Event("input", { bubbles: true })); });
     container.appendChild(row);
@@ -256,6 +289,14 @@ function attachLibFormCardListeners(card, originalName) {
             renumberRuleGroups(rulesEl);
             checkChanged();
         });
+        group.querySelector(".btn-move-rule-up").addEventListener("click", () => {
+            moveRuleGroup(group, -1, rulesEl);
+            checkChanged();
+        });
+        group.querySelector(".btn-move-rule-down").addEventListener("click", () => {
+            moveRuleGroup(group, 1, rulesEl);
+            checkChanged();
+        });
         const condsEl = group.querySelector(".skip-rule-conds");
         group.querySelector(".skip-add-cond").addEventListener("click", () => {
             addCondRow(condsEl, "video_codec", "equals", "");
@@ -274,6 +315,7 @@ function attachLibFormCardListeners(card, originalName) {
             });
         });
     });
+    updateRuleArrows(rulesEl);
 
     card.querySelector(".lc-add-rule").addEventListener("click", () => {
         addRuleGroup(rulesEl);
@@ -308,7 +350,7 @@ function attachLibFormCardListeners(card, originalName) {
         const chip = document.createElement("span");
         chip.className = "path-chip";
         chip.dataset.path = path;
-        chip.innerHTML = `<button class="browse-chip" type="button">${esc(path)}</button><button class="remove-chip" type="button">&times;</button>`;
+        chip.innerHTML = `<button class="browse-chip" type="button">${esc(path)}</button><button class="remove-chip" type="button"><img src="close.svg" alt="Remove"></button>`;
         chipsContainer.appendChild(chip);
         updatePathEmpty();
         checkChanged();
@@ -461,10 +503,10 @@ function setScanningBadge(name, show) {
 
 export function initLibraries() {
     document.getElementById("library-grid").addEventListener("click", async (e) => {
-        const btn = e.target.closest("[data-lib-action]");
+        const btn = e.target.closest("[data-action]");
         if (!btn) return;
         const name = btn.dataset.name;
-        if (btn.dataset.libAction === "scan") {
+        if (btn.dataset.action === "scan-library") {
             setScanningBadge(name, true);
             try {
                 const result = await api("POST", `/api/libraries/${encodeURIComponent(name)}/scan`);
@@ -474,11 +516,11 @@ export function initLibraries() {
                 setScanningBadge(name, false);
                 alert("Scan failed: " + err.message);
             }
-        } else if (btn.dataset.libAction === "edit") {
+        } else if (btn.dataset.action === "edit-library") {
             editingLibraryName = name;
             creatingNewLibrary = false;
             renderLibraries();
-        } else if (btn.dataset.libAction === "delete") {
+        } else if (btn.dataset.action === "delete-library") {
             if (!confirm(`Delete library "${name}"?`)) return;
             try {
                 await api("DELETE", `/api/libraries/${encodeURIComponent(name)}`);

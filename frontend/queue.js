@@ -57,8 +57,8 @@ function renderIssues() {
     let html = "";
     issues.forEach(j => {
         const actions = j.type === "failed"
-            ? `<button class="btn btn-sm" data-retry="${j.id}">Retry</button>
-                <button class="btn btn-sm" data-dismiss="${j.id}">Dismiss</button>`
+            ? `<button class="btn-icon" data-action="retry-job" data-job-id="${j.id}" data-tooltip="Retry"><img src="retry.svg" alt="Retry"></button>`
+                + `<button class="btn-icon" data-action="dismiss-job" data-job-id="${j.id}" data-tooltip="Dismiss"><img src="close.svg" alt="Dismiss"></button>`
             : "";
         html += `<tr>
             <td title="${esc(j.file_path)}">${esc(basename(j.file_path))}</td>
@@ -160,23 +160,22 @@ export function initQueue() {
         });
     });
 
-    document.getElementById("issues-body").addEventListener("click", (e) => {
-        const retryBtn = e.target.closest("[data-retry]");
-        if (retryBtn) {
-            const id = retryBtn.dataset.retry;
-            api("POST", "/api/queue/retry", { ids: [id] }).then(() => {
-                failedJobs = failedJobs.filter(j => j.id !== id);
+    document.getElementById("issues-body").addEventListener("click", async (e) => {
+        const btn = e.target.closest("[data-action]");
+        if (!btn) return;
+        const jobId = btn.dataset.jobId;
+        if (btn.dataset.action === "retry-job") {
+            try {
+                await api("POST", "/api/queue/retry", { ids: [jobId] });
+                failedJobs = failedJobs.filter(j => j.id !== jobId);
                 renderIssues();
-            }).catch(err => alert(err.message));
-            return;
-        }
-        const dismissBtn = e.target.closest("[data-dismiss]");
-        if (dismissBtn) {
-            const id = dismissBtn.dataset.dismiss;
-            api("POST", "/api/history/dismiss", { ids: [id] }).then(() => {
-                failedJobs = failedJobs.filter(j => j.id !== id);
+            } catch (err) { alert(err.message); }
+        } else if (btn.dataset.action === "dismiss-job") {
+            try {
+                await api("POST", "/api/history/dismiss", { ids: [jobId] });
+                failedJobs = failedJobs.filter(j => j.id !== jobId);
                 renderIssues();
-            }).catch(err => alert(err.message));
+            } catch (err) { alert(err.message); }
         }
     });
 }

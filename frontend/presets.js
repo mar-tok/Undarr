@@ -122,8 +122,8 @@ function renderPresetViewCard(p) {
         <div class="preset-card-header">
             <span class="preset-card-name">${esc(p.name)}</span>
             <div class="preset-card-actions">
-                <button class="btn" data-action="edit" data-name="${escAttr(p.name)}">Edit</button>
-                <button class="btn btn-danger" data-action="delete" data-name="${escAttr(p.name)}">Delete</button>
+                <button class="btn-icon" data-action="edit-preset" data-name="${escAttr(p.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
+                <button class="btn-icon" data-action="delete-preset" data-name="${escAttr(p.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
             </div>
         </div>
         <div class="preset-card-section"><span class="preset-card-section-label">Video</span><dl class="preset-card-props">${videoHtml}</dl></div>
@@ -437,12 +437,12 @@ export function initPresets() {
         const btn = e.target.closest("[data-action]");
         if (!btn) return;
         const name = btn.dataset.name;
-        if (btn.dataset.action === "edit") {
+        if (btn.dataset.action === "edit-preset") {
             editingPresetName = name;
             creatingNewPreset = false;
             renderPresets();
-        } else if (btn.dataset.action === "delete") {
-            if (!confirm(`Delete preset "${name}"?`)) return;
+        } else if (btn.dataset.action === "delete-preset") {
+            if (!confirm(`Delete preset "${name}"?\n\nThis removes the preset configuration permanently. Any libraries using this preset will need to be reassigned to a different one.\n\nIf you just want to change settings, edit the preset instead.`)) return;
             try {
                 await api("DELETE", `/api/presets/${encodeURIComponent(name)}`);
                 if (editingPresetName === name) editingPresetName = null;
