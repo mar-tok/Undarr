@@ -4,16 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Undarr</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="layout">
         <nav id="sidebar">
-            <h1><span class="accent">Un</span>darr</h1>
-            <button class="nav-item active" data-view="queue">Queue</button>
-            <button class="nav-item" data-view="presets">Presets</button>
-            <button class="nav-item" data-view="libraries">Libraries</button>
-            <button class="nav-item" data-view="settings">Settings</button>
+            <h1 id="sidebar-title"><span class="accent">Un</span>darr</h1>
+            <button class="nav-item active" data-view="queue"><img src="list.svg" alt="">Queue</button>
+            <button class="nav-item" data-view="presets"><img src="sliders.svg" alt="">Presets</button>
+            <button class="nav-item" data-view="libraries"><img src="folder.svg" alt="">Libraries</button>
+            <button class="nav-item" data-view="settings"><img src="gear.svg" alt="">Settings</button>
+            <div id="sidebar-footer">
+                <a href="https://github.com/mar-tok/Undarr/issues" target="_blank" rel="noopener">
+                    <img src="github-symbol.svg" alt="GitHub">
+                    <span>Report an issue</span>
+                </a>
+                <a href="https://ko-fi.com/martokdev" target="_blank" rel="noopener">
+                    <img src="kofi_symbol.svg" alt="Ko-fi">
+                    <span>Buy me a coffee</span>
+                </a>
+                <a id="version-link" href="https://github.com/mar-tok/Undarr/releases" target="_blank" rel="noopener">
+                    <span id="version-label"></span>
+                    <img id="update-icon" src="dot.svg" alt="Update available" class="hidden">
+                </a>
+            </div>
         </nav>
         <main id="content">
             <div id="view-queue" class="view active">

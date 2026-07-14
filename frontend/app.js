@@ -1,3 +1,4 @@
+import { api } from "./helpers.js";
 import { initQueue, connectSSE } from "./queue.js";
 import { initHistory } from "./history.js";
 import { initSearch } from "./search.js";
@@ -41,6 +42,7 @@ function navigate(viewId) {
 }
 
 navItems.forEach(n => n.addEventListener("click", () => navigate(n.dataset.view)));
+document.getElementById("sidebar-title").addEventListener("click", () => navigate("queue"));
 
 initQueue();
 initHistory();
@@ -53,3 +55,13 @@ const validViews = ["queue", "presets", "libraries", "settings"];
 const hashView = location.hash.replace("#", "");
 navigate(validViews.includes(hashView) ? hashView : "queue");
 connectSSE();
+
+api("GET", "/api/version").then(data => {
+    document.getElementById("version-label").textContent = "Version " + data.version;
+    if (data.latest) {
+        const link = document.getElementById("version-link");
+        const icon = document.getElementById("update-icon");
+        link.dataset.tooltip = "You are running " + data.version + ". Version " + data.latest + " is available with new changes. Click here to view the changelog.";
+        icon.classList.remove("hidden");
+    }
+}).catch(() => {});

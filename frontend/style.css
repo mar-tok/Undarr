@@ -48,6 +48,7 @@ html, body {
     padding: 0 16px 16px;
     border-bottom: 1px solid var(--border);
     margin-bottom: 8px;
+    cursor: pointer;
 }
 
 .accent {
@@ -57,16 +58,24 @@ html, body {
 .nav-item {
     display: flex;
     align-items: center;
+    gap: 16px;
     width: 100%;
-    padding: 10px 16px;
+    padding: 10px 16px 10px 8px;
     background: none;
     border: none;
     border-left: 3px solid transparent;
     color: var(--text);
     font-size: 16px;
     text-align: left;
+    white-space: nowrap;
     cursor: pointer;
     font-family: inherit;
+}
+
+.nav-item img {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
 }
 
 .nav-item:hover {
@@ -76,6 +85,51 @@ html, body {
 .nav-item.active {
     border-left-color: var(--accent);
     background: var(--bg-tertiary);
+}
+
+#sidebar-footer {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+#sidebar-footer a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    color: var(--text);
+    text-decoration: none;
+    font-size: 16px;
+    border-left: 3px solid transparent;
+    cursor: pointer;
+}
+
+#sidebar-footer a:hover {
+    background: var(--bg-tertiary);
+}
+
+#sidebar-footer img {
+    width: 16px;
+    height: 16px;
+    margin-top: 3px;
+}
+
+#version-link {
+    font-size: 12px;
+    color: var(--text);
+    padding: 8px 16px;
+    border-top: 1px solid var(--border);
+}
+
+#update-icon {
+    width: 10px;
+    height: 10px;
+    margin: 0 0 0 12px;
+}
+
+.hidden {
+    display: none;
 }
 
 #content {

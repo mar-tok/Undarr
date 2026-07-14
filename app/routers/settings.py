@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import time
+from importlib.metadata import version
+from urllib.request import urlopen, Request
+
 from fastapi import APIRouter, HTTPException
 
 from app.models.requests import SettingsUpdate, DeviceUpdate
@@ -9,6 +15,43 @@ from core.queue_manager import queue_manager
 from core.devices import detect_devices
 
 router = APIRouter(prefix="/api", tags=["settings"])
+
+APP_VERSION = version("undarr")
+GITHUB_REPO = "mar-tok/Undarr"
+UPDATE_CHECK_INTERVAL = 6 * 3600
+
+_latest_version: str | None = None
+_last_check: float = 0
+
+
+async def _check_latest_version() -> str | None:
+    global _latest_version, _last_check
+    now = time.monotonic()
+    if _latest_version is not None and now - _last_check < UPDATE_CHECK_INTERVAL:
+        return _latest_version
+    try:
+
+        def _fetch():
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            req = Request(url, headers={"Accept": "application/vnd.github.v3+json"})
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+                return data.get("tag_name", "").lstrip("v")
+
+        _latest_version = await asyncio.to_thread(_fetch)
+        _last_check = now
+    except (OSError, ValueError, KeyError) as e:
+        log.debug("Update check failed: %s", e)
+    return _latest_version
+
+
+@router.get("/version")
+async def get_version():
+    latest = await _check_latest_version()
+    result = {"version": APP_VERSION}
+    if latest and latest != APP_VERSION:
+        result["latest"] = latest
+    return result
 
 
 @router.get("/settings")
@@ -35,13 +78,15 @@ async def get_devices():
     result = []
     for dev in devices:
         cfg = settings.devices.get(dev.id)
-        result.append({
-            "id": dev.id,
-            "name": dev.name,
-            "type": dev.type,
-            "encoders": dev.encoders,
-            "max_jobs": cfg.max_jobs if cfg else 1,
-        })
+        result.append(
+            {
+                "id": dev.id,
+                "name": dev.name,
+                "type": dev.type,
+                "encoders": dev.encoders,
+                "max_jobs": cfg.max_jobs if cfg else 1,
+            }
+        )
     return result
 
 
