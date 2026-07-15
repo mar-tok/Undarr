@@ -1,4 +1,5 @@
 import { api, esc, escAttr, getFormSnapshot, clearValidation, setError } from "./helpers.js";
+import { loadDeviceData, isEncoderDisabled, disabledDeviceTooltip } from "./devices.js";
 
 let presets = [];
 let editingPresetName = null;
@@ -31,7 +32,7 @@ const RESOLUTION_CAP_OPTIONS = [
     { value: "2160", label: "2160p" },
 ];
 
-function parsePresetData(p) {
+export function parsePresetData(p) {
     const audio = p.audio || null;
     let audioMode = "copy";
     if (audio) {
@@ -43,10 +44,13 @@ function parsePresetData(p) {
     let subtitleMode = "keep";
     if (subtitle && subtitle.mode !== "keep") subtitleMode = subtitle.mode;
     const resolutionCap = p.resolution_cap || null;
-    return { audio, audioMode, subtitle, subtitleMode, resolutionCap };
+    let encoder = "";
+    const encMatch = p.ffmpeg_args.match(/-c:v\s+(\S+)/);
+    if (encMatch) encoder = encMatch[1];
+    return { audio, audioMode, subtitle, subtitleMode, resolutionCap, encoder };
 }
 
-export function loadPresets() {
+function loadPresets() {
     return api("GET", "/api/presets").then(data => {
         presets = data;
         renderPresets();
@@ -71,6 +75,7 @@ function renderPresets() {
 
 function renderPresetViewCard(p) {
     const data = parsePresetData(p);
+    const disabled = data.encoder && isEncoderDisabled(data.encoder);
 
     let videoHtml = "";
     videoHtml += `<dt>Args</dt><dd>${esc(p.ffmpeg_args)}</dd>`;
@@ -118,9 +123,13 @@ function renderPresetViewCard(p) {
         }
     }
 
+    const warnHtml = disabled
+        ? `<span data-tooltip="${disabledDeviceTooltip(data.encoder, 'preset')}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`
+        : "";
+
     return `<div class="preset-card">
         <div class="preset-card-header">
-            <span class="preset-card-name">${esc(p.name)}</span>
+            <span class="preset-card-name">${warnHtml}${esc(p.name)}</span>
             <div class="preset-card-actions">
                 <button class="btn-icon" data-action="edit-preset" data-name="${escAttr(p.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
                 <button class="btn-icon" data-action="delete-preset" data-name="${escAttr(p.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
@@ -430,6 +439,11 @@ function attachFormCardListeners(card, originalName) {
         }
         renderPresets();
     });
+}
+
+export async function loadPresetView() {
+    await loadDeviceData();
+    await loadPresets();
 }
 
 export function initPresets() {

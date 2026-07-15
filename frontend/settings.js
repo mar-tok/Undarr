@@ -1,5 +1,7 @@
 import { api, esc, escAttr, wrapNumberInputs } from "./helpers.js";
+import { loadDeviceData } from "./devices.js";
 import { openDirBrowser } from "./dir-browser.js";
+import { renderQueue, renderIssues } from "./queue.js";
 
 let settingsOriginal = {};
 let settingsSaveBtn = null;
@@ -55,6 +57,9 @@ function renderDevices(devices) {
                 await api("PATCH", `/api/devices/${deviceId}`, { max_jobs: val });
                 original = input.value;
                 btn.disabled = true;
+                await loadDeviceData();
+                renderQueue();
+                renderIssues();
             } catch (e) {
                 alert(e.message);
             }

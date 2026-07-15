@@ -2,8 +2,8 @@ import { api } from "./helpers.js";
 import { initQueue, connectSSE } from "./queue.js";
 import { initHistory } from "./history.js";
 import { initSearch } from "./search.js";
-import { initPresets, loadPresets } from "./presets.js";
-import { initLibraries, loadLibraries } from "./libraries.js";
+import { initPresets, loadPresetView } from "./presets.js";
+import { initLibraries, loadLibraryView } from "./libraries.js";
 import { initSettings, loadSettings } from "./settings.js";
 
 const tooltip = document.getElementById("tooltip");
@@ -33,8 +33,8 @@ const views = document.querySelectorAll(".view");
 function navigate(viewId) {
     navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));
     views.forEach(v => v.classList.toggle("active", v.id === "view-" + viewId));
-    if (viewId === "presets") loadPresets();
-    if (viewId === "libraries") loadLibraries();
+    if (viewId === "presets") loadPresetView();
+    if (viewId === "libraries") loadLibraryView();
     if (viewId === "settings") loadSettings();
     const hash = viewId === "queue" ? "" : viewId;
     if (location.hash.replace("#", "") !== hash)

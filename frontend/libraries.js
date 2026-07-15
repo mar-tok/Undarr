@@ -1,4 +1,6 @@
 import { api, esc, escAttr, getFormSnapshot, wrapNumberInputs, clearValidation, setError } from "./helpers.js";
+import { loadDeviceData, isEncoderDisabled, disabledDeviceTooltip } from "./devices.js";
+import { parsePresetData } from "./presets.js";
 import { openDirBrowser } from "./dir-browser.js";
 
 let libraries = [];
@@ -10,7 +12,7 @@ let librariesGeneration = 0;
 const SKIP_FIELDS = ["video_codec", "audio_codec", "resolution_width", "resolution_height", "bitrate_kbps", "file_size_mb", "duration_seconds"];
 const SKIP_OPS = ["equals", "not_equals", "less_than", "greater_than", "contains"];
 
-export async function loadLibraries() {
+async function loadLibraries() {
     const gen = ++librariesGeneration;
     const [libs, pres] = await Promise.all([
         api("GET", "/api/libraries"),
@@ -20,6 +22,11 @@ export async function loadLibraries() {
     libraries = libs;
     presets = pres;
     renderLibraries();
+}
+
+export async function loadLibraryView() {
+    await loadDeviceData();
+    await loadLibraries();
 }
 
 function renderLibraries() {
@@ -42,19 +49,29 @@ function renderLibraries() {
 }
 
 function renderLibraryViewCard(lib) {
+    const preset = presets.find(p => p.name === lib.preset);
+    const encoder = preset ? (parsePresetData(preset).encoder || "") : "";
+    const disabled = encoder && isEncoderDisabled(encoder);
     let propsHtml = "";
-    propsHtml += `<dt>Preset</dt><dd>${esc(lib.preset)}</dd>`;
+    propsHtml += `<dt>Preset</dt><dd>${lib.preset ? esc(lib.preset) : "(none)"}</dd>`;
     propsHtml += `<dt>Watch</dt><dd>${lib.watch ? "Yes" : "No"}</dd>`;
     if (lib.scan_interval > 0) {
         propsHtml += `<dt>Scan</dt><dd>Every ${lib.scan_interval} ${esc(lib.scan_unit)}</dd>`;
     }
     propsHtml += `<dt>Paths</dt><dd>${esc(lib.paths.join(", "))}</dd>`;
 
+    let warnHtml = "";
+    if (!lib.preset) {
+        warnHtml = `<span data-tooltip="No preset assigned.<br>Files in this library will not be transcoded.<br>Assign a preset to enable processing."><img class="warning-icon" src="warning-triangle-fill.svg" alt="No preset"></span>`;
+    } else if (disabled) {
+        warnHtml = `<span data-tooltip="${disabledDeviceTooltip(encoder, "library")}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`;
+    }
+
     return `<div class="library-card" data-name="${escAttr(lib.name)}">
         <div class="library-card-header">
             <span class="library-card-name">${esc(lib.name)}</span>
             <div class="library-card-actions">
-                <button class="btn" data-action="scan-library" data-name="${escAttr(lib.name)}">Scan</button>
+                ${warnHtml}<button class="btn" data-action="scan-library" data-name="${escAttr(lib.name)}">Scan</button>
                 <button class="btn-icon" data-action="edit-library" data-name="${escAttr(lib.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
                 <button class="btn-icon" data-action="delete-library" data-name="${escAttr(lib.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
             </div>
@@ -66,13 +83,14 @@ function renderLibraryViewCard(lib) {
 function renderLibraryFormCard(lib) {
     const name = lib ? lib.name : "";
     const paths = lib ? lib.paths : [];
-    const preset = lib ? lib.preset : "";
+    const preset = lib ? lib.preset : (presets[0]?.name || "");
     const watch = lib ? lib.watch : true;
     const scanInterval = lib ? (lib.scan_interval || 0) : 0;
     const scanUnit = lib ? (lib.scan_unit || "minutes") : "minutes";
 
-    const presetOptionsHtml = presets.map(p =>
-        `<option value="${escAttr(p.name)}"${p.name === preset ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+    const presetOptionsHtml = `<option value=""${!preset ? " selected" : ""}>(none)</option>` + presets.map(p =>
+        `<option value="${escAttr(p.name)}"${p.name === preset ? " selected" : ""}>${esc(p.name)}</option>`
+    ).join("");
 
     const skipRulesHtml = (lib ? (lib.skip_rules || []) : []).map((rule, ri) => {
         const condsHtml = (rule.conditions || []).map(c => `
@@ -446,7 +464,6 @@ function attachLibFormCardListeners(card, originalName) {
 
         let valid = true;
         if (!name) { setError(nameEl, "Name is required"); valid = false; }
-        if (!preset) { setError(presetEl, "Preset is required"); valid = false; }
         if (!paths.length) { setError(chipsContainer, "At least one path is required"); valid = false; }
         card.querySelectorAll(".skip-cond-row").forEach(row => {
             const valInput = row.querySelector(".cond-value");

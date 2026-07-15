@@ -1,4 +1,5 @@
 import { api, formatBytes, basename, esc } from "./helpers.js";
+import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
 import { loadHistory } from "./history.js";
 
 let queuePaused = false;
@@ -6,6 +7,7 @@ let activeJobs = {};
 let pendingJobs = [];
 let blockedJobs = [];
 let failedJobs = [];
+let hasUnseenFailures = false;
 
 let eventSource = null;
 
@@ -17,25 +19,49 @@ function updatePauseButton() {
 function getAllIssueJobs() {
     const issues = [];
     blockedJobs.forEach(j => issues.push({ ...j, issue: j.block_reason || "Unknown issue", type: "blocked" }));
+    pendingJobs.forEach(j => {
+        if (!isDeviceDisabled(j.device)) return;
+        const dev = deviceData.find(d => d.id === j.device);
+        issues.push({ ...j, issue: `Requires ${dev ? dev.name : j.device}, which is disabled. Enable it in Settings > Devices.`, type: "blocked" });
+    });
     failedJobs.forEach(j => issues.push({ ...j, issue: j.error_message || "Unknown error", type: "failed" }));
     return issues;
 }
 
-function renderQueue() {
+function updateQueueTabs() {
+    const issues = getAllIssueJobs();
+    const n = issues.length;
+    const issuesTab = document.querySelector('#queue-tabs [data-qtab="issues"]');
+    issuesTab.innerHTML = n
+        ? `Issues <span data-tooltip="${n} job${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} attention.<br>Check the <em>Issues</em> tab to resolve."><img class="warning-icon-sm" src="warning-triangle-fill.svg" alt="Issues"></span>`
+        : "Issues";
+    const queueTab = document.querySelector('#queue-tabs [data-qtab="queue"]');
+    const deviceBlocked = pendingJobs.some(j => isDeviceDisabled(j.device));
+    queueTab.innerHTML = deviceBlocked
+        ? `Queue <span data-tooltip="Some queued jobs are blocked by disabled devices.<br>Check the <em>Issues</em> tab to resolve."><img class="warning-icon-sm" src="warning-triangle-fill.svg" alt="Issues"></span>`
+        : "Queue";
+    const historyTab = document.querySelector('#queue-tabs [data-qtab="history"]');
+    historyTab.innerHTML = hasUnseenFailures
+        ? `History <span data-tooltip="One or more jobs failed.<br>Check <em>History</em> for details."><img class="warning-icon-sm" src="warning-triangle-fill.svg" alt="Failed"></span>`
+        : "History";
+}
+
+export function renderQueue() {
     const table = document.getElementById("queue-table");
     const tbody = document.getElementById("queue-body");
     const emptyMsg = document.getElementById("queue-empty");
     const controls = document.getElementById("queue-controls");
     const active = Object.values(activeJobs);
-    const hasJobs = active.length || pendingJobs.length;
+    const runnablePending = pendingJobs.filter(j => !isDeviceDisabled(j.device));
+    const hasJobs = active.length || runnablePending.length;
     table.style.display = hasJobs ? "" : "none";
     emptyMsg.style.display = hasJobs ? "none" : "";
     controls.style.display = (hasJobs || queuePaused) ? "" : "none";
     document.getElementById("pending-count").textContent =
-        pendingJobs.length ? `${pendingJobs.length} pending` : "";
+        runnablePending.length ? `${runnablePending.length} pending` : "";
 
     let html = "";
-    active.concat(pendingJobs).forEach(j => {
+    active.concat(runnablePending).forEach(j => {
         html += `<tr>
             <td title="${esc(j.file_path)}">${esc(basename(j.file_path))}</td>
             <td>${esc(j.library_name || "")}</td>
@@ -44,9 +70,11 @@ function renderQueue() {
         </tr>`;
     });
     tbody.innerHTML = html;
+
+    updateQueueTabs();
 }
 
-function renderIssues() {
+export function renderIssues() {
     const table = document.getElementById("issues-table");
     const tbody = document.getElementById("issues-body");
     const emptyMsg = document.getElementById("issues-empty");
@@ -70,19 +98,21 @@ function renderIssues() {
         </tr>`;
     });
     tbody.innerHTML = html;
+    updateQueueTabs();
 }
 
 export function connectSSE() {
     if (eventSource) eventSource.close();
     const es = eventSource = new EventSource("/api/queue/events");
 
-    es.addEventListener("init", (e) => {
+    es.addEventListener("init", async (e) => {
         const data = JSON.parse(e.data);
         activeJobs = {};
         data.active.forEach(j => activeJobs[j.id] = j);
         pendingJobs = data.pending;
         blockedJobs = data.blocked || [];
         queuePaused = !!data.paused;
+        await loadDeviceData();
         updatePauseButton();
         renderQueue();
         renderIssues();
@@ -131,6 +161,7 @@ export function connectSSE() {
         if (job.status === "failed") {
             failedJobs.unshift(job);
         }
+        if (job.status === "failed") hasUnseenFailures = true;
         renderQueue();
         renderIssues();
     });
@@ -156,7 +187,11 @@ export function initQueue() {
         tab.addEventListener("click", () => {
             document.querySelectorAll("#queue-tabs .queue-tab").forEach(t => t.classList.toggle("active", t === tab));
             document.querySelectorAll("#view-queue .queue-pane").forEach(p => p.classList.toggle("active", p.id === "qtab-" + tab.dataset.qtab));
-            if (tab.dataset.qtab === "history") loadHistory();
+            if (tab.dataset.qtab === "history") {
+                hasUnseenFailures = false;
+                updateQueueTabs();
+                loadHistory();
+            }
         });
     });
 

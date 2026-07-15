@@ -57,7 +57,7 @@ async def list_libraries():
 async def create_library(body: LibraryCreate):
     if await store.get_library(body.name):
         raise HTTPException(409, "Library already exists")
-    if not await store.get_preset(body.preset):
+    if body.preset and not await store.get_preset(body.preset):
         raise HTTPException(400, f"Preset '{body.preset}' not found")
     lib = Library(
         paths=body.paths,
@@ -88,7 +88,7 @@ async def create_library(body: LibraryCreate):
 async def update_library(name: str, body: LibraryUpdate):
     if not await store.get_library(name):
         raise HTTPException(404, "Library not found")
-    if not await store.get_preset(body.preset):
+    if body.preset and not await store.get_preset(body.preset):
         raise HTTPException(400, f"Preset '{body.preset}' not found")
 
     lib = Library(
