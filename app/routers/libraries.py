@@ -1,3 +1,5 @@
+from pathlib import PurePosixPath
+
 from fastapi import APIRouter, HTTPException
 
 from core.logger import log
@@ -9,6 +11,35 @@ from core.queue_manager import queue_manager
 from core.watcher import watcher
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
+
+
+def _paths_overlap(a: str, b: str) -> bool:
+    pa = PurePosixPath(a)
+    pb = PurePosixPath(b)
+    try:
+        pa.relative_to(pb)
+        return True
+    except ValueError:
+        pass
+    try:
+        pb.relative_to(pa)
+        return True
+    except ValueError:
+        return False
+
+
+async def _check_path_overlaps(
+    paths: list[str], exclude_library: str | None = None
+) -> str | None:
+    libraries = await store.get_libraries()
+    for lib_name, lib in libraries.items():
+        if lib_name == exclude_library:
+            continue
+        for new_path in paths:
+            for existing_path in lib.paths:
+                if _paths_overlap(new_path, existing_path):
+                    return f"Path {new_path} overlaps with library '{lib_name}' ({existing_path})"
+    return None
 
 
 def _to_skip_rules(rules_in: list) -> list[SkipRule]:
@@ -59,6 +90,9 @@ async def create_library(body: LibraryCreate):
         raise HTTPException(409, "Library already exists")
     if body.preset and not await store.get_preset(body.preset):
         raise HTTPException(400, f"Preset '{body.preset}' not found")
+    overlap = await _check_path_overlaps(body.paths)
+    if overlap:
+        raise HTTPException(409, overlap)
     lib = Library(
         paths=body.paths,
         preset=body.preset,
@@ -90,6 +124,9 @@ async def update_library(name: str, body: LibraryUpdate):
         raise HTTPException(404, "Library not found")
     if body.preset and not await store.get_preset(body.preset):
         raise HTTPException(400, f"Preset '{body.preset}' not found")
+    overlap = await _check_path_overlaps(body.paths, exclude_library=name)
+    if overlap:
+        raise HTTPException(409, overlap)
 
     lib = Library(
         paths=body.paths,

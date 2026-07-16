@@ -8,7 +8,9 @@ export async function api(method, path, body) {
     if (res.status === 204) return null;
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || res.statusText);
+        let detail = Array.isArray(err.detail) ? err.detail[0]?.msg || res.statusText : err.detail || res.statusText;
+        if (typeof detail === "string") detail = detail.replace(/^Value error, /i, "");
+        throw new Error(detail);
     }
     return res.json();
 }

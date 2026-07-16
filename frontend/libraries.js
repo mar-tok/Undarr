@@ -481,7 +481,11 @@ function attachLibFormCardListeners(card, originalName) {
             }
             loadLibraries();
         } catch (e) {
-            setError(nameEl, e.message);
+            if (e.message.toLowerCase().includes("overlaps with library")) {
+                showPathError(e.message);
+            } else {
+                setError(nameEl, e.message);
+            }
         }
     });
 
