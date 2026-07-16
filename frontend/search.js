@@ -114,6 +114,18 @@ function render() {
     });
 }
 
+export function clearSearch() {
+    const input = document.getElementById("queue-search");
+    if (input.value) {
+        input.value = "";
+        searchQuery = "";
+        lastResults = [];
+        lastTotal = 0;
+        setSearchActive(false);
+        render();
+    }
+}
+
 export function initSearch() {
     document.getElementById("queue-search").addEventListener("input", (e) => {
         clearTimeout(searchTimer);

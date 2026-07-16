@@ -1,5 +1,5 @@
 import { api } from "./helpers.js";
-import { initQueue, connectSSE } from "./queue.js";
+import { initQueue, connectSSE, loadQueueTab } from "./queue.js";
 import { initHistory } from "./history.js";
 import { initSearch } from "./search.js";
 import { initPresets, loadPresetView } from "./presets.js";
@@ -33,6 +33,7 @@ const views = document.querySelectorAll(".view");
 function navigate(viewId) {
     navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));
     views.forEach(v => v.classList.toggle("active", v.id === "view-" + viewId));
+    if (viewId === "queue") loadQueueTab();
     if (viewId === "presets") loadPresetView();
     if (viewId === "libraries") loadLibraryView();
     if (viewId === "settings") loadSettings();

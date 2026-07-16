@@ -9,6 +9,8 @@ let historyStatusFilter = null;
 let historyData = [];
 
 const expandedHistoryIds = new Set();
+const historyLogCache = new Map();
+let historyGeneration = 0;
 
 function buildHistoryQuery() {
     const params = new URLSearchParams();
@@ -58,9 +60,10 @@ function expandHistoryRow(clickedRow) {
     const row = historyData.find(r => r.id === jobId);
     const detail = row ? buildDetailMessage(row) : "";
     const detailHtml = detail ? `<div class="history-detail">${detail}</div>` : "";
+    const cached = historyLogCache.get(jobId);
     const expandRow = document.createElement("tr");
     expandRow.className = "log-row";
-    expandRow.innerHTML = `<td colspan="6">${detailHtml}<button class="btn btn-copy-log" data-log-id="${jobId}" style="margin-bottom:8px">Copy to Clipboard</button><div class="log-expand" id="log-${jobId}">Loading...</div></td>`;
+    expandRow.innerHTML = `<td colspan="6">${detailHtml}<button class="btn btn-copy-log" data-log-id="${jobId}" style="margin-bottom:8px">Copy to Clipboard</button><div class="log-expand" id="log-${jobId}">${cached != null ? esc(cached) : "Loading..."}</div></td>`;
     clickedRow.after(expandRow);
     expandRow.querySelector(".btn-copy-log").addEventListener("click", (e) => {
         e.stopPropagation();
@@ -83,7 +86,7 @@ function expandHistoryRow(clickedRow) {
         btn.after(msg);
         setTimeout(() => msg.remove(), 4000);
     });
-    fetchLog(jobId);
+    if (cached == null) fetchLog(jobId);
 }
 
 function toggleLog(clickedRow) {
@@ -103,14 +106,22 @@ async function fetchLog(jobId) {
     if (!el) return;
     try {
         const data = await api("GET", `/api/history/${jobId}/log`);
-        el.textContent = data.log || "(empty)";
+        const text = data.log || "(empty)";
+        historyLogCache.set(jobId, text);
+        el.textContent = text;
     } catch {
         el.textContent = "(failed to load log)";
     }
 }
 
 export async function loadHistory() {
+    const gen = ++historyGeneration;
     const rows = await api("GET", `/api/history?${buildHistoryQuery()}`);
+    if (gen !== historyGeneration) return;
+    const currentIds = new Set(rows.map(r => r.id));
+    for (const key of historyLogCache.keys()) {
+        if (!currentIds.has(key)) historyLogCache.delete(key);
+    }
     historyData = rows;
     updateSortHeaders();
     const table = document.getElementById("history-table");
@@ -151,6 +162,11 @@ export async function loadHistory() {
         historyPage = 0;
         loadHistory();
     });
+}
+
+export function reloadHistory() {
+    historyPage = 0;
+    return loadHistory();
 }
 
 export function initHistory() {

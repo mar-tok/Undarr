@@ -87,6 +87,7 @@ async def dismiss_history(body: dict):
     dismissed = await db.dismiss_history_entries(ids)
     return {"dismissed": dismissed}
 
+
 @router.get("/api/history", response_model=list[HistoryOut])
 async def get_history(
     limit: int = Query(50, ge=1, le=500),
@@ -94,10 +95,15 @@ async def get_history(
     status: str | None = Query(None),
     sort_by: str = Query("finished_at"),
     sort_dir: str = Query("desc"),
+    exclude_dismissed: bool = Query(False),
 ):
     rows = await db.get_history(
-        limit=limit, offset=offset, status=status,
-        sort_by=sort_by, sort_dir=sort_dir,
+        limit=limit,
+        offset=offset,
+        status=status,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        exclude_dismissed=exclude_dismissed,
     )
     return [HistoryOut(**r) for r in rows]
 
@@ -126,32 +132,41 @@ async def search_files(
     for item in queue_manager.search_jobs(q):
         if status and item["status"] != status:
             continue
-        queue_results.append(SearchResultOut(
-            id=item["id"],
-            file_path=item["file_path"],
-            library_name=item["library_name"],
-            status=item["status"],
-            old_size_bytes=item["old_size_bytes"],
-            new_size_bytes=item.get("new_size_bytes"),
-            date=item.get("started_at"),
-            source="queue",
-        ))
+        queue_results.append(
+            SearchResultOut(
+                id=item["id"],
+                file_path=item["file_path"],
+                library_name=item["library_name"],
+                status=item["status"],
+                old_size_bytes=item["old_size_bytes"],
+                new_size_bytes=item.get("new_size_bytes"),
+                date=item.get("started_at"),
+                source="queue",
+            )
+        )
 
     history_rows, history_total = await db.search_files(
-        q, limit, offset, sort_by=sort_by, sort_dir=sort_dir, status=status,
+        q,
+        limit,
+        offset,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        status=status,
     )
     history_results = []
     for row in history_rows:
-        history_results.append(SearchResultOut(
-            id=row["id"],
-            file_path=row["file_path"],
-            library_name=row["library_name"],
-            status=row["status"],
-            old_size_bytes=row["old_size_bytes"],
-            new_size_bytes=row.get("new_size_bytes"),
-            date=row.get("finished_at"),
-            source="history",
-        ))
+        history_results.append(
+            SearchResultOut(
+                id=row["id"],
+                file_path=row["file_path"],
+                library_name=row["library_name"],
+                status=row["status"],
+                old_size_bytes=row["old_size_bytes"],
+                new_size_bytes=row.get("new_size_bytes"),
+                date=row.get("finished_at"),
+                source="history",
+            )
+        )
 
     return {
         "results": [r.model_dump() for r in queue_results + history_results],

@@ -44,11 +44,17 @@ async def init_db() -> None:
 
     cols = await _column_names(_db, "job_history")
     if "dismissed" not in cols:
-        await _db.execute("ALTER TABLE job_history ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0")
+        await _db.execute(
+            "ALTER TABLE job_history ADD COLUMN dismissed INTEGER NOT NULL DEFAULT 0"
+        )
         await _db.commit()
     if "preset_name" not in cols:
-        await _db.execute("ALTER TABLE job_history ADD COLUMN preset_name TEXT NOT NULL DEFAULT ''")
-        await _db.execute("ALTER TABLE job_history ADD COLUMN device_name TEXT NOT NULL DEFAULT ''")
+        await _db.execute(
+            "ALTER TABLE job_history ADD COLUMN preset_name TEXT NOT NULL DEFAULT ''"
+        )
+        await _db.execute(
+            "ALTER TABLE job_history ADD COLUMN device_name TEXT NOT NULL DEFAULT ''"
+        )
         await _db.commit()
 
     log.info("Database initialized at %s", db_path)
@@ -98,16 +104,31 @@ async def insert_job_history(
             started_at, finished_at, duration_seconds, ffmpeg_log, error_message,
             preset_name, device_name)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (id, library_name, file_path, status, old_size_bytes, new_size_bytes,
-         started_at, finished_at, duration_seconds, ffmpeg_log, error_message,
-         preset_name, device_name),
+        (
+            id,
+            library_name,
+            file_path,
+            status,
+            old_size_bytes,
+            new_size_bytes,
+            started_at,
+            finished_at,
+            duration_seconds,
+            ffmpeg_log,
+            error_message,
+            preset_name,
+            device_name,
+        ),
     )
     await db.commit()
 
 
 HISTORY_SORT_COLUMNS = {
-    "finished_at", "file_path", "library_name",
-    "old_size_bytes","new_size_bytes",
+    "finished_at",
+    "file_path",
+    "library_name",
+    "old_size_bytes",
+    "new_size_bytes",
 }
 
 
@@ -117,10 +138,13 @@ async def get_history(
     status: str | None = None,
     sort_by: str = "finished_at",
     sort_dir: str = "desc",
+    exclude_dismissed: bool = False,
 ) -> list[dict]:
     db = get_db()
     conditions: list[str] = []
     params: list = []
+    if exclude_dismissed:
+        conditions.append("dismissed = 0")
     if status:
         conditions.append("status = ?")
         params.append(status)
@@ -139,6 +163,7 @@ async def get_history(
     )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows]
+
 
 async def get_history_entry(job_id: str) -> dict | None:
     db = get_db()
@@ -180,7 +205,8 @@ async def search_files(
         params.append(status)
     where = "WHERE " + " AND ".join(conditions)
     cursor = await db.execute(
-        f"SELECT COUNT(*) FROM job_history {where}", params,
+        f"SELECT COUNT(*) FROM job_history {where}",
+        params,
     )
     total = (await cursor.fetchone())[0]
     col = sort_by if sort_by in HISTORY_SORT_COLUMNS else "finished_at"

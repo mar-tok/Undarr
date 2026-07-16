@@ -1,6 +1,7 @@
 import { api, formatBytes, basename, esc } from "./helpers.js";
 import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
-import { loadHistory } from "./history.js";
+import { loadHistory, reloadHistory } from "./history.js";
+import { clearSearch } from "./search.js";
 
 let queuePaused = false;
 let activeJobs = {};
@@ -9,7 +10,9 @@ let blockedJobs = [];
 let failedJobs = [];
 let hasUnseenFailures = false;
 
-let eventSource = null;
+let _eventSource = null;
+let _reconnectTimer = null;
+let _renderTimer = null;
 
 function updatePauseButton() {
     const btn = document.getElementById("btn-pause");
@@ -44,6 +47,11 @@ function updateQueueTabs() {
     historyTab.innerHTML = hasUnseenFailures
         ? `History <span data-tooltip="One or more jobs failed.<br>Check <em>History</em> for details."><img class="warning-icon-sm" src="warning-triangle-fill.svg" alt="Failed"></span>`
         : "History";
+}
+
+function debouncedRenderQueue() {
+    if (_renderTimer) return;
+    _renderTimer = setTimeout(() => { _renderTimer = null; renderQueue(); }, 50);
 }
 
 export function renderQueue() {
@@ -102,8 +110,9 @@ export function renderIssues() {
 }
 
 export function connectSSE() {
-    if (eventSource) eventSource.close();
-    const es = eventSource = new EventSource("/api/queue/events");
+    if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+    if (_eventSource) { _eventSource.close(); _eventSource = null; }
+    const es = _eventSource = new EventSource("/api/queue/events");
 
     es.addEventListener("init", async (e) => {
         const data = JSON.parse(e.data);
@@ -113,6 +122,9 @@ export function connectSSE() {
         blockedJobs = data.blocked || [];
         queuePaused = !!data.paused;
         await loadDeviceData();
+        try {
+            failedJobs = await api("GET", "/api/history?status=failed&limit=500&exclude_dismissed=true");
+        } catch { failedJobs = []; }
         updatePauseButton();
         renderQueue();
         renderIssues();
@@ -128,7 +140,7 @@ export function connectSSE() {
     es.addEventListener("job_queued", (e) => {
         const job = JSON.parse(e.data);
         pendingJobs.push(job);
-        renderQueue();
+        debouncedRenderQueue();
     });
 
     es.addEventListener("job_blocked", (e) => {
@@ -141,7 +153,7 @@ export function connectSSE() {
         const job = JSON.parse(e.data);
         blockedJobs = blockedJobs.filter(j => j.id !== job.id);
         pendingJobs.push(job);
-        renderQueue();
+        debouncedRenderQueue();
         renderIssues();
     });
 
@@ -164,12 +176,22 @@ export function connectSSE() {
         if (job.status === "failed") hasUnseenFailures = true;
         renderQueue();
         renderIssues();
+        if (document.getElementById("qtab-history").classList.contains("active")) {
+            hasUnseenFailures = false;
+            loadHistory().catch(() => {});
+        }
     });
 
     es.onerror = () => {
         es.close();
-        setTimeout(connectSSE, 3000);
+        _eventSource = null;
+        _reconnectTimer = setTimeout(connectSSE, 3000);
     };
+}
+
+export function loadQueueTab() {
+    const active = document.querySelector("#queue-tabs .queue-tab.active");
+    if (active && active.dataset.qtab === "history") { reloadHistory(); }
 }
 
 export function initQueue() {
@@ -185,12 +207,13 @@ export function initQueue() {
 
     document.querySelectorAll("#queue-tabs .queue-tab").forEach(tab => {
         tab.addEventListener("click", () => {
+            clearSearch();
             document.querySelectorAll("#queue-tabs .queue-tab").forEach(t => t.classList.toggle("active", t === tab));
             document.querySelectorAll("#view-queue .queue-pane").forEach(p => p.classList.toggle("active", p.id === "qtab-" + tab.dataset.qtab));
             if (tab.dataset.qtab === "history") {
                 hasUnseenFailures = false;
                 updateQueueTabs();
-                loadHistory();
+                reloadHistory();
             }
         });
     });
