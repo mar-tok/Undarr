@@ -1,7 +1,7 @@
 import { api, formatBytes, basename, esc, escAttr, formatDuration, formatDate } from "./helpers.js";
 
 const HISTORY_PAGE_SIZES = [25, 50, 100, 200];
-let historyPageSize = 50;
+let historyPageSize = 25;
 let historyPage = 0;
 let historySortBy = "finished_at";
 let historySortDir = "desc";
@@ -30,10 +30,14 @@ function updateSortHeaders() {
         if (col === historySortBy) {
             const arrow = document.createElement("span");
             arrow.className = "sort-arrow";
-            arrow.textContent = historySortDir === "asc" ? " ▲" : " ▼";
+            arrow.textContent = historySortDir === "asc" ? "\u25B2" : "\u25BC";
             th.appendChild(arrow);
         }
     });
+    const statusTh = document.getElementById("history-status-th");
+    statusTh.textContent = historyStatusFilter
+        ? historyStatusFilter.charAt(0).toUpperCase() + historyStatusFilter.slice(1)
+        : "Status";
 }
 
 function buildDetailMessage(r) {
@@ -60,33 +64,41 @@ function expandHistoryRow(clickedRow) {
     const row = historyData.find(r => r.id === jobId);
     const detail = row ? buildDetailMessage(row) : "";
     const detailHtml = detail ? `<div class="history-detail">${detail}</div>` : "";
+    const isSkipped = row && row.status.startsWith("skipped");
     const cached = historyLogCache.get(jobId);
     const expandRow = document.createElement("tr");
     expandRow.className = "log-row";
-    expandRow.innerHTML = `<td colspan="6">${detailHtml}<button class="btn btn-copy-log" data-log-id="${jobId}" style="margin-bottom:8px">Copy to Clipboard</button><div class="log-expand" id="log-${jobId}">${cached != null ? esc(cached) : "Loading..."}</div></td>`;
+    if (isSkipped) {
+        expandRow.innerHTML = `<td colspan="6">${detailHtml}</td>`;
+    } else {
+        expandRow.innerHTML = `<td colspan="6">${detailHtml}<button class="btn btn-copy-log" data-log-id="${jobId}" style="margin-bottom:8px">Copy to Clipboard</button><div class="log-expand" id="log-${jobId}">${cached != null ? esc(cached) : "Loading..."}</div></td>`;
+    }
     clickedRow.after(expandRow);
-    expandRow.querySelector(".btn-copy-log").addEventListener("click", (e) => {
-        e.stopPropagation();
-        const logEl = document.getElementById("log-" + jobId);
-        if (!logEl) return;
-        const btn = e.currentTarget;
-        const ta = document.createElement("textarea");
-        ta.value = logEl.textContent;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        ta.remove();
-        let msg = btn.nextElementSibling;
-        if (msg && msg.classList.contains("copy-confirm")) msg.remove();
-        msg = document.createElement("span");
-        msg.className = "copy-confirm";
-        msg.textContent = "Copied!";
-        btn.after(msg);
-        setTimeout(() => msg.remove(), 4000);
-    });
-    if (cached == null) fetchLog(jobId);
+    const copyBtn = expandRow.querySelector(".btn-copy-log");
+    if (copyBtn) {
+        copyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const logEl = document.getElementById("log-" + jobId);
+            if (!logEl) return;
+            const btn = e.currentTarget;
+            const ta = document.createElement("textarea");
+            ta.value = logEl.textContent;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+            let msg = btn.nextElementSibling;
+            if (msg && msg.classList.contains("copy-confirm")) msg.remove();
+            msg = document.createElement("span");
+            msg.className = "copy-confirm";
+            msg.textContent = "Copied!";
+            btn.after(msg);
+            setTimeout(() => msg.remove(), 4000);
+        });
+    }
+    if (!isSkipped && cached == null) fetchLog(jobId);
 }
 
 function toggleLog(clickedRow) {
@@ -124,10 +136,6 @@ export async function loadHistory() {
     }
     historyData = rows;
     updateSortHeaders();
-    const table = document.getElementById("history-table");
-    const emptyMsg = document.getElementById("history-empty");
-    table.style.display = rows.length ? "" : "none";
-    emptyMsg.style.display = rows.length ? "none" : "";
     const tbody = document.getElementById("history-body");
     tbody.innerHTML = rows.map((r, i) =>
         `<tr class="clickable${i % 2 ? " stripe" : ""}" data-job-id="${r.id}">
@@ -149,14 +157,42 @@ export async function loadHistory() {
     const hasPrev = historyPage > 0;
     const hasNext = rows.length === historyPageSize;
     const sizeOptions = HISTORY_PAGE_SIZES.map(n =>
-        `<option value="${n}"${n === historyPageSize ? " selected" : ""}>${n} / page</option>`
+        `<option value="${n}"${n === historyPageSize ? " selected" : ""}>${n}</option>`
     ).join("");
-    pagEl.innerHTML = `<button class="btn btn-sm" id="hist-prev"${hasPrev ? "" : " disabled"}>Prev</button>
-        <span class="hist-page-label">Page ${historyPage + 1}</span>
-        <button class="btn btn-sm" id="hist-next"${hasNext ? "" : " disabled"}>Next</button>
-        <select id="hist-page-size">${sizeOptions}</select>`;
+    pagEl.innerHTML = `
+        <span class="number-wrap">
+            <button class="number-btn" type="button" id="hist-prev" ${hasPrev ? "" : "disabled"}><img src="arrow-left.svg" alt="Previous"></button>
+            <input type="number" id="hist-page" class="page-input" value="${historyPage + 1}" min="1">
+            <button class="number-btn" type="button" id="hist-next" ${hasNext ? "" : "disabled"}><img src="arrow-right.svg" alt="Next"></button>
+        </span>
+        <select id="hist-page-size">${sizeOptions}</select>
+    `;
     if (hasPrev) document.getElementById("hist-prev").addEventListener("click", () => { historyPage--; loadHistory(); });
     if (hasNext) document.getElementById("hist-next").addEventListener("click", () => { historyPage++; loadHistory(); });
+    const pageInput = document.getElementById("hist-page");
+    function sizePageInput() {
+        pageInput.style.width = (String(pageInput.value).length + 1) + "ch";
+    }
+    sizePageInput();
+    pageInput.addEventListener("input", sizePageInput);
+    pageInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            const val = parseInt(pageInput.value);
+            if (!isNaN(val) && val >= 1) {
+                historyPage = val - 1;
+                loadHistory();
+            }
+        }
+    });
+    pageInput.addEventListener("blur", () => {
+        const val = parseInt(pageInput.value);
+        if (!isNaN(val) && val >= 1 && val - 1 !== historyPage) {
+            historyPage = val - 1;
+            loadHistory();
+        } else {
+            pageInput.value = historyPage + 1;
+        }
+    });
     document.getElementById("hist-page-size").addEventListener("change", (e) => {
         historyPageSize = parseInt(e.target.value);
         historyPage = 0;
@@ -174,7 +210,14 @@ export function initHistory() {
         th.addEventListener("click", () => {
             const col = th.dataset.sort;
             if (historySortBy === col) {
-                historySortDir = historySortDir === "asc" ? "desc" : "asc";
+                if (historySortDir === "asc") {
+                    historySortDir = "desc";
+                } else if (col === "finished_at") {
+                    historySortDir = "asc";
+                } else {
+                    historySortBy = "finished_at";
+                    historySortDir = "desc";
+                }
             } else {
                 historySortBy = col;
                 historySortDir = col === "finished_at" ? "desc" : "asc";
@@ -184,10 +227,36 @@ export function initHistory() {
         });
     });
 
-    document.getElementById("history-status-filter").addEventListener("change", (e) => {
-        historyStatusFilter = e.target.value;
-        historyPage = 0;
-        loadHistory();
+    document.getElementById("history-status-th").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const existing = document.querySelector(".status-dropdown");
+        if (existing) { existing.remove(); return; }
+        const th = document.getElementById("history-status-th");
+        const dd = document.createElement("div");
+        dd.className = "status-dropdown";
+        const options = [null, "completed", "failed", "skipped (rule)"];
+        const labels = ["All", "Completed", "Failed", "Skipped (rule)"];
+        options.forEach((val, i) => {
+            const btn = document.createElement("button");
+            btn.textContent = labels[i];
+            if (historyStatusFilter === val) btn.classList.add("active");
+            btn.addEventListener("click", (ev) => {
+                ev.stopPropagation();
+                historyStatusFilter = val;
+                historyPage = 0;
+                dd.remove();
+                loadHistory();
+            });
+            dd.appendChild(btn);
+        });
+        th.appendChild(dd);
+        const closeDropdown = (ev) => {
+            if (!dd.contains(ev.target) && ev.target !== th) {
+                dd.remove();
+                document.removeEventListener("click", closeDropdown);
+            }
+        };
+        setTimeout(() => document.addEventListener("click", closeDropdown), 0);
     });
 
     document.getElementById("history-body").addEventListener("click", (e) => {

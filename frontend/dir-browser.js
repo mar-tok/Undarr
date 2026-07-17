@@ -6,7 +6,7 @@ export function openDirBrowser(startPath, onSelect) {
     overlay.innerHTML = `
         <div class="dir-browser">
             <div class="dir-browser-header">
-                <button class="btn db-back" style="display:none">Back</button>
+                <button class="btn-icon db-back" style="display:none" data-tooltip="Back"><img src="arrow-left.svg" alt="Back"></button>
                 <span class="dir-browser-path"></span>
             </div>
             <div class="dir-browser-entries"></div>
@@ -32,7 +32,7 @@ export function openDirBrowser(startPath, onSelect) {
         const detailSpan = detail ? ` <span style="color:var(--text-muted);font-size:11px">${esc(detail)}</span>` : "";
         return `<button class="dir-browser-entry" data-path="${escAttr(path)}">
             <span class="dir-browser-entry-name">${esc(name)}${detailSpan}</span>
-            <span class="entry-nav">Open</span>
+            <span class="entry-nav"><img src="arrow-right.svg" alt="Open"></span>
         </button>`;
     }
 

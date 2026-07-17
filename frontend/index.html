@@ -73,29 +73,20 @@
                     <p id="issues-empty">No issues.</p>
                 </div>
                 <div class="queue-pane" id="qtab-history">
-                    <div class="history-toolbar">
-                        <select id="history-status-filter">
-                            <option value="">All statuses</option>
-                            <option value="completed">Completed</option>
-                            <option value="failed">Failed</option>
-                            <option value="skipped (rule)">Skipped (rule)</option>
-                        </select>
-                    </div>
                     <table id="history-table">
                         <thead>
                             <tr>
                                 <th class="sortable" data-sort="file_path">File</th>
                                 <th class="sortable" data-sort="library_name">Library</th>
-                                <th class="sortable" data-sort="old_size_bytes">Original</th>
-                                <th class="sortable" data-sort="new_size_bytes">New</th>
-                                <th class="sortable" data-sort="finished_at">Finished</th>
-                                <th>Status</th>
+                                <th class="sortable" data-sort="old_size_bytes">Old Size</th>
+                                <th class="sortable" data-sort="new_size_bytes">New Size</th>
+                                <th class="sortable" data-sort="finished_at">Date</th>
+                                <th id="history-status-th">Status</th>
                             </tr>
                         </thead>
                         <tbody id="history-body"></tbody>
                     </table>
-                    <p id="history-empty">No history yet.</p>
-                    <div class="history-pagination" id="history-pagination"></div>
+                    <div class="pagination" id="history-pagination"></div>
                 </div>
                 <div id="search-results" style="display:none">
                     <table id="search-table">
@@ -105,13 +96,13 @@
                                 <th class="sortable" data-sort="library_name">Library</th>
                                 <th class="sortable" data-sort="old_size_bytes">Size</th>
                                 <th class="sortable" data-sort="finished_at">Date</th>
-                                <th>Status</th>
+                                <th id="search-status-th">Status</th>
                             </tr>
                         </thead>
                         <tbody id="search-body"></tbody>
                     </table>
                     <p id="search-empty" style="display:none">No results.</p>
-                    <div id="search-pagination"></div>
+                    <div class="pagination" id="search-pagination"></div>
                 </div>
             </div>
 
