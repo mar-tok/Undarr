@@ -339,9 +339,16 @@ button, button * {
     white-space: nowrap;
 }
 
-.issue-actions .btn-sm {
-    margin-left: 4px;
-}
+#issues-table th:nth-child(1),
+#issues-table td:nth-child(1) { width: 44%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#issues-table th:nth-child(2),
+#issues-table td:nth-child(2) { width: 18%; }
+#issues-table th:nth-child(3),
+#issues-table td:nth-child(3) { width: 12%; }
+#issues-table th:nth-child(4),
+#issues-table td:nth-child(4) { width: 14%; }
+#issues-table th:nth-child(5),
+#issues-table td:nth-child(5) { width: 12%; text-align: center; padding-top: 0; padding-bottom: 0; }
 
 .queue-controls {
     display: flex;
@@ -354,9 +361,17 @@ button, button * {
     font-size: 13px;
 }
 
-.status-completed { color: var(--success); }
-.status-failed { color: var(--error); }
-.status-blocked { color: #e8a735; }
+.status-completed {
+    color: var(--success);
+}
+
+.status-failed {
+    color: var(--error);
+}
+
+.status-blocked {
+    color: var(--accent);
+}
 
 .queue-tabs {
     display: flex;
@@ -401,11 +416,9 @@ button, button * {
     font-size: 13px;
 }
 
-#queue-table tbody tr:nth-child(even) {
-    background: #272727;
-}
-
+#queue-table tbody tr.stripe,
 #history-table tbody tr.stripe,
+#issues-table tbody tr.stripe,
 #search-table tbody tr.stripe {
     background: #272727;
 }
@@ -543,6 +556,15 @@ tr.clickable:hover {
     height: 300px;
     overflow-y: auto;
     resize: vertical;
+}
+
+.job-detail {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    padding: 12px;
+    white-space: pre-wrap;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 12px;
 }
 
 .copy-confirm {

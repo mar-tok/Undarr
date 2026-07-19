@@ -1,4 +1,4 @@
-import { api, formatBytes, basename, esc } from "./helpers.js";
+import { api, formatBytes, basename, esc, formatDuration } from "./helpers.js";
 import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
 import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
@@ -13,6 +13,9 @@ let hasUnseenFailures = false;
 let _eventSource = null;
 let _reconnectTimer = null;
 let _renderTimer = null;
+
+const expandedQueueIds = new Set();
+const expandedIssueIds = new Set();
 
 function updatePauseButton() {
     const btn = document.getElementById("btn-pause");
@@ -54,6 +57,20 @@ function debouncedRenderQueue() {
     _renderTimer = setTimeout(() => { _renderTimer = null; renderQueue(); }, 50);
 }
 
+function formatMediaInfo(info) {
+    if (!info) return null;
+    const parts = [];
+    if (info.video_codec) {
+        let v = info.video_codec.toUpperCase();
+        if (info.resolution_width && info.resolution_height) v += ` ${info.resolution_width}x${info.resolution_height}`;
+        parts.push(v);
+    }
+    if (info.audio_codec) parts.push(info.audio_codec.toUpperCase());
+    if (info.bitrate_kbps) parts.push(info.bitrate_kbps + " kbps");
+    if (info.duration_seconds) parts.push(formatDuration(info.duration_seconds));
+    return parts.join(", ");
+}
+
 export function renderQueue() {
     const table = document.getElementById("queue-table");
     const tbody = document.getElementById("queue-body");
@@ -69,17 +86,63 @@ export function renderQueue() {
         runnablePending.length ? `${runnablePending.length} pending` : "";
 
     let html = "";
-    active.concat(runnablePending).forEach(j => {
-        html += `<tr>
-            <td title="${esc(j.file_path)}">${esc(basename(j.file_path))}</td>
+    let rowIdx = 0;
+    active.forEach(j => {
+        html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
+            <td>${esc(basename(j.file_path))}</td>
+            <td>${esc(j.library_name || "")}</td>
+            <td>${formatBytes(j.old_size_bytes)}</td>
+            <td class="status-${j.status}">${esc(j.status)}</td>
+        </tr>`;
+    });
+    runnablePending.forEach(j => {
+        html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
+            <td>${esc(basename(j.file_path))}</td>
             <td>${esc(j.library_name || "")}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
             <td class="status-${j.status}">${esc(j.status)}</td>
         </tr>`;
     });
     tbody.innerHTML = html;
+    for (const id of expandedQueueIds) {
+        const row = tbody.querySelector(`tr[data-job-id="${id}"]`);
+        if (row) expandQueueRow(row);
+        else expandedQueueIds.delete(id);
+    }
 
     updateQueueTabs();
+}
+
+function findQueueJob(jobId) {
+    if (activeJobs[jobId]) return activeJobs[jobId];
+    return pendingJobs.find(j => j.id === jobId) || null;
+}
+
+function expandQueueRow(clickedRow) {
+    const jobId = clickedRow.dataset.jobId;
+    const job = findQueueJob(jobId);
+    if (!job) return;
+    let lines = [job.file_path];
+    if (job.preset_name) lines.push(`Preset: ${job.preset_name}`);
+    const media = formatMediaInfo(job.media_info);
+    if (media) lines.push(`Source: ${media}`);
+    const expandRow = document.createElement("tr");
+    expandRow.className = "detail-row";
+    const cols = clickedRow.children.length;
+    expandRow.innerHTML = `<td colspan="${cols}"><div class="job-detail">${lines.map(esc).join("\n")}</div></td>`;
+    clickedRow.after(expandRow);
+}
+
+function toggleQueueDetail(clickedRow) {
+    const jobId = clickedRow.dataset.jobId;
+    const nextRow = clickedRow.nextElementSibling;
+    if (nextRow && nextRow.classList.contains("detail-row")) {
+        nextRow.remove();
+        expandedQueueIds.delete(jobId);
+        return;
+    }
+    expandedQueueIds.add(jobId);
+    expandQueueRow(clickedRow);
 }
 
 export function renderIssues() {
@@ -91,22 +154,75 @@ export function renderIssues() {
     table.style.display = hasIssues ? "" : "none";
     emptyMsg.style.display = hasIssues ? "none" : "";
     let html = "";
+    let rowIdx = 0;
     issues.forEach(j => {
-        const actions = j.type === "failed"
-            ? `<button class="btn-icon" data-action="retry-job" data-job-id="${j.id}" data-tooltip="Retry"><img src="retry.svg" alt="Retry"></button>`
-                + `<button class="btn-icon" data-action="dismiss-job" data-job-id="${j.id}" data-tooltip="Dismiss"><img src="close.svg" alt="Dismiss"></button>`
-            : "";
-        html += `<tr>
-            <td title="${esc(j.file_path)}">${esc(basename(j.file_path))}</td>
+        let actions = "";
+        if (j.type === "failed") {
+            actions = `<button class="btn-icon" data-action="retry-job" data-job-id="${j.id}" data-tooltip="Retry"><img src="retry.svg" alt="Retry"></button>`
+                + `<button class="btn-icon" data-action="dismiss-job" data-job-id="${j.id}" data-tooltip="Dismiss"><img src="close.svg" alt="Dismiss"></button>`;
+        } else {
+            actions = `<button class="btn-icon" data-action="dismiss-job" data-job-id="${j.id}" data-tooltip="Dismiss"><img src="close.svg" alt="Dismiss"></button>`;
+        }
+        html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}" data-issue-type="${j.type}">
+            <td>${esc(basename(j.file_path))}</td>
             <td>${esc(j.library_name || "")}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
             <td class="status-${j.type}">${j.type}</td>
-            <td>${esc(j.issue)}</td>
             <td class="issue-actions">${actions}</td>
         </tr>`;
     });
     tbody.innerHTML = html;
+    for (const id of expandedIssueIds) {
+        const row = tbody.querySelector(`tr[data-job-id="${id}"]`);
+        if (row) expandIssueRow(row);
+        else expandedIssueIds.delete(id);
+    }
     updateQueueTabs();
+}
+
+function expandIssueRow(clickedRow) {
+    const jobId = clickedRow.dataset.jobId;
+    const allIssues = getAllIssueJobs();
+    const job = allIssues.find(j => j.id === jobId);
+    if (!job) return;
+    const cols = clickedRow.children.length;
+    let lines = [job.file_path];
+    if (job.issue) lines.push(job.issue);
+    const expandRow = document.createElement("tr");
+    expandRow.className = "detail-row";
+    expandRow.innerHTML = `<td colspan="${cols}"><button class="btn btn-copy-log" style="margin-bottom:8px">Copy to Clipboard</button><div class="job-detail">${lines.map(esc).join("\n")}</div></td>`;
+    clickedRow.after(expandRow);
+    expandRow.querySelector(".btn-copy-log").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const btn = e.currentTarget;
+        const ta = document.createElement("textarea");
+        ta.value = lines.join("\n");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+        let msg = btn.nextElementSibling;
+        if (msg && msg.classList.contains("copy-confirm")) msg.remove();
+        msg = document.createElement("span");
+        msg.className = "copy-confirm";
+        msg.textContent = "Copied!";
+        btn.after(msg);
+        setTimeout(() => msg.remove(), 4000);
+    });
+}
+
+function toggleIssueDetail(clickedRow) {
+    const jobId = clickedRow.dataset.jobId;
+    const nextRow = clickedRow.nextElementSibling;
+    if (nextRow && nextRow.classList.contains("detail-row")) {
+        nextRow.remove();
+        expandedIssueIds.delete(jobId);
+        return;
+    }
+    expandedIssueIds.add(jobId);
+    expandIssueRow(clickedRow);
 }
 
 export function connectSSE() {
@@ -218,22 +334,39 @@ export function initQueue() {
         });
     });
 
+    document.getElementById("queue-body").addEventListener("click", async (e) => {
+        const row = e.target.closest("tr.clickable");
+        if (row) toggleQueueDetail(row);
+    });
+
     document.getElementById("issues-body").addEventListener("click", async (e) => {
         const btn = e.target.closest("[data-action]");
-        if (!btn) return;
-        const jobId = btn.dataset.jobId;
-        if (btn.dataset.action === "retry-job") {
-            try {
-                await api("POST", "/api/queue/retry", { ids: [jobId] });
-                failedJobs = failedJobs.filter(j => j.id !== jobId);
-                renderIssues();
-            } catch (err) { alert(err.message); }
-        } else if (btn.dataset.action === "dismiss-job") {
-            try {
-                await api("POST", "/api/history/dismiss", { ids: [jobId] });
-                failedJobs = failedJobs.filter(j => j.id !== jobId);
-                renderIssues();
-            } catch (err) { alert(err.message); }
+        if (btn) {
+            const jobId = btn.dataset.jobId;
+            const row = btn.closest("tr.clickable");
+            const type = row ? row.dataset.issueType : null;
+            if (btn.dataset.action === "retry-job") {
+                try {
+                    await api("POST", "/api/queue/retry", { ids: [jobId] });
+                    failedJobs = failedJobs.filter(j => j.id !== jobId);
+                    expandedIssueIds.delete(jobId);
+                    renderIssues();
+                } catch (err) { alert(err.message); }
+            } else if (btn.dataset.action === "dismiss-job") {
+                try {
+                    if (type === "failed") {
+                        await api("POST", "/api/history/dismiss", { ids: [jobId] });
+                        failedJobs = failedJobs.filter(j => j.id !== jobId);
+                    } else {
+                        await api("DELETE", `/api/queue/${jobId}`);
+                    }
+                    expandedIssueIds.delete(jobId);
+                    renderIssues();
+                } catch (err) { alert(err.message); }
+            }
+            return;
         }
+        const row = e.target.closest("tr.clickable");
+        if (row) toggleIssueDetail(row);
     });
 }
