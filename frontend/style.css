@@ -373,27 +373,41 @@ button, button * {
     color: var(--accent);
 }
 
-.queue-tabs {
+.settings-tabs {
     display: flex;
+    gap: 0;
     border-bottom: 1px solid var(--border);
     margin-bottom: 16px;
 }
 
-.queue-tab {
+.settings-tab {
     background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: var(--text-muted);
+    border: 1px solid var(--text-muted);
+    color: var(--text);
     padding: 8px 16px;
-    font-size: 14px;
-    cursor: pointer;
+    min-width: 100px;
+    font-size: 13px;
     font-family: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.queue-tab:hover { color: var(--text); }
-.queue-tab.active {
+.settings-tab:hover {
+    background: var(--border);
+}
+
+.settings-tab + .settings-tab {
+    margin-left: -1px;
+}
+
+.settings-tab.active {
+    position: relative;
+    z-index: 1;
     color: var(--text);
-    border-bottom-color: var(--accent);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--accent);
 }
 
 #queue-search {
@@ -402,15 +416,24 @@ button, button * {
     align-self: center;
 }
 
-.queue-tab.dimmed {
+.settings-tab.dimmed {
     color: var(--text-muted);
     border-color: var(--border);
     pointer-events: none;
     cursor: default;
 }
 
-.queue-pane { display: none; }
-.queue-pane.active { display: block; }
+.settings-pane, .queue-pane {
+    display: none;
+}
+
+#stab-general {
+    max-width: 960px;
+}
+
+.settings-pane.active, .queue-pane.active {
+    display: block;
+}
 
 #queue-empty, #issues-empty {
     font-size: 13px;
@@ -1163,12 +1186,6 @@ input[type="checkbox"][role="switch"]:focus-visible {
     gap: 8px;
     padding: 12px;
     border-top: 1px solid var(--border);
-}
-
-#view-settings h2 {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 12px;
 }
 
 #device-grid {

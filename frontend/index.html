@@ -32,10 +32,10 @@
         </nav>
         <main id="content">
             <div id="view-queue" class="view active">
-                <div class="queue-tabs" id="queue-tabs">
-                    <button class="queue-tab active" data-qtab="queue">Queue</button>
-                    <button class="queue-tab" data-qtab="issues">Issues</button>
-                    <button class="queue-tab" data-qtab="history">History</button>
+                <div class="settings-tabs" id="queue-tabs">
+                    <button class="settings-tab active" data-qtab="queue">Queue</button>
+                    <button class="settings-tab" data-qtab="issues">Issues</button>
+                    <button class="settings-tab" data-qtab="history">History</button>
                     <input type="text" id="queue-search" placeholder="Search...">
                 </div>
                 <div class="queue-pane active" id="qtab-queue">
@@ -116,16 +116,23 @@
             </div>
 
             <div id="view-settings" class="view">
-                <div class="form-group" style="max-width:420px">
-                    <label data-tooltip="Temporary files are stored here during transcoding.<br>Requires enough free space for the largest file being processed.<br>Cleaned up automatically after each job.">Cache Directory</label>
-                    <div class="path-manual-row">
-                        <input type="text" id="set-cache-dir" placeholder="/tmp/undarr">
-                        <button class="btn" id="btn-browse-cache" type="button">Browse</button>
-                    </div>
+                <div class="settings-tabs">
+                    <button class="settings-tab active" data-stab="general">General</button>
+                    <button class="settings-tab" data-stab="devices">Devices</button>
                 </div>
-                <button class="btn btn-primary" id="btn-save-settings" style="margin-bottom:24px">Save</button>
-                <h2>Devices</h2>
-                <div id="device-grid"></div>
+                <div class="settings-pane active" id="stab-general">
+                    <div class="form-group" style="max-width:420px">
+                        <label data-tooltip="Temporary files are stored here during transcoding.<br>Requires enough free space for the largest file being processed.<br>Cleaned up automatically after each job.">Cache Directory</label>
+                        <div class="path-manual-row">
+                            <input type="text" id="set-cache-dir" placeholder="/tmp/undarr">
+                            <button class="btn" id="btn-browse-cache" type="button">Browse</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="btn-save-settings">Save</button>
+                </div>
+                <div class="settings-pane" id="stab-devices">
+                    <div id="device-grid"></div>
+                </div>
             </div>
         </main>
     </div>

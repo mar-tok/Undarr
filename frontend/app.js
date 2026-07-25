@@ -4,7 +4,7 @@ import { initHistory } from "./history.js";
 import { initSearch } from "./search.js";
 import { initPresets, loadPresetView } from "./presets.js";
 import { initLibraries, loadLibraryView } from "./libraries.js";
-import { initSettings, loadSettings } from "./settings.js";
+import { initSettings, loadSettings, switchSettingsTab } from "./settings.js";
 
 const tooltip = document.getElementById("tooltip");
 let tipTarget = null;
@@ -38,7 +38,7 @@ function navigate(viewId) {
     if (viewId === "libraries") loadLibraryView();
     if (viewId === "settings") loadSettings();
     const hash = viewId === "queue" ? "" : viewId;
-    if (location.hash.replace("#", "") !== hash)
+    if (location.hash.replace("#", "").split("/")[0] !== hash)
         history.replaceState(null, "", hash ? "#" + hash : location.pathname);
 }
 
@@ -53,8 +53,10 @@ initLibraries();
 initSettings();
 
 const validViews = ["queue", "presets", "libraries", "settings"];
-const hashView = location.hash.replace("#", "");
+const hashParts = location.hash.replace("#", "").split("/");
+const hashView = hashParts[0];
 navigate(validViews.includes(hashView) ? hashView : "queue");
+if (hashParts[0] === "settings" && hashParts[1]) switchSettingsTab(hashParts[1]);
 connectSSE();
 
 api("GET", "/api/version").then(data => {

@@ -306,7 +306,7 @@ export function connectSSE() {
 }
 
 export function loadQueueTab() {
-    const active = document.querySelector("#queue-tabs .queue-tab.active");
+    const active = document.querySelector("#queue-tabs .settings-tab.active");
     if (active && active.dataset.qtab === "history") { reloadHistory(); }
 }
 
@@ -321,10 +321,10 @@ export function initQueue() {
         }
     });
 
-    document.querySelectorAll("#queue-tabs .queue-tab").forEach(tab => {
+    document.querySelectorAll("#queue-tabs .settings-tab").forEach(tab => {
         tab.addEventListener("click", () => {
             clearSearch();
-            document.querySelectorAll("#queue-tabs .queue-tab").forEach(t => t.classList.toggle("active", t === tab));
+            document.querySelectorAll("#queue-tabs .settings-tab").forEach(t => t.classList.toggle("active", t === tab));
             document.querySelectorAll("#view-queue .queue-pane").forEach(p => p.classList.toggle("active", p.id === "qtab-" + tab.dataset.qtab));
             if (tab.dataset.qtab === "history") {
                 hasUnseenFailures = false;

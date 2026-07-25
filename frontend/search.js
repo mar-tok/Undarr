@@ -21,7 +21,7 @@ function sizeLabel(r) {
 function setSearchActive(active) {
     const results = document.getElementById("search-results");
     const panes = document.querySelectorAll("#view-queue .queue-pane");
-    const tabs = document.querySelectorAll("#queue-tabs .queue-tab");
+    const tabs = document.querySelectorAll("#queue-tabs .settings-tab");
 
     if (active) {
         panes.forEach(p => p.style.display = "none");
