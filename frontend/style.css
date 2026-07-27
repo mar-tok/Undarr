@@ -2,6 +2,7 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    cursor: default;
 }
 
 :root {
@@ -48,6 +49,10 @@ html, body {
     padding: 0 16px 16px;
     border-bottom: 1px solid var(--border);
     margin-bottom: 8px;
+    cursor: pointer;
+}
+
+#sidebar h1 * {
     cursor: pointer;
 }
 
@@ -102,6 +107,10 @@ html, body {
     text-decoration: none;
     font-size: 16px;
     border-left: 3px solid transparent;
+    cursor: pointer;
+}
+
+#sidebar-footer a * {
     cursor: pointer;
 }
 
@@ -180,6 +189,7 @@ td {
 }
 
 input, textarea, select {
+    cursor: text;
     background: var(--bg-input);
     border: 1px solid var(--text-muted);
     border-radius: 0;
@@ -476,6 +486,7 @@ th.sortable:hover {
 th.sortable .sort-arrow {
     font-size: 10px;
     margin-left: 4px;
+    cursor: pointer;
 }
 
 #history-status-th,
