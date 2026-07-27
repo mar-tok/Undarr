@@ -9,6 +9,13 @@ let editingLibraryName = null;
 let creatingNewLibrary = false;
 let librariesGeneration = 0;
 
+const SCAN_UNITS = [
+    { value: "seconds", label: "seconds" },
+    { value: "minutes", label: "minutes" },
+    { value: "hours", label: "hours" },
+    { value: "days", label: "days" },
+];
+
 const SKIP_FIELDS = ["video_codec", "audio_codec", "resolution_width", "resolution_height", "bitrate_kbps", "file_size_mb", "duration_seconds"];
 const SKIP_OPS = ["equals", "not_equals", "less_than", "greater_than", "contains"];
 
@@ -41,7 +48,7 @@ function renderLibraries() {
     }).join("");
     grid.innerHTML = html;
 
-    const editCard = grid.querySelector(".library-card.editing");
+    const editCard = grid.querySelector(".lib-card.editing");
     if (editCard) {
         attachLibFormCardListeners(editCard, creatingNewLibrary ? null : editingLibraryName);
         wrapNumberInputs(editCard);
@@ -67,16 +74,16 @@ function renderLibraryViewCard(lib) {
         warnHtml = `<span data-tooltip="${disabledDeviceTooltip(encoder, "library")}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`;
     }
 
-    return `<div class="library-card" data-name="${escAttr(lib.name)}">
-        <div class="library-card-header">
-            <span class="library-card-name">${esc(lib.name)}</span>
-            <div class="library-card-actions">
+    return `<div class="lib-card" data-name="${escAttr(lib.name)}">
+        <div class="lib-card-header">
+            <span class="lib-card-name">${esc(lib.name)}</span>
+            <div class="lib-card-actions">
                 ${warnHtml}<button class="btn" data-action="scan-library" data-name="${escAttr(lib.name)}">Scan</button>
                 <button class="btn-icon" data-action="edit-library" data-name="${escAttr(lib.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
                 <button class="btn-icon" data-action="delete-library" data-name="${escAttr(lib.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
             </div>
         </div>
-        <dl class="library-card-props">${propsHtml}</dl>
+        <dl class="lib-card-props">${propsHtml}</dl>
     </div>`;
 }
 
@@ -90,6 +97,10 @@ function renderLibraryFormCard(lib) {
 
     const presetOptionsHtml = `<option value=""${!preset ? " selected" : ""}>(none)</option>` + presets.map(p =>
         `<option value="${escAttr(p.name)}"${p.name === preset ? " selected" : ""}>${esc(p.name)}</option>`
+    ).join("");
+
+    const scanUnitOptionsHtml = SCAN_UNITS.map(u =>
+        `<option value="${escAttr(u.value)}"${u.value === scanUnit ? " selected" : ""}>${esc(u.label)}</option>`
     ).join("");
 
     const skipRulesHtml = (lib ? (lib.skip_rules || []) : []).map((rule, ri) => {
@@ -122,7 +133,7 @@ function renderLibraryFormCard(lib) {
         </div>
     `).join("");
 
-    return `<div class="library-card editing">
+    return `<div class="lib-card editing">
         <div class="form-group">
             <label data-tooltip="A display name for this library.<br>Used for identification only. Does not affect file paths or processing.">Name</label>
             <input type="text" class="lc-name" value="${escAttr(name)}">
@@ -145,15 +156,14 @@ function renderLibraryFormCard(lib) {
         <div class="form-group">
             <label data-tooltip="Monitors this library's paths for newly added or modified files using filesystem events.<br>Unlike <em>Scan Interval</em>, file watching detects changes continuously."><input type="checkbox" role="switch" class="lc-watch"${watch ? " checked" : ""}> Watch for new files</label>
         </div>
-        <div class="form-group">
-            <label data-tooltip="How often to automatically re-scan this library's paths for new or changed files.<br>Already processed files are skipped.<br>Useful as a safety net alongside <em>Watch for new files</em>, catching files added while the app was down or on network mounts where filesystem events may not fire.<br>Set to 0 to disable (default). You can still scan manually.">Scan Interval</label>
-            <div style="display:flex;gap:8px">
-                <input type="number" class="lc-scan-interval" value="${scanInterval}" min="0" style="width:80px">
-                <select class="lc-scan-unit">
-                    <option value="minutes"${scanUnit === "minutes" ? " selected" : ""}>minutes</option>
-                    <option value="hours"${scanUnit === "hours" ? " selected" : ""}>hours</option>
-                    <option value="days"${scanUnit === "days" ? " selected" : ""}>days</option>
-                </select>
+        <div class="form-row form-row-4">
+            <div class="form-group">
+                <label data-tooltip="How often to automatically re-scan this library's paths for new or changed files.<br>Already processed files are skipped.<br>Useful as a safety net alongside <em>Watch for new files</em>, catching files added while the app was down or on network mounts where filesystem events may not fire.<br>Set to 0 to disable (default). You can still scan manually.">Scan Interval</label>
+                <input type="number" class="lc-scan-interval" min="0" value="${scanInterval}" placeholder="0">
+            </div>
+            <div class="form-group">
+                <label data-tooltip="The time unit for the scan interval.<br>For example, an interval of 30 with unit <em>minutes</em> scans every 30 minutes.">Scan Unit</label>
+                <select class="lc-scan-unit">${scanUnitOptionsHtml}</select>
             </div>
         </div>
         <div>
@@ -507,15 +517,15 @@ function scanResultMessage(result) {
 }
 
 function setScanningBadge(name, show) {
-    const card = document.querySelector(`.library-card[data-name="${CSS.escape(name)}"]`);
+    const card = document.querySelector(`.lib-card[data-name="${CSS.escape(name)}"]`);
     if (!card) return;
-    const header = card.querySelector(".library-card-header");
-    const existing = header.querySelector(".scanning-badge");
+    const header = card.querySelector(".lib-card-header");
+    const existing = header.querySelector(".lib-scanning-badge");
     if (show && !existing) {
         const badge = document.createElement("span");
-        badge.className = "scanning-badge";
+        badge.className = "lib-scanning-badge";
         badge.textContent = "SCANNING";
-        const nameEl = header.querySelector(".library-card-name");
+        const nameEl = header.querySelector(".lib-card-name");
         nameEl.after(badge);
     } else if (!show && existing) {
         existing.remove();

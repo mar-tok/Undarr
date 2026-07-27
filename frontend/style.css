@@ -149,6 +149,7 @@ html, body {
 
 .view {
     display: none;
+    max-width: 1400px;
 }
 
 .view.active {
@@ -158,6 +159,7 @@ html, body {
 table {
     width: 100%;
     border-collapse: collapse;
+    margin-bottom: 24px;
     table-layout: fixed;
 }
 
@@ -322,6 +324,8 @@ button, button * {
 
 .btn-primary {
     border-color: var(--accent);
+    background: var(--bg-tertiary);
+    color: var(--text);
 }
 
 .btn-primary:hover {
@@ -336,13 +340,6 @@ button, button * {
 .btn-danger:hover {
     background: var(--error);
     color: #000;
-}
-
-.btn-sm {
-    padding: 4px 12px;
-    height: 28px;
-    min-width: 0;
-    font-size: 12px;
 }
 
 .issue-actions {
@@ -445,8 +442,9 @@ button, button * {
     display: block;
 }
 
-#queue-empty, #issues-empty {
+.section-empty {
     font-size: 13px;
+    color: var(--text);
 }
 
 #queue-table tbody tr.stripe,
@@ -457,7 +455,17 @@ button, button * {
 }
 
 #history-table th:nth-child(1),
-#history-table td:nth-child(1) { width: 35%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#history-table td:nth-child(1) { width: 33%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#history-table th:nth-child(2),
+#history-table td:nth-child(2) { width: 14%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#history-table th:nth-child(3),
+#history-table td:nth-child(3) { width: 11%; }
+#history-table th:nth-child(4),
+#history-table td:nth-child(4) { width: 11%; }
+#history-table th:nth-child(5),
+#history-table td:nth-child(5) { width: 18%; }
+#history-table th:nth-child(6),
+#history-table td:nth-child(6) { width: 13%; }
 
 #search-table th:nth-child(1),
 #search-table td:nth-child(1) { width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -616,6 +624,7 @@ tr.clickable:hover {
 
 .form-group label {
     font-size: 12px;
+    color: var(--text);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -627,6 +636,10 @@ tr.clickable:hover {
     margin-bottom: 0;
 }
 
+.form-row.form-row-4 {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+
 .form-row .form-group {
     margin-bottom: 12px;
 }
@@ -634,6 +647,7 @@ tr.clickable:hover {
 .form-actions {
     display: flex;
     gap: 8px;
+    margin-top: 8px;
     justify-content: flex-end;
 }
 
@@ -651,6 +665,7 @@ tr.clickable:hover {
 
 .preset-card.editing {
     border-color: var(--accent);
+    min-width: 400px;
     grid-column: 1 / -1;
 }
 
@@ -668,7 +683,7 @@ tr.clickable:hover {
 
 .preset-card-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
 }
 
 .preset-card-props {
@@ -686,13 +701,17 @@ tr.clickable:hover {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    color: var(--text);
     display: flex;
     align-items: center;
 }
 
 .preset-card-props dd {
     font-size: 13px;
+    color: var(--text);
     text-align: right;
+    overflow-wrap: break-word;
+    min-width: 0;
 }
 
 .preset-card-props dt:nth-of-type(odd),
@@ -837,62 +856,81 @@ tr.clickable:hover {
     gap: 12px;
 }
 
-.library-card {
+.lib-card {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     padding: 16px;
 }
 
-.library-card.editing {
+.lib-card.editing {
     border-color: var(--accent);
+    min-width: 400px;
     grid-column: 1 / -1;
 }
 
-.library-card-header {
+.lib-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
 }
 
-.library-card-name {
+.lib-card-name {
     font-weight: 600;
     font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
-.library-card-actions {
+.lib-card-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     align-items: center;
 }
 
-.library-card-props {
+.lib-card-props {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 0;
 }
 
-.library-card-props dt,
-.library-card-props dd {
+.lib-card-props dt,
+.lib-card-props dd {
     padding: 4px 8px;
 }
 
-.library-card-props dt {
+.lib-card-props dt {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    color: var(--text);
     display: flex;
     align-items: center;
 }
 
-.library-card-props dd {
+.lib-card-props dd {
     font-size: 13px;
+    color: var(--text);
     text-align: right;
 }
 
-.library-card-props dt:nth-of-type(odd),
-.library-card-props dd:nth-of-type(odd) {
+.lib-card-props dt:nth-of-type(odd),
+.lib-card-props dd:nth-of-type(odd) {
     background: var(--bg-tertiary);
+}
+
+.lib-scanning-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--accent);
+    color: #fff;
+    padding: 1px 6px;
+    margin-left: 8px;
+    flex-shrink: 0;
 }
 
 .form-group input[type="checkbox"] {
@@ -1199,9 +1237,9 @@ input[type="checkbox"][role="switch"]:focus-visible {
     border-top: 1px solid var(--border);
 }
 
-#device-grid {
+#devices-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 12px;
 }
 
@@ -1209,16 +1247,18 @@ input[type="checkbox"][role="switch"]:focus-visible {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     padding: 16px;
+    display: flex;
+    flex-direction: column;
 }
 
-.device-card-header {
+.device-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
 }
 
-.device-card-name {
+.device-name {
     font-weight: 600;
     font-size: 14px;
 }
@@ -1227,20 +1267,48 @@ input[type="checkbox"][role="switch"]:focus-visible {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--accent);
+    border: 1px solid var(--text);
+    padding: 2px 8px;
 }
 
 .device-encoders {
-    font-size: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
     margin-bottom: 12px;
 }
 
-.scanning-badge {
-    font-size: 11px;
-    font-weight: 600;
+.device-encoder {
+    font-size: 12px;
+    font-family: "Cascadia Code", "Consolas", monospace;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+}
+
+.device-config {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.device-config label {
+    font-size: 12px;
+    text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--accent);
-    margin-left: 10px;
+}
+
+.device-config .number-wrap {
+    flex-shrink: 0;
+}
+
+.device-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 8px;
 }
 
 /* Tooltip */

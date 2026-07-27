@@ -20,42 +20,48 @@ export function loadSettings() {
 }
 
 async function loadDevices() {
-    const container = document.getElementById("device-grid");
+    const container = document.getElementById("devices-grid");
     try {
         const devices = await api("GET", "/api/devices");
         if (!devices || devices.length === 0) {
-            container.innerHTML = "<p>No devices detected.</p>";
+            container.innerHTML = '<p class="section-empty">No devices detected.</p>';
             return;
         }
         let html = "";
         for (const dev of devices) {
+            const encoderChips = dev.encoders.map(e =>
+                `<span class="device-encoder">${esc(e)}</span>`
+            ).join("");
             const typeTip = dev.type === "cpu"
                 ? "Software encoding using the CPU.<br>Slower but widely compatible. No special hardware required."
                 : `Hardware-accelerated encoding using <em>${dev.name}</em>.<br>Faster than CPU, but may have session limits and fewer quality options.`;
             html += `<div class="device-card">
-                <div class="device-card-header">
-                    <span class="device-card-name">${esc(dev.name)}</span>
+                <div class="device-header">
+                    <span class="device-name">${esc(dev.name)}</span>
                     <span class="device-type" data-tooltip="${typeTip}">${esc(dev.type)}</span>
                 </div>
-                <div class="device-encoders">${dev.encoders.map(esc).join(", ")}</div>
-                <div class="form-group">
-                    <label data-tooltip="How many files this device can transcode at the same time.<br>Set to 0 to disable this device. Jobs that need it will be blocked until re-enabled.">Max Concurrent Jobs (0 = disabled)</label>
-                    <input type="number" class="dc-max-jobs" data-id="${escAttr(dev.id)}" value="${dev.max_jobs}" min="0">
+                <div class="device-encoders">${encoderChips || '<span class="section-empty">No verified encoders</span>'}</div>
+                <div class="device-config">
+                    <label data-tooltip="How many files this device can transcode at the same time.<br>Set to 0 to disable this device. Jobs that need it will be blocked until re-enabled.">Max concurrent jobs</label>
+                    <input type="number" class="device-max-jobs" data-device="${escAttr(dev.id)}"
+                           min="0" max="16" value="${dev.max_jobs}">
                 </div>
-                <button class="btn btn-primary dc-save" data-id="${escAttr(dev.id)}">Save</button>
+                <div class="device-actions">
+                    <button class="btn btn-primary device-save" data-device="${escAttr(dev.id)}">Save</button>
+                </div>
             </div>`;
         }
         container.innerHTML = html;
         wrapNumberInputs(container);
 
         container.querySelectorAll(".device-card").forEach(card => {
-            const input = card.querySelector(".dc-max-jobs");
-            const btn = card.querySelector(".dc-save");
+            const input = card.querySelector(".device-max-jobs");
+            const btn = card.querySelector(".device-save");
             let original = input.value;
             btn.disabled = true;
             input.addEventListener("input", () => { btn.disabled = input.value === original; });
             btn.addEventListener("click", async () => {
-                const deviceId = btn.dataset.id;
+                const deviceId = btn.dataset.device;
                 const val = parseInt(input.value);
                 if (isNaN(val) || val < 0) { alert("Max jobs must be 0 or greater"); return; }
                 try {
@@ -71,7 +77,7 @@ async function loadDevices() {
             });
         });
     } catch {
-        container.innerHTML = "<p>Failed to load devices.</p>";
+        container.innerHTML = '<p class="section-empty">Failed to load devices.</p>';
     }
 }
 
