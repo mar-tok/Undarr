@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import aiosqlite
 
 import config
@@ -26,6 +28,16 @@ CREATE TABLE IF NOT EXISTS job_history (
 );
 """
 
+PROCESSED_SCHEMA = """\
+CREATE TABLE IF NOT EXISTS processed_files (
+    file_path     TEXT NOT NULL,
+    library_name  TEXT NOT NULL,
+    mtime         REAL NOT NULL,
+    processed_at  TEXT NOT NULL,
+    PRIMARY KEY (file_path, library_name)
+);
+"""
+
 
 async def _column_names(conn: aiosqlite.Connection, table: str) -> set[str]:
     cursor = await conn.execute(f"PRAGMA table_info({table})")
@@ -40,6 +52,7 @@ async def init_db() -> None:
     _db = await aiosqlite.connect(str(db_path))
     _db.row_factory = aiosqlite.Row
     await _db.executescript(SCHEMA)
+    await _db.executescript(PROCESSED_SCHEMA)
     await _db.commit()
 
     cols = await _column_names(_db, "job_history")
@@ -70,15 +83,6 @@ async def close_db() -> None:
 def get_db() -> aiosqlite.Connection:
     assert _db is not None, "Database not initialized"
     return _db
-
-
-async def has_completed_job(file_path: str) -> bool:
-    db = get_db()
-    row = await db.execute_fetchall(
-        "SELECT 1 FROM job_history WHERE file_path = ? AND status = 'completed' LIMIT 1",
-        (file_path,),
-    )
-    return len(row) > 0
 
 
 async def insert_job_history(
@@ -230,3 +234,25 @@ async def get_job_log(job_id: str) -> str | None:
     )
     row = await cursor.fetchone()
     return row["ffmpeg_log"] if row else None
+
+
+async def mark_processed(file_path: str, library_name: str, mtime: float) -> None:
+    db = get_db()
+    await db.execute(
+        """INSERT OR REPLACE INTO processed_files (file_path, library_name, mtime, processed_at)
+           VALUES (?, ?, ?, ?)""",
+        (file_path, library_name, mtime, datetime.now(timezone.utc).isoformat()),
+    )
+    await db.commit()
+
+
+async def is_processed(file_path: str, library_name: str, current_mtime: float) -> bool:
+    db = get_db()
+    cursor = await db.execute(
+        "SELECT mtime FROM processed_files WHERE file_path = ? AND library_name = ?",
+        (file_path, library_name),
+    )
+    row = await cursor.fetchone()
+    if row is None:
+        return False
+    return abs(row["mtime"] - current_mtime) < 0.001

@@ -426,6 +426,12 @@ class QueueManager:
                 self._active.pop(job.id, None)
                 self._device_active[job.device] -= 1
                 self._known_paths.discard(job.file_path)
+            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                try:
+                    mtime = Path(job.file_path).stat().st_mtime
+                except OSError:
+                    mtime = 0.0
+                await db.mark_processed(job.file_path, job.library_name, mtime)
             await db.insert_job_history(
                 id=job.id,
                 library_name=job.library_name,

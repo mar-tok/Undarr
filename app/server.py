@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,9 +9,25 @@ from core import db
 from core.queue_manager import queue_manager
 from core.yaml_store import store
 from core.watcher import watcher
-from core.scanner import periodic_scanner
+from core.scanner import scan_library, periodic_scanner
 from core.devices import detect_devices
 from app.routers import queue, presets, libraries, settings, filesystem
+
+
+async def _startup_scan() -> None:
+    libs = await store.get_libraries()
+    for name, lib in libs.items():
+        if not lib.preset:
+            continue
+        try:
+            if not await store.get_library(name):
+                continue
+            await scan_library(name, lib, queue_manager.enqueue)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.error("Startup scan of '%s' failed: %s", name, e)
+    log.info("Startup scan complete")
 
 
 @asynccontextmanager
@@ -27,7 +44,10 @@ async def lifespan(app: FastAPI):
     await queue_manager.start(limits)
     await watcher.start(queue_manager.enqueue)
     await periodic_scanner.start(queue_manager.enqueue)
+    scan_task = asyncio.create_task(_startup_scan())
     yield
+    scan_task.cancel()
+    await asyncio.gather(scan_task, return_exceptions=True)
     await periodic_scanner.stop()
     await watcher.stop()
     await queue_manager.stop()

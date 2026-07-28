@@ -158,7 +158,7 @@ function renderLibraryFormCard(lib) {
         </div>
         <div class="form-row form-row-4">
             <div class="form-group">
-                <label data-tooltip="How often to automatically re-scan this library's paths for new or changed files.<br>Already processed files are skipped.<br>Useful as a safety net alongside <em>Watch for new files</em>, catching files added while the app was down or on network mounts where filesystem events may not fire.<br>Set to 0 to disable (default). You can still scan manually.">Scan Interval</label>
+                <label data-tooltip="How often to automatically re-scan this library's paths for new or changed files.<br>Already processed files are skipped unless they have been modified since.<br>Useful as a safety net alongside <em>Watch for new files</em>, catching files added while the app was down or on network mounts where filesystem events may not fire.<br>Set to 0 to disable (default). You can still scan manually.">Scan Interval</label>
                 <input type="number" class="lc-scan-interval" min="0" value="${scanInterval}" placeholder="0">
             </div>
             <div class="form-group">

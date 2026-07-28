@@ -38,9 +38,13 @@ async def scan_library(
     count = 0
     skipped = 0
     for file in files:
-        file_str = str(file)
+        try:
+            st = file.stat()
+        except OSError:
+            continue
 
-        if await db.has_completed_job(file_str):
+        file_str = str(file)
+        if await db.is_processed(file_str, library_name, st.st_mtime):
             continue
 
         result = await scan_single_file(file_str, library_name, library, enqueue_fn)
@@ -70,8 +74,10 @@ async def _log_skip(
     try:
         st = Path(file_path).stat()
         file_size = st.st_size
+        mtime = st.st_mtime
     except OSError:
         file_size = 0
+        mtime = None
     await db.insert_job_history(
         id=str(uuid.uuid4()),
         library_name=library_name,
@@ -87,6 +93,8 @@ async def _log_skip(
         preset_name=preset,
         device_name="",
     )
+    if mtime is not None:
+        await db.mark_processed(file_path, library_name, mtime)
 
 
 async def scan_single_file(

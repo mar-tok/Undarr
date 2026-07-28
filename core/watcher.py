@@ -11,19 +11,26 @@ from core.logger import log
 from core.ffprobe import is_video_file
 from core.yaml_store import store
 from core.scanner import scan_single_file
+from core import db
 
-_suppressed: set[str] = set()
+# Paths suppressed by the queue manager during file replacement.
+# Checked by the watcher before scheduling any debounce, so
+# shutil.move operations never trigger a re-queue.
+_suppressed_paths: set[str] = set()
 _suppressed_lock = threading.Lock()
 
 
 def suppress_path(path: str) -> None:
     with _suppressed_lock:
-        _suppressed.add(path)
+        _suppressed_paths.add(path)
 
 
 def unsuppress_path(path: str) -> None:
     with _suppressed_lock:
-        _suppressed.discard(path)
+        _suppressed_paths.discard(path)
+
+    with _suppressed_lock:
+        return path in _suppressed_paths
 
 
 class _VideoHandler(FileSystemEventHandler):
@@ -38,9 +45,8 @@ class _VideoHandler(FileSystemEventHandler):
     def _schedule(self, path: str) -> None:
         if not is_video_file(path):
             return
-        with _suppressed_lock:
-            if path in _suppressed:
-                return
+        if is_suppressed(path):
+            return
         handle = self._debounce.pop(path, None)
         if handle:
             handle.cancel()
@@ -48,15 +54,23 @@ class _VideoHandler(FileSystemEventHandler):
 
     def _fire(self, path: str) -> None:
         self._debounce.pop(path, None)
-        with _suppressed_lock:
-            if path in _suppressed:
-                return
+        if is_suppressed(path):
+            return
         asyncio.run_coroutine_threadsafe(self._handle_file(path), self._loop)
 
     async def _handle_file(self, path: str) -> None:
         log.debug("File detected: %s", path)
+        if is_suppressed(path):
+            return
         library = await store.get_library(self._library_name)
         if library is None:
+            return
+        try:
+            st = Path(path).stat()
+        except OSError:
+            return
+        if await db.is_processed(path, self._library_name, st.st_mtime):
+            log.debug("Watcher ignoring %s (already processed)", path)
             return
         await scan_single_file(path, self._library_name, library, self._enqueue_fn)
 
