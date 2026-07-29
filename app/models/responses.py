@@ -51,6 +51,8 @@ class LibraryOut(BaseModel):
     path_patterns: list[str] = []
     scan_interval: int = 0
     scan_unit: str = "hours"
+    new_file_delay: int = 0
+    new_file_delay_unit: str = "minutes"
 
 
 class HistoryOut(BaseModel):

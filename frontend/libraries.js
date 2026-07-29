@@ -65,6 +65,9 @@ function renderLibraryViewCard(lib) {
     if (lib.scan_interval > 0) {
         propsHtml += `<dt>Scan</dt><dd>Every ${lib.scan_interval} ${esc(lib.scan_unit)}</dd>`;
     }
+    if (lib.new_file_delay) {
+        propsHtml += `<dt>Delay</dt><dd>${esc(String(lib.new_file_delay))} ${esc(lib.new_file_delay_unit || "minutes")}</dd>`;
+    }
     propsHtml += `<dt>Paths</dt><dd>${esc(lib.paths.join(", "))}</dd>`;
 
     let warnHtml = "";
@@ -94,6 +97,8 @@ function renderLibraryFormCard(lib) {
     const watch = lib ? lib.watch : true;
     const scanInterval = lib ? (lib.scan_interval || 0) : 0;
     const scanUnit = lib ? (lib.scan_unit || "minutes") : "minutes";
+    const newFileDelay = lib ? (lib.new_file_delay || 0) : 0;
+    const newFileDelayUnit = lib ? (lib.new_file_delay_unit || "minutes") : "minutes";
 
     const presetOptionsHtml = `<option value=""${!preset ? " selected" : ""}>(none)</option>` + presets.map(p =>
         `<option value="${escAttr(p.name)}"${p.name === preset ? " selected" : ""}>${esc(p.name)}</option>`
@@ -101,6 +106,10 @@ function renderLibraryFormCard(lib) {
 
     const scanUnitOptionsHtml = SCAN_UNITS.map(u =>
         `<option value="${escAttr(u.value)}"${u.value === scanUnit ? " selected" : ""}>${esc(u.label)}</option>`
+    ).join("");
+
+    const delayUnitOptionsHtml = SCAN_UNITS.map(u =>
+        `<option value="${escAttr(u.value)}"${u.value === newFileDelayUnit ? " selected" : ""}>${esc(u.label)}</option>`
     ).join("");
 
     const skipRulesHtml = (lib ? (lib.skip_rules || []) : []).map((rule, ri) => {
@@ -153,9 +162,14 @@ function renderLibraryFormCard(lib) {
                 <button class="btn lc-browse-path" type="button">Browse</button>
             </div>
         </div>
-        <div class="form-group">
-            <label data-tooltip="Monitors this library's paths for newly added or modified files using filesystem events.<br>Unlike <em>Scan Interval</em>, file watching detects changes continuously."><input type="checkbox" role="switch" class="lc-watch"${watch ? " checked" : ""}> Watch for new files</label>
+        <div class="toggle-row">
+            <input type="checkbox" role="switch" class="lc-watch"${watch ? " checked" : ""}>
+            <label data-tooltip="Monitors this library's paths for newly added or modified files using filesystem events.<br>Detected files are queued for processing after the <em>New File Delay</em> expires (immediately if delay is 0).<br>Unlike <em>Scan Interval</em>, file watching detects changes continuously.">Watch for new files</label>
         </div>
+        ${!lib ? `<div class="toggle-row">
+            <input type="checkbox" role="switch" class="lc-mark-processed">
+            <label data-tooltip="Marks all files currently in this library's paths as already processed.<br>Only new files added after this library is created will be picked up.<br><br>Use this when importing a library that has already been transcoded, or one you don't want to process yet.">Mark existing files as processed</label>
+        </div>` : ""}
         <div class="form-row form-row-4">
             <div class="form-group">
                 <label data-tooltip="How often to automatically re-scan this library's paths for new or changed files.<br>Already processed files are skipped unless they have been modified since.<br>Useful as a safety net alongside <em>Watch for new files</em>, catching files added while the app was down or on network mounts where filesystem events may not fire.<br>Set to 0 to disable (default). You can still scan manually.">Scan Interval</label>
@@ -164,6 +178,16 @@ function renderLibraryFormCard(lib) {
             <div class="form-group">
                 <label data-tooltip="The time unit for the scan interval.<br>For example, an interval of 30 with unit <em>minutes</em> scans every 30 minutes.">Scan Unit</label>
                 <select class="lc-scan-unit">${scanUnitOptionsHtml}</select>
+            </div>
+        </div>
+        <div class="form-row form-row-4">
+            <div class="form-group">
+                <label data-tooltip="How long to wait after a file is first detected or last modified before queuing it.<br>The timer resets if the file changes again during the wait.<br>Set to 0 to process files immediately (default).">New File Delay</label>
+                <input type="number" class="lc-new-file-delay" min="0" value="${newFileDelay}" placeholder="0">
+            </div>
+            <div class="form-group">
+                <label data-tooltip="The time unit for the new file delay.">Delay Unit</label>
+                <select class="lc-new-file-delay-unit">${delayUnitOptionsHtml}</select>
             </div>
         </div>
         <div>
@@ -469,6 +493,8 @@ function attachLibFormCardListeners(card, originalName) {
         const watch = card.querySelector(".lc-watch").checked;
         const scan_interval = parseInt(card.querySelector(".lc-scan-interval").value) || 0;
         const scan_unit = card.querySelector(".lc-scan-unit").value;
+        const new_file_delay = parseInt(card.querySelector(".lc-new-file-delay").value) || 0;
+        const new_file_delay_unit = card.querySelector(".lc-new-file-delay-unit").value;
         const skip_rules = collectSkipRules(card.querySelector(".lc-skip-rules"));
         const path_patterns = collectPathPatterns(card.querySelector(".lc-path-patterns"));
 
@@ -483,10 +509,11 @@ function attachLibFormCardListeners(card, originalName) {
 
         try {
             if (isNew) {
-                await api("POST", "/api/libraries", { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit });
+                const mark_existing_processed = card.querySelector(".lc-mark-processed").checked;
+                await api("POST", "/api/libraries", { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit, mark_existing_processed, new_file_delay, new_file_delay_unit });
                 creatingNewLibrary = false;
             } else {
-                await api("PUT", `/api/libraries/${encodeURIComponent(originalName)}`, { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit });
+                await api("PUT", `/api/libraries/${encodeURIComponent(originalName)}`, { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit, new_file_delay, new_file_delay_unit });
                 editingLibraryName = null;
             }
             loadLibraries();

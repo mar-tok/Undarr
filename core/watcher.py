@@ -37,11 +37,16 @@ def is_suppressed(path: str) -> bool:
 
 class _VideoHandler(FileSystemEventHandler):
     def __init__(
-        self, library_name: str, loop: asyncio.AbstractEventLoop, enqueue_fn
+        self,
+        library_name: str,
+        loop: asyncio.AbstractEventLoop,
+        enqueue_fn,
+        delay_seconds: float = 0,
     ) -> None:
         self._library_name = library_name
         self._loop = loop
         self._enqueue_fn = enqueue_fn
+        self._delay = delay_seconds
         self._debounce: dict[str, asyncio.TimerHandle] = {}
 
     def _schedule(self, path: str) -> None:
@@ -52,7 +57,9 @@ class _VideoHandler(FileSystemEventHandler):
         handle = self._debounce.pop(path, None)
         if handle:
             handle.cancel()
-        self._debounce[path] = self._loop.call_later(2.0, self._fire, path)
+        self._debounce[path] = self._loop.call_later(
+            max(2.0, self._delay), self._fire, path
+        )
 
     def _fire(self, path: str) -> None:
         self._debounce.pop(path, None)
@@ -96,7 +103,8 @@ class LibraryWatcher:
         for name, lib in libraries.items():
             if not lib.watch:
                 continue
-            handler = _VideoHandler(name, loop, enqueue_fn)
+            delay_seconds = lib.new_file_delay_seconds
+            handler = _VideoHandler(name, loop, enqueue_fn, delay_seconds)
             for dir_path in lib.paths:
                 p = Path(dir_path)
                 if not p.exists():

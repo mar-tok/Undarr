@@ -6,7 +6,7 @@ from core.logger import log
 from app.models.requests import LibraryCreate, LibraryUpdate
 from app.models.responses import LibraryOut, SkipRuleOut, SkipConditionOut
 from core.yaml_store import store, Library, SkipRule, SkipCondition
-from core.scanner import scan_library, periodic_scanner
+from core.scanner import scan_library, periodic_scanner, mark_library_processed
 from core.queue_manager import queue_manager
 from core.watcher import watcher
 
@@ -79,6 +79,8 @@ async def list_libraries():
             path_patterns=l.path_patterns,
             scan_interval=l.scan_interval,
             scan_unit=l.scan_unit,
+            new_file_delay=l.new_file_delay,
+            new_file_delay_unit=l.new_file_delay_unit,
         )
         for n, l in libs.items()
     ]
@@ -101,9 +103,13 @@ async def create_library(body: LibraryCreate):
         path_patterns=body.path_patterns,
         scan_interval=body.scan_interval,
         scan_unit=body.scan_unit,
+        new_file_delay=body.new_file_delay,
+        new_file_delay_unit=body.new_file_delay_unit,
     )
     await store.create_library(body.name, lib)
     log.info("Library created: '%s'", body.name)
+    if body.mark_existing_processed:
+        await mark_library_processed(body.name, lib)
     await watcher.restart(queue_manager.enqueue)
     await periodic_scanner.restart(queue_manager.enqueue)
     return LibraryOut(
@@ -115,6 +121,8 @@ async def create_library(body: LibraryCreate):
         path_patterns=lib.path_patterns,
         scan_interval=lib.scan_interval,
         scan_unit=lib.scan_unit,
+        new_file_delay=lib.new_file_delay,
+        new_file_delay_unit=lib.new_file_delay_unit,
     )
 
 
@@ -136,6 +144,8 @@ async def update_library(name: str, body: LibraryUpdate):
         path_patterns=body.path_patterns,
         scan_interval=body.scan_interval,
         scan_unit=body.scan_unit,
+        new_file_delay=body.new_file_delay,
+        new_file_delay_unit=body.new_file_delay_unit,
     )
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:
@@ -159,6 +169,8 @@ async def update_library(name: str, body: LibraryUpdate):
         path_patterns=lib.path_patterns,
         scan_interval=lib.scan_interval,
         scan_unit=lib.scan_unit,
+        new_file_delay=lib.new_file_delay,
+        new_file_delay_unit=lib.new_file_delay_unit,
     )
 
 

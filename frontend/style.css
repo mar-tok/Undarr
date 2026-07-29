@@ -964,9 +964,15 @@ tr.clickable:hover {
     flex-shrink: 0;
 }
 
-.form-group input[type="checkbox"] {
+.toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.toggle-row input[type="checkbox"] {
     width: auto;
-    margin-right: 6px;
 }
 
 /* Toggle switch */
@@ -1007,6 +1013,10 @@ input[type="checkbox"][role="switch"]:checked::before {
 input[type="checkbox"][role="switch"]:focus-visible {
     outline: 1px solid var(--accent);
     outline-offset: 1px;
+}
+
+.toggle-row label {
+    color: var(--text);
 }
 
 .skip-rule-group {

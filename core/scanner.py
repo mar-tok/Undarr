@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -46,6 +47,12 @@ async def scan_library(
         file_str = str(file)
         if await db.is_processed(file_str, library_name, st.st_mtime):
             continue
+
+        if library.new_file_delay:
+            newest = max(st.st_mtime, st.st_ctime)
+            age = time.time() - newest
+            if age < library.new_file_delay_seconds:
+                continue
 
         result = await scan_single_file(file_str, library_name, library, enqueue_fn)
         if result == "queued":
@@ -140,6 +147,22 @@ async def scan_single_file(
 
     result = await enqueue_fn(file_path, library_name, media_info=media_info)
     return "queued" if result is not None else "none"
+
+
+async def mark_library_processed(
+    library_name: str,
+    library: Library,
+) -> int:
+    count = 0
+    for file in _collect_video_files(library):
+        try:
+            st = file.stat()
+        except OSError:
+            continue
+        await db.mark_processed(str(file), library_name, st.st_mtime)
+        count += 1
+    log.info("Marked %d files as processed in '%s'", count, library_name)
+    return count
 
 
 def _to_seconds(interval: int, unit: str) -> int:

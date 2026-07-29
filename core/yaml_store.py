@@ -75,6 +75,13 @@ class Library:
     path_patterns: list[str] = field(default_factory=list)
     scan_interval: int = 0
     scan_unit: str = "hours"
+    new_file_delay: int = 0
+    new_file_delay_unit: str = "minutes"
+
+    @property
+    def new_file_delay_seconds(self) -> int:
+        multipliers = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
+        return self.new_file_delay * multipliers.get(self.new_file_delay_unit, 60)
 
 
 @dataclass
@@ -162,6 +169,8 @@ def _config_from_dict(data: dict) -> Config:
             path_patterns=lib.get("path_patterns", []),
             scan_interval=lib.get("scan_interval", 0),
             scan_unit=lib.get("scan_unit", "hours"),
+            new_file_delay=lib.get("new_file_delay", 0),
+            new_file_delay_unit=lib.get("new_file_delay_unit", "minutes"),
         )
 
     return Config(settings=settings, presets=presets, libraries=libraries)
@@ -243,6 +252,14 @@ def _config_to_dict(cfg: Config) -> dict:
                 ],
                 "scan_interval": lib.scan_interval,
                 "scan_unit": lib.scan_unit,
+                **(
+                    {"new_file_delay": lib.new_file_delay} if lib.new_file_delay else {}
+                ),
+                **(
+                    {"new_file_delay_unit": lib.new_file_delay_unit}
+                    if lib.new_file_delay
+                    else {}
+                ),
                 **({"path_patterns": lib.path_patterns} if lib.path_patterns else {}),
             }
             for name, lib in cfg.libraries.items()
