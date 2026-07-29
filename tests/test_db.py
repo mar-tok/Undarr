@@ -1,7 +1,13 @@
 import aiosqlite
 
 import core.db as db_mod
-from core.db import SCHEMA, PROCESSED_SCHEMA, mark_processed, is_processed
+from core.db import (
+    SCHEMA,
+    PROCESSED_SCHEMA,
+    mark_processed,
+    is_processed,
+    remove_processed,
+)
 
 import pytest
 
@@ -36,3 +42,10 @@ class TestMarkAndIsProcessed:
 
     async def test_path_not_in_db(self, db_setup):
         assert await is_processed("/media/unknown.mkv", "lib1", 1000.0) is False
+
+
+class TestRemoveProcessed:
+    async def test_removes_entry(self, db_setup):
+        await mark_processed("/a.mkv", "lib1", 1.0)
+        await remove_processed("/a.mkv", "lib1")
+        assert not await is_processed("/a.mkv", "lib1", 1.0)

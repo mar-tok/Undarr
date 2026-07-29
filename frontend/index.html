@@ -72,9 +72,13 @@
                     <p id="issues-empty" class="section-empty">No issues.</p>
                 </div>
                 <div class="queue-pane" id="qtab-history">
+                    <div id="history-controls" style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+                        <button class="btn btn-primary" id="btn-requeue-selected" disabled style="display:none">Re-queue Selected</button>
+                    </div>
                     <table id="history-table">
                         <thead>
                             <tr>
+                                <th id="history-checkbox-col" style="display:none"><input type="checkbox" id="history-select-all" data-tooltip="Select all"></th>
                                 <th class="sortable" data-sort="file_path">File</th>
                                 <th class="sortable" data-sort="library_name">Library</th>
                                 <th class="sortable" data-sort="old_size_bytes">Old Size</th>

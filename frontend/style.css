@@ -467,6 +467,21 @@ button, button * {
 #history-table th:nth-child(6),
 #history-table td:nth-child(6) { width: 13%; }
 
+#history-table.has-checkboxes th:nth-child(1),
+#history-table.has-checkboxes td:nth-child(1) { width: 36px; overflow: visible; white-space: normal; }
+#history-table.has-checkboxes th:nth-child(2),
+#history-table.has-checkboxes td:nth-child(2) { width: calc(33% - 36px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#history-table.has-checkboxes th:nth-child(3),
+#history-table.has-checkboxes td:nth-child(3) { width: 14%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#history-table.has-checkboxes th:nth-child(4),
+#history-table.has-checkboxes td:nth-child(4) { width: 11%; }
+#history-table.has-checkboxes th:nth-child(5),
+#history-table.has-checkboxes td:nth-child(5) { width: 11%; }
+#history-table.has-checkboxes th:nth-child(6),
+#history-table.has-checkboxes td:nth-child(6) { width: 18%; }
+#history-table.has-checkboxes th:nth-child(7),
+#history-table.has-checkboxes td:nth-child(7) { width: 13%; }
+
 #search-table th:nth-child(1),
 #search-table td:nth-child(1) { width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #search-table th:nth-child(2),
@@ -572,6 +587,22 @@ th.sortable .sort-arrow {
 
 tr.clickable, tr.clickable * {
     cursor: pointer;
+}
+
+tr.clickable td:has(> input[type="checkbox"]) {
+    cursor: default;
+}
+
+td:has(> input[type="checkbox"]),
+th:has(> input[type="checkbox"]) {
+    cursor: pointer;
+}
+
+td > input[type="checkbox"],
+th > input[type="checkbox"] {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
 }
 
 tr.clickable:hover {

@@ -256,3 +256,12 @@ async def is_processed(file_path: str, library_name: str, current_mtime: float) 
     if row is None:
         return False
     return abs(row["mtime"] - current_mtime) < 0.001
+
+
+async def remove_processed(file_path: str, library_name: str) -> None:
+    db = get_db()
+    await db.execute(
+        "DELETE FROM processed_files WHERE file_path = ? AND library_name = ?",
+        (file_path, library_name),
+    )
+    await db.commit()

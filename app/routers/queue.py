@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from core.queue_manager import queue_manager, job_to_dict
+from core.yaml_store import store
 from core import db
 from app.models.responses import HistoryOut, SearchResultOut
 
@@ -79,6 +80,34 @@ async def retry_jobs(body: dict):
     if to_dismiss:
         await db.dismiss_history_entries(to_dismiss)
     return {"retried": retried}
+
+
+@router.post("/api/queue/requeue")
+async def requeue_jobs(body: dict):
+    ids = body.get("ids", [])
+    requeued = 0
+    skipped = 0
+    for job_id in ids:
+        entry = await db.get_history_entry(job_id)
+        if not entry:
+            skipped += 1
+            continue
+        file_path = entry["file_path"]
+        library_name = entry["library_name"]
+        if not Path(file_path).exists():
+            skipped += 1
+            continue
+        library = await store.get_library(library_name)
+        if not library:
+            skipped += 1
+            continue
+        await db.remove_processed(file_path, library_name)
+        job = await queue_manager.enqueue(file_path, library_name)
+        if job is None:
+            skipped += 1
+            continue
+        requeued += 1
+    return {"requeued": requeued, "skipped": skipped}
 
 
 @router.post("/api/history/dismiss")

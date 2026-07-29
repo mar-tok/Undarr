@@ -7,6 +7,7 @@ let historySortBy = "finished_at";
 let historySortDir = "desc";
 let historyStatusFilter = null;
 let historyData = [];
+let historyCheckboxesVisible = false;
 
 const expandedHistoryIds = new Set();
 const historyLogCache = new Map();
@@ -66,12 +67,13 @@ function expandHistoryRow(clickedRow) {
     const detailHtml = detail ? `<div class="history-detail">${detail}</div>` : "";
     const isSkipped = row && row.status.startsWith("skipped");
     const cached = historyLogCache.get(jobId);
+    const colspan = historyCheckboxesVisible ? 7 : 6;
     const expandRow = document.createElement("tr");
     expandRow.className = "log-row";
     if (isSkipped) {
-        expandRow.innerHTML = `<td colspan="6">${detailHtml}</td>`;
+        expandRow.innerHTML = `<td colspan="${colspan}">${detailHtml}</td>`;
     } else {
-        expandRow.innerHTML = `<td colspan="6">${detailHtml}<button class="btn btn-copy-log" data-log-id="${jobId}" style="margin-bottom:8px">Copy to Clipboard</button><div class="log-expand" id="log-${jobId}">${cached != null ? esc(cached) : "Loading..."}</div></td>`;
+        expandRow.innerHTML = `<td colspan="${colspan}">${detailHtml}<button class="btn btn-copy-log" data-log-id="${jobId}" style="margin-bottom:8px">Copy to Clipboard</button><div class="log-expand" id="log-${jobId}">${cached != null ? esc(cached) : "Loading..."}</div></td>`;
     }
     clickedRow.after(expandRow);
     const copyBtn = expandRow.querySelector(".btn-copy-log");
@@ -135,10 +137,20 @@ export async function loadHistory() {
         if (!currentIds.has(key)) historyLogCache.delete(key);
     }
     historyData = rows;
+    historyCheckboxesVisible = rows.length > 0;
     updateSortHeaders();
+    const checkboxCol = document.getElementById("history-checkbox-col");
+    const selectAll = document.getElementById("history-select-all");
+    const requeueBtn = document.getElementById("btn-requeue-selected");
+    checkboxCol.style.display = historyCheckboxesVisible ? "" : "none";
+    document.getElementById("history-table").classList.toggle("has-checkboxes", historyCheckboxesVisible);
+    requeueBtn.style.display = historyCheckboxesVisible ? "" : "none";
+    requeueBtn.disabled = true;
+    if (selectAll) selectAll.checked = false;
     const tbody = document.getElementById("history-body");
     tbody.innerHTML = rows.map((r, i) =>
         `<tr class="clickable${i % 2 ? " stripe" : ""}" data-job-id="${r.id}">
+            ${historyCheckboxesVisible ? `<td><input type="checkbox" class="history-check" data-job-id="${r.id}"></td>` : ""}
             <td data-tooltip="${escAttr(r.file_path)}">${esc(basename(r.file_path))}</td>
             <td>${esc(r.library_name)}</td>
             <td>${formatBytes(r.old_size_bytes)}</td>
@@ -205,6 +217,12 @@ export function reloadHistory() {
     return loadHistory();
 }
 
+function updateHistoryActions() {
+    const checks = document.querySelectorAll("#history-body .history-check");
+    const anyChecked = Array.from(checks).some(c => c.checked);
+    document.getElementById("btn-requeue-selected").disabled = !anyChecked;
+}
+
 export function initHistory() {
     document.querySelectorAll("#history-table th.sortable").forEach(th => {
         th.addEventListener("click", () => {
@@ -260,7 +278,48 @@ export function initHistory() {
     });
 
     document.getElementById("history-body").addEventListener("click", (e) => {
+        const checkCell = e.target.closest("td");
+        const checkInput = e.target.type === "checkbox" ? e.target
+            : checkCell?.querySelector("input.history-check");
+        if (checkInput) {
+            if (e.target.type !== "checkbox") checkInput.checked = !checkInput.checked;
+            updateHistoryActions();
+            const checks = document.querySelectorAll("#history-body .history-check");
+            const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+            document.getElementById("history-select-all").checked = allChecked;
+            return;
+        }
         const row = e.target.closest("tr.clickable");
         if (row) toggleLog(row);
+    });
+
+    document.getElementById("history-select-all").addEventListener("change", (e) => {
+        const checked = e.target.checked;
+        document.querySelectorAll("#history-body .history-check").forEach(c => { c.checked = checked; });
+        updateHistoryActions();
+    });
+
+    document.getElementById("btn-requeue-selected").addEventListener("click", async () => {
+        const checks = document.querySelectorAll("#history-body .history-check:checked");
+        const ids = Array.from(checks).map(c => c.dataset.jobId);
+        if (!ids.length) return;
+        const btn = document.getElementById("btn-requeue-selected");
+        btn.disabled = true;
+        try {
+            const result = await api("POST", "/api/queue/requeue", { ids });
+            if (result.requeued > 0 && result.skipped > 0) {
+                btn.textContent = `Queued ${result.requeued}, ${result.skipped} skipped`;
+            } else if (result.requeued > 0) {
+                btn.textContent = `Queued ${result.requeued}`;
+            } else {
+                btn.textContent = `${result.skipped} skipped (missing or already queued)`;
+            }
+            setTimeout(() => { btn.textContent = "Re-queue Selected"; }, 4000);
+            document.getElementById("history-select-all").checked = false;
+            document.querySelectorAll("#history-body .history-check").forEach(c => { c.checked = false; });
+        } catch (err) {
+            alert(err.message);
+        }
+        updateHistoryActions();
     });
 }

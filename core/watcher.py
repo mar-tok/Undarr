@@ -29,6 +29,8 @@ def unsuppress_path(path: str) -> None:
     with _suppressed_lock:
         _suppressed_paths.discard(path)
 
+
+def is_suppressed(path: str) -> bool:
     with _suppressed_lock:
         return path in _suppressed_paths
 
