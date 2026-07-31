@@ -81,9 +81,11 @@ function renderLibraryViewCard(lib) {
         <div class="lib-card-header">
             <span class="lib-card-name">${esc(lib.name)}</span>
             <div class="lib-card-actions">
-                ${warnHtml}<button class="btn" data-action="scan-library" data-name="${escAttr(lib.name)}">Scan</button>
-                <button class="btn-icon" data-action="edit-library" data-name="${escAttr(lib.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
+                ${warnHtml}<button class="btn-icon" data-action="edit-library" data-name="${escAttr(lib.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
                 <button class="btn-icon" data-action="delete-library" data-name="${escAttr(lib.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
+                <div class="lib-menu-wrapper">
+                    <button class="btn-icon" data-action="lib-menu" data-name="${escAttr(lib.name)}" data-tooltip="Actions"><img src="three-dots-vertical.svg" alt="Actions"></button>
+                </div>
             </div>
         </div>
         <dl class="lib-card-props">${propsHtml}</dl>
@@ -168,7 +170,7 @@ function renderLibraryFormCard(lib) {
         </div>
         ${!lib ? `<div class="toggle-row">
             <input type="checkbox" role="switch" class="lc-mark-processed">
-            <label data-tooltip="Marks all files currently in this library's paths as already processed.<br>Only new files added after this library is created will be picked up.<br><br>Use this when importing a library that has already been transcoded, or one you don't want to process yet.">Mark existing files as processed</label>
+            <label data-tooltip="Marks all files currently in this library's paths as already processed.<br>They will not be queued for transcoding until a <em>Force Rescan</em>.<br>Only new files added after this library is created will be picked up.<br><br>Use this when importing a library that has already been transcoded, or one you don't want to process yet.">Mark existing files as processed</label>
         </div>` : ""}
         <div class="form-row form-row-4">
             <div class="form-group">
@@ -543,7 +545,7 @@ function scanResultMessage(result) {
     return parts.length ? parts.join(" ") : "No new files found.";
 }
 
-function setScanningBadge(name, show) {
+function setScanningBadge(name, show, label = "SCANNING") {
     const card = document.querySelector(`.lib-card[data-name="${CSS.escape(name)}"]`);
     if (!card) return;
     const header = card.querySelector(".lib-card-header");
@@ -551,7 +553,7 @@ function setScanningBadge(name, show) {
     if (show && !existing) {
         const badge = document.createElement("span");
         badge.className = "lib-scanning-badge";
-        badge.textContent = "SCANNING";
+        badge.textContent = label;
         const nameEl = header.querySelector(".lib-card-name");
         nameEl.after(badge);
     } else if (!show && existing) {
@@ -564,22 +566,12 @@ export function initLibraries() {
         const btn = e.target.closest("[data-action]");
         if (!btn) return;
         const name = btn.dataset.name;
-        if (btn.dataset.action === "scan-library") {
-            setScanningBadge(name, true);
-            try {
-                const result = await api("POST", `/api/libraries/${encodeURIComponent(name)}/scan`);
-                setScanningBadge(name, false);
-                alert(scanResultMessage(result));
-            } catch (err) {
-                setScanningBadge(name, false);
-                alert("Scan failed: " + err.message);
-            }
-        } else if (btn.dataset.action === "edit-library") {
+        if (btn.dataset.action === "edit-library") {
             editingLibraryName = name;
             creatingNewLibrary = false;
             renderLibraries();
         } else if (btn.dataset.action === "delete-library") {
-            if (!confirm(`Delete library "${name}"?`)) return;
+            if (!confirm(`Delete library "${name}"?\n\nThis removes the library configuration and stops watching its paths. Your media files are not affected.\n\nQueued jobs from this library will remain in the queue. History and processed file records are kept.`)) return;
             try {
                 await api("DELETE", `/api/libraries/${encodeURIComponent(name)}`);
                 if (editingLibraryName === name) editingLibraryName = null;
@@ -587,6 +579,84 @@ export function initLibraries() {
             } catch (err) {
                 alert(err.message);
             }
+        } else if (btn.dataset.action === "lib-menu") {
+            const wrapper = btn.closest(".lib-menu-wrapper");
+            const existing = wrapper.querySelector(".lib-context-menu");
+            if (existing) { existing.remove(); return; }
+
+            const lib = libraries.find(l => l.name === name);
+            const preset = lib ? presets.find(p => p.name === lib.preset) : null;
+            const encoder = preset ? (parsePresetData(preset).encoder || "") : "";
+            const scanDisabled = !lib?.preset || (encoder && isEncoderDisabled(encoder));
+
+            const menu = document.createElement("div");
+            menu.className = "lib-context-menu";
+
+            const items = [
+                { action: "scan", label: "Scan & Queue", disabled: scanDisabled },
+                { action: "force-scan", label: "Force Rescan", disabled: scanDisabled },
+                { action: "mark-processed", label: "Mark All Processed" },
+            ];
+
+            for (const item of items) {
+                const b = document.createElement("button");
+                b.textContent = item.label;
+                b.dataset.menuAction = item.action;
+                if (item.disabled) b.disabled = true;
+                menu.appendChild(b);
+            }
+
+            wrapper.appendChild(menu);
+
+            menu.addEventListener("click", async (ev) => {
+                const menuBtn = ev.target.closest("[data-menu-action]");
+                if (!menuBtn || menuBtn.disabled) return;
+                const action = menuBtn.dataset.menuAction;
+                menu.remove();
+
+                if (action === "scan") {
+                    if (!confirm(`This will scan all paths in "${name}" and queue any unprocessed files for transcoding. Continue?`)) return;
+                    setScanningBadge(name, true);
+                    try {
+                        const result = await api("POST", `/api/libraries/${encodeURIComponent(name)}/scan`);
+                        setScanningBadge(name, false);
+                        alert(scanResultMessage(result));
+                    } catch (err) {
+                        setScanningBadge(name, false);
+                        alert("Scan failed: " + err.message);
+                    }
+                } else if (action === "force-scan") {
+                    if (!confirm(`Force rescan "${name}"?\n\nThis clears all processed file records for this library and re-evaluates every file from scratch. Files matching skip rules will still be skipped.\n\nThis is only needed if you changed the library's preset and want to re-process files, or if files were incorrectly skipped.`)) return;
+                    setScanningBadge(name, true);
+                    try {
+                        const result = await api("POST", `/api/libraries/${encodeURIComponent(name)}/scan?force=true`);
+                        setScanningBadge(name, false);
+                        alert(scanResultMessage(result));
+                    } catch (err) {
+                        setScanningBadge(name, false);
+                        alert("Force scan failed: " + err.message);
+                    }
+                } else if (action === "mark-processed") {
+                    if (!confirm(`Mark all files in "${name}" as processed?\n\nEvery file currently in this library's paths will be marked as already handled. They will not be queued on future scans or startup.\n\nOnly new files added after this point, or files whose content changes, will be picked up.\n\nUse Force Rescan to undo this and re-evaluate all files.`)) return;
+                    setScanningBadge(name, true, "MARKING");
+                    try {
+                        const result = await api("POST", `/api/libraries/${encodeURIComponent(name)}/mark-processed`);
+                        setScanningBadge(name, false);
+                        alert(`Marked ${result.marked} file${result.marked !== 1 ? "s" : ""} as processed.`);
+                    } catch (err) {
+                        setScanningBadge(name, false);
+                        alert("Failed to mark files: " + err.message);
+                    }
+                }
+            });
+
+            const closeMenu = (ev) => {
+                if (!menu.contains(ev.target) && ev.target !== btn && !btn.contains(ev.target)) {
+                    menu.remove();
+                    document.removeEventListener("click", closeMenu);
+                }
+            };
+            setTimeout(() => document.addEventListener("click", closeMenu), 0);
         }
     });
 

@@ -964,6 +964,47 @@ tr.clickable:hover {
     flex-shrink: 0;
 }
 
+.lib-menu-wrapper {
+    position: relative;
+}
+
+.lib-context-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--accent);
+    z-index: 100;
+    min-width: 180px;
+    box-shadow: 0 4px 12px #0a0a0a;
+    margin-top: 4px;
+}
+
+.lib-context-menu button {
+    display: block;
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 400;
+    cursor: pointer;
+}
+
+.lib-context-menu button:disabled {
+    color: #555;
+    cursor: default;
+}
+
+.lib-context-menu button:hover:not(:disabled) {
+    background: var(--bg-tertiary);
+}
+
 .toggle-row {
     display: flex;
     align-items: center;

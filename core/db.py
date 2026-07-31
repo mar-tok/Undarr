@@ -258,6 +258,16 @@ async def is_processed(file_path: str, library_name: str, current_mtime: float) 
     return abs(row["mtime"] - current_mtime) < 0.001
 
 
+async def clear_processed(library_name: str) -> int:
+    db = get_db()
+    cursor = await db.execute(
+        "DELETE FROM processed_files WHERE library_name = ?",
+        (library_name,),
+    )
+    await db.commit()
+    return cursor.rowcount
+
+
 async def remove_processed(file_path: str, library_name: str) -> None:
     db = get_db()
     await db.execute(

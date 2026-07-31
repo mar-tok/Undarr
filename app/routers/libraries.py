@@ -1,6 +1,6 @@
 from pathlib import PurePosixPath
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from core.logger import log
 from app.models.requests import LibraryCreate, LibraryUpdate
@@ -9,6 +9,7 @@ from core.yaml_store import store, Library, SkipRule, SkipCondition
 from core.scanner import scan_library, periodic_scanner, mark_library_processed
 from core.queue_manager import queue_manager
 from core.watcher import watcher
+from core import db
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
@@ -184,9 +185,24 @@ async def delete_library(name: str):
 
 
 @router.post("/{name}/scan")
-async def scan(name: str):
+async def scan(name: str, force: bool = Query(False)):
     lib = await store.get_library(name)
     if not lib:
         raise HTTPException(404, "Library not found")
+    if force:
+        cleared = await db.clear_processed(name)
+        log.info("Force rescan: cleared %d processed records for '%s'", cleared, name)
+    else:
+        log.info("Scan triggered for '%s'", name)
     count, skipped = await scan_library(name, lib, queue_manager.enqueue)
     return {"queued": count, "skipped": skipped}
+
+
+@router.post("/{name}/mark-processed")
+async def mark_processed(name: str):
+    lib = await store.get_library(name)
+    if not lib:
+        raise HTTPException(404, "Library not found")
+    count = await mark_library_processed(name, lib)
+    log.info("Marked all files as processed in '%s'", name)
+    return {"marked": count}

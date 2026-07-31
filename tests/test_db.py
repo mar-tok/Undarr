@@ -6,6 +6,7 @@ from core.db import (
     PROCESSED_SCHEMA,
     mark_processed,
     is_processed,
+    clear_processed,
     remove_processed,
 )
 
@@ -42,6 +43,16 @@ class TestMarkAndIsProcessed:
 
     async def test_path_not_in_db(self, db_setup):
         assert await is_processed("/media/unknown.mkv", "lib1", 1000.0) is False
+
+
+class TestClearProcessed:
+    async def test_clears_by_library(self, db_setup):
+        await mark_processed("/a.mkv", "lib1", 1.0)
+        await mark_processed("/b.mkv", "lib2", 2.0)
+        count = await clear_processed("lib1")
+        assert count == 1
+        assert not await is_processed("/a.mkv", "lib1", 1.0)
+        assert await is_processed("/b.mkv", "lib2", 2.0)
 
 
 class TestRemoveProcessed:
