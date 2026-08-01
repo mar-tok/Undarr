@@ -620,6 +620,7 @@ export function initLibraries() {
                     try {
                         const result = await api("POST", `/api/libraries/${encodeURIComponent(name)}/scan`);
                         setScanningBadge(name, false);
+                        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
                         alert(scanResultMessage(result));
                     } catch (err) {
                         setScanningBadge(name, false);
@@ -631,6 +632,7 @@ export function initLibraries() {
                     try {
                         const result = await api("POST", `/api/libraries/${encodeURIComponent(name)}/scan?force=true`);
                         setScanningBadge(name, false);
+                        await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
                         alert(scanResultMessage(result));
                     } catch (err) {
                         setScanningBadge(name, false);

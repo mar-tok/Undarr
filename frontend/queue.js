@@ -298,6 +298,33 @@ export function connectSSE() {
         }
     });
 
+    es.addEventListener("scan_progress", (e) => {
+        const data = JSON.parse(e.data);
+        const el = document.getElementById("scan-status");
+        if (!el) return;
+        const pct = data.total > 0 ? Math.round((data.scanned / data.total) * 100) : 0;
+        el.style.display = "block";
+        el.innerHTML = `<span class="scan-progress-text">Scanning '${esc(data.library)}': ${data.scanned}/${data.total} (${pct}%), ${data.queued} queued</span>`;
+    });
+
+    es.addEventListener("scan_complete", (e) => {
+        const data = JSON.parse(e.data);
+        const el = document.getElementById("scan-status");
+        if (!el) return;
+        if (data.library === null) {
+            el.style.display = "none";
+            el.innerHTML = "";
+        } else {
+            el.innerHTML = `<span class="scan-progress-text">Scan of '${esc(data.library)}' complete. ${data.queued} queued.</span>`;
+            setTimeout(() => {
+                if (el.textContent.includes(data.library)) {
+                    el.style.display = "none";
+                    el.innerHTML = "";
+                }
+            }, 10000);
+        }
+    });
+
     es.onerror = () => {
         es.close();
         _eventSource = null;

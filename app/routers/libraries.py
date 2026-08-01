@@ -13,6 +13,8 @@ from core import db
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
+_scanning: set[str] = set()
+
 
 def _paths_overlap(a: str, b: str) -> bool:
     pa = PurePosixPath(a)
@@ -189,13 +191,38 @@ async def scan(name: str, force: bool = Query(False)):
     lib = await store.get_library(name)
     if not lib:
         raise HTTPException(404, "Library not found")
-    if force:
-        cleared = await db.clear_processed(name)
-        log.info("Force rescan: cleared %d processed records for '%s'", cleared, name)
-    else:
-        log.info("Scan triggered for '%s'", name)
-    count, skipped = await scan_library(name, lib, queue_manager.enqueue)
-    return {"queued": count, "skipped": skipped}
+    if name in _scanning:
+        raise HTTPException(409, "This library is already being scanned")
+    _scanning.add(name)
+    try:
+        if force:
+            cleared = await db.clear_processed(name)
+            log.info(
+                "Force rescan: cleared %d processed records for '%s'", cleared, name
+            )
+        else:
+            log.info("Scan triggered for '%s'", name)
+
+        async def progress_fn(scanned: int, total: int, queued: int) -> None:
+            await queue_manager._broadcast(
+                "scan_progress",
+                {
+                    "library": name,
+                    "scanned": scanned,
+                    "total": total,
+                    "queued": queued,
+                },
+            )
+
+        count, skipped = await scan_library(
+            name, lib, queue_manager.enqueue, progress_fn=progress_fn
+        )
+        await queue_manager._broadcast(
+            "scan_complete", {"library": name, "queued": count}
+        )
+        return {"queued": count, "skipped": skipped}
+    finally:
+        _scanning.discard(name)
 
 
 @router.post("/{name}/mark-processed")

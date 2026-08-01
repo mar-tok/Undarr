@@ -30,28 +30,39 @@ async def scan_library(
     library_name: str,
     library: Library,
     enqueue_fn,
+    *,
+    progress_fn=None,
 ) -> tuple[int, int]:
     if not library.preset:
         log.warning("Scan skipped for '%s': no preset assigned", library_name)
         return 0, 0
 
     files = _collect_video_files(library)
+    total = len(files)
     count = 0
     skipped = 0
+    scanned = 0
     for file in files:
+        scanned += 1
         try:
             st = file.stat()
         except OSError:
+            if progress_fn:
+                await progress_fn(scanned, total, count)
             continue
 
         file_str = str(file)
         if await db.is_processed(file_str, library_name, st.st_mtime):
+            if progress_fn:
+                await progress_fn(scanned, total, count)
             continue
 
         if library.new_file_delay:
             newest = max(st.st_mtime, st.st_ctime)
             age = time.time() - newest
             if age < library.new_file_delay_seconds:
+                if progress_fn:
+                    await progress_fn(scanned, total, count)
                 continue
 
         result = await scan_single_file(file_str, library_name, library, enqueue_fn)
@@ -59,6 +70,8 @@ async def scan_library(
             count += 1
         elif result == "skipped":
             skipped += 1
+        if progress_fn:
+            await progress_fn(scanned, total, count)
 
     log.info("Scan of '%s': queued %d, skipped %d", library_name, count, skipped)
     return count, skipped

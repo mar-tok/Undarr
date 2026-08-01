@@ -19,14 +19,34 @@ async def _startup_scan() -> None:
     for name, lib in libs.items():
         if not lib.preset:
             continue
+
+        async def progress_fn(
+            scanned: int, total: int, queued: int, lib_name: str = name
+        ) -> None:
+            await queue_manager._broadcast(
+                "scan_progress",
+                {
+                    "library": lib_name,
+                    "scanned": scanned,
+                    "total": total,
+                    "queued": queued,
+                },
+            )
+
         try:
             if not await store.get_library(name):
                 continue
-            await scan_library(name, lib, queue_manager.enqueue)
+            count, _ = await scan_library(
+                name, lib, queue_manager.enqueue, progress_fn=progress_fn
+            )
+            await queue_manager._broadcast(
+                "scan_complete", {"library": name, "queued": count}
+            )
         except asyncio.CancelledError:
             raise
         except Exception as e:
             log.error("Startup scan of '%s' failed: %s", name, e)
+    await queue_manager._broadcast("scan_complete", {"library": None, "queued": 0})
     log.info("Startup scan complete")
 
 
