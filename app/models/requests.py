@@ -113,3 +113,7 @@ class SettingsUpdate(BaseModel):
 
 class DeviceUpdate(BaseModel):
     max_jobs: int
+
+
+class PauseRequest(BaseModel):
+    paused: bool

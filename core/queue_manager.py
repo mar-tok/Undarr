@@ -104,6 +104,7 @@ class QueueManager:
         self._dispatch_event = asyncio.Event()
         self._device_limits: dict[str, int] = {}
         self._device_active: dict[str, int] = {}
+        self._paused_libraries: set[str] = set()
 
     @property
     def pending_jobs(self) -> list[Job]:
@@ -120,6 +121,10 @@ class QueueManager:
     @property
     def paused(self) -> bool:
         return not self._running.is_set()
+
+    @property
+    def paused_libraries(self) -> set[str]:
+        return set(self._paused_libraries)
 
     async def start(self, device_limits: dict[str, int]) -> None:
         self._device_limits = dict(device_limits)
@@ -152,6 +157,38 @@ class QueueManager:
         self._dispatch_event.set()
         await self._broadcast("queue_paused", {"paused": False})
         log.info("Queue resumed")
+
+    def load_paused_libraries(self, names: set[str]) -> None:
+        self._paused_libraries = set(names)
+
+    async def pause_library(self, name: str) -> None:
+        self._paused_libraries.add(name)
+        await self._broadcast("library_paused", {"library_name": name, "paused": True})
+        log.info("Library '%s' paused", name)
+
+    async def resume_library(self, name: str) -> None:
+        self._paused_libraries.discard(name)
+        await self._broadcast("library_paused", {"library_name": name, "paused": False})
+        self._dispatch_event.set()
+        log.info("Library '%s' resumed", name)
+
+    async def rename_paused_library(self, old: str, new: str) -> None:
+        if old in self._paused_libraries:
+            self._paused_libraries.discard(old)
+            self._paused_libraries.add(new)
+            await self._broadcast(
+                "library_paused", {"library_name": old, "paused": False}
+            )
+            await self._broadcast(
+                "library_paused", {"library_name": new, "paused": True}
+            )
+
+    async def clear_paused_library(self, name: str) -> None:
+        if name in self._paused_libraries:
+            self._paused_libraries.discard(name)
+            await self._broadcast(
+                "library_paused", {"library_name": name, "paused": False}
+            )
 
     async def _resolve_device(self, library_name: str) -> tuple[str, str | None]:
         library = await store.get_library(library_name)
@@ -285,6 +322,9 @@ class QueueManager:
             async with self._lock:
                 still_pending: list[Job] = []
                 for job in self._pending:
+                    if job.library_name in self._paused_libraries:
+                        still_pending.append(job)
+                        continue
                     limit = self._device_limits.get(job.device, 1)
                     active = self._device_active.get(job.device, 0)
                     if active >= limit:

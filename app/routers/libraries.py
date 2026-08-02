@@ -3,7 +3,7 @@ from pathlib import PurePosixPath
 from fastapi import APIRouter, HTTPException, Query
 
 from core.logger import log
-from app.models.requests import LibraryCreate, LibraryUpdate
+from app.models.requests import LibraryCreate, LibraryUpdate, PauseRequest
 from app.models.responses import LibraryOut, SkipRuleOut, SkipConditionOut
 from core.yaml_store import store, Library, SkipRule, SkipCondition
 from core.scanner import scan_library, periodic_scanner, mark_library_processed
@@ -84,6 +84,7 @@ async def list_libraries():
             scan_unit=l.scan_unit,
             new_file_delay=l.new_file_delay,
             new_file_delay_unit=l.new_file_delay_unit,
+            paused=l.paused,
         )
         for n, l in libs.items()
     ]
@@ -126,12 +127,14 @@ async def create_library(body: LibraryCreate):
         scan_unit=lib.scan_unit,
         new_file_delay=lib.new_file_delay,
         new_file_delay_unit=lib.new_file_delay_unit,
+        paused=lib.paused,
     )
 
 
 @router.put("/{name}", response_model=LibraryOut)
 async def update_library(name: str, body: LibraryUpdate):
-    if not await store.get_library(name):
+    old_lib = await store.get_library(name)
+    if not old_lib:
         raise HTTPException(404, "Library not found")
     if body.preset and not await store.get_preset(body.preset):
         raise HTTPException(400, f"Preset '{body.preset}' not found")
@@ -149,6 +152,7 @@ async def update_library(name: str, body: LibraryUpdate):
         scan_unit=body.scan_unit,
         new_file_delay=body.new_file_delay,
         new_file_delay_unit=body.new_file_delay_unit,
+        paused=old_lib.paused,
     )
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:
@@ -157,6 +161,7 @@ async def update_library(name: str, body: LibraryUpdate):
     await store.update_library(new_name, lib)
     if new_name != name:
         await store.delete_library(name)
+        await queue_manager.rename_paused_library(name, new_name)
         log.info("Library renamed: '%s' -> '%s'", name, new_name)
     else:
         log.info("Library updated: '%s'", name)
@@ -174,6 +179,7 @@ async def update_library(name: str, body: LibraryUpdate):
         scan_unit=lib.scan_unit,
         new_file_delay=lib.new_file_delay,
         new_file_delay_unit=lib.new_file_delay_unit,
+        paused=lib.paused,
     )
 
 
@@ -182,8 +188,22 @@ async def delete_library(name: str):
     if not await store.delete_library(name):
         raise HTTPException(404, "Library not found")
     log.info("Library deleted: '%s'", name)
+    await queue_manager.clear_paused_library(name)
     await watcher.restart(queue_manager.enqueue)
     await periodic_scanner.restart(queue_manager.enqueue)
+
+
+@router.post("/{name}/pause")
+async def pause_library(name: str, body: PauseRequest):
+    lib = await store.get_library(name)
+    if not lib:
+        raise HTTPException(404, "Library not found")
+    await store.set_library_paused(name, body.paused)
+    if body.paused:
+        await queue_manager.pause_library(name)
+    else:
+        await queue_manager.resume_library(name)
+    return {"paused": body.paused}
 
 
 @router.post("/{name}/scan")

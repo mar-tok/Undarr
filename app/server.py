@@ -61,6 +61,8 @@ async def lifespan(app: FastAPI):
     for d in devices:
         dev_cfg = cfg.devices.get(d.id)
         limits[d.id] = dev_cfg.max_jobs if dev_cfg else 1
+    paused_libs = {name for name, lib in store.config.libraries.items() if lib.paused}
+    queue_manager.load_paused_libraries(paused_libs)
     await queue_manager.start(limits)
     await watcher.start(queue_manager.enqueue)
     await periodic_scanner.start(queue_manager.enqueue)

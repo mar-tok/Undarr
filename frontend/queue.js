@@ -1,4 +1,4 @@
-import { api, formatBytes, basename, esc, formatDuration } from "./helpers.js";
+import { api, formatBytes, basename, esc, escAttr, formatDuration } from "./helpers.js";
 import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
 import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
@@ -9,6 +9,7 @@ let pendingJobs = [];
 let blockedJobs = [];
 let failedJobs = [];
 let hasUnseenFailures = false;
+let pausedLibraries = new Set();
 
 let _eventSource = null;
 let _reconnectTimer = null;
@@ -96,11 +97,14 @@ export function renderQueue() {
         </tr>`;
     });
     runnablePending.forEach(j => {
+        const libPaused = pausedLibraries.has(j.library_name);
+        const statusText = libPaused ? "paused (library)" : "pending";
+        const statusTip = libPaused ? ` data-tooltip="Library '${escAttr(j.library_name)}' is paused. Jobs stay queued but will not start until the library is resumed.<br>Resume from the library's actions menu on the Libraries page."` : "";
         html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
             <td>${esc(basename(j.file_path))}</td>
             <td>${esc(j.library_name || "")}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
-            <td class="status-${j.status}">${esc(j.status)}</td>
+            <td class="status-${j.status}"${statusTip}>${statusText}</td>
         </tr>`;
     });
     tbody.innerHTML = html;
@@ -237,6 +241,7 @@ export function connectSSE() {
         pendingJobs = data.pending;
         blockedJobs = data.blocked || [];
         queuePaused = !!data.paused;
+        pausedLibraries = new Set(data.paused_libraries || []);
         await loadDeviceData();
         try {
             failedJobs = await api("GET", "/api/history?status=failed&limit=500&exclude_dismissed=true");
@@ -251,6 +256,16 @@ export function connectSSE() {
         queuePaused = !!data.paused;
         updatePauseButton();
         renderQueue();
+    });
+
+    es.addEventListener("library_paused", (e) => {
+        const data = JSON.parse(e.data);
+        if (data.paused) {
+            pausedLibraries.add(data.library_name);
+        } else {
+            pausedLibraries.delete(data.library_name);
+        }
+        debouncedRenderQueue();
     });
 
     es.addEventListener("job_queued", (e) => {

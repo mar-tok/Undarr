@@ -964,6 +964,18 @@ tr.clickable:hover {
     flex-shrink: 0;
 }
 
+.lib-paused-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--accent);
+    color: #fff;
+    padding: 1px 6px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
 #scan-status {
     position: fixed;
     top: 12px;

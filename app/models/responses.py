@@ -53,6 +53,7 @@ class LibraryOut(BaseModel):
     scan_unit: str = "hours"
     new_file_delay: int = 0
     new_file_delay_unit: str = "minutes"
+    paused: bool = False
 
 
 class HistoryOut(BaseModel):

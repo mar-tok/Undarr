@@ -77,6 +77,7 @@ class Library:
     scan_unit: str = "hours"
     new_file_delay: int = 0
     new_file_delay_unit: str = "minutes"
+    paused: bool = False
 
     @property
     def new_file_delay_seconds(self) -> int:
@@ -171,6 +172,7 @@ def _config_from_dict(data: dict) -> Config:
             scan_unit=lib.get("scan_unit", "hours"),
             new_file_delay=lib.get("new_file_delay", 0),
             new_file_delay_unit=lib.get("new_file_delay_unit", "minutes"),
+            paused=bool(lib.get("paused", False)),
         )
 
     return Config(settings=settings, presets=presets, libraries=libraries)
@@ -261,6 +263,7 @@ def _config_to_dict(cfg: Config) -> dict:
                     else {}
                 ),
                 **({"path_patterns": lib.path_patterns} if lib.path_patterns else {}),
+                **({"paused": True} if lib.paused else {}),
             }
             for name, lib in cfg.libraries.items()
         },
@@ -363,6 +366,13 @@ class YamlStore:
         async with self._lock:
             self._config.libraries[name] = library
             await self._save()
+
+    async def set_library_paused(self, name: str, paused: bool) -> None:
+        async with self._lock:
+            lib = self._config.libraries.get(name)
+            if lib:
+                lib.paused = paused
+                await self._save()
 
     async def delete_library(self, name: str) -> bool:
         async with self._lock:

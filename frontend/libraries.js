@@ -77,9 +77,11 @@ function renderLibraryViewCard(lib) {
         warnHtml = `<span data-tooltip="${disabledDeviceTooltip(encoder, "library")}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`;
     }
 
+    const statusBadge = lib.paused ? `<span class="lib-paused-badge">PAUSED</span>` : "";
+
     return `<div class="lib-card" data-name="${escAttr(lib.name)}">
         <div class="lib-card-header">
-            <span class="lib-card-name">${esc(lib.name)}</span>
+            <span class="lib-card-name">${esc(lib.name)}</span>${statusBadge}
             <div class="lib-card-actions">
                 ${warnHtml}<button class="btn-icon" data-action="edit-library" data-name="${escAttr(lib.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
                 <button class="btn-icon" data-action="delete-library" data-name="${escAttr(lib.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
@@ -593,6 +595,7 @@ export function initLibraries() {
             menu.className = "lib-context-menu";
 
             const items = [
+                { action: "toggle-pause", label: lib?.paused ? "Resume Processing" : "Pause Processing" },
                 { action: "scan", label: "Scan & Queue", disabled: scanDisabled },
                 { action: "force-scan", label: "Force Rescan", disabled: scanDisabled },
                 { action: "mark-processed", label: "Mark All Processed" },
@@ -614,7 +617,15 @@ export function initLibraries() {
                 const action = menuBtn.dataset.menuAction;
                 menu.remove();
 
-                if (action === "scan") {
+                if (action === "toggle-pause") {
+                    const isPaused = lib?.paused;
+                    try {
+                        await api("POST", `/api/libraries/${encodeURIComponent(name)}/pause`, { paused: !isPaused });
+                        loadLibraries();
+                    } catch (err) {
+                        alert(err.message);
+                    }
+                } else if (action === "scan") {
                     if (!confirm(`This will scan all paths in "${name}" and queue any unprocessed files for transcoding. Continue?`)) return;
                     setScanningBadge(name, true);
                     try {
