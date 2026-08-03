@@ -51,10 +51,19 @@ class DeviceConfig:
     max_jobs: int = 1
 
 
+DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def _default_schedule() -> dict[str, list[bool]]:
+    return {day: [True] * 24 for day in DAYS}
+
+
 @dataclass
 class Settings:
     cache_dir: str = "/tmp/undarr"
     devices: dict[str, DeviceConfig] = field(default_factory=dict)
+    schedule_enabled: bool = False
+    schedule: dict[str, list[bool]] = field(default_factory=_default_schedule)
 
 
 @dataclass
@@ -98,9 +107,20 @@ def _config_from_dict(data: dict) -> Config:
     devices: dict[str, DeviceConfig] = {}
     for dev_id, dev in (raw_settings.get("devices") or {}).items():
         devices[dev_id] = DeviceConfig(max_jobs=dev.get("max_jobs", 1))
+
+    schedule = _default_schedule()
+    raw_schedule = raw_settings.get("schedule")
+    if isinstance(raw_schedule, dict):
+        for day in DAYS:
+            raw_day = raw_schedule.get(day)
+            if isinstance(raw_day, list) and len(raw_day) == 24:
+                schedule[day] = [bool(v) for v in raw_day]
+
     settings = Settings(
         cache_dir=raw_settings.get("cache_dir", "/tmp/undarr"),
         devices=devices,
+        schedule_enabled=bool(raw_settings.get("schedule_enabled", False)),
+        schedule=schedule,
     )
 
     presets: dict[str, Preset] = {}
@@ -221,6 +241,8 @@ def _config_to_dict(cfg: Config) -> dict:
                 dev_id: {"max_jobs": dc.max_jobs}
                 for dev_id, dc in cfg.settings.devices.items()
             },
+            "schedule_enabled": cfg.settings.schedule_enabled,
+            "schedule": cfg.settings.schedule,
         },
         "presets": {
             name: {
@@ -313,9 +335,11 @@ class YamlStore:
     async def get_settings(self) -> Settings:
         return self._config.settings
 
-    async def set_cache_dir(self, cache_dir: str) -> Settings:
+    async def update_settings(self, **kwargs) -> Settings:
         async with self._lock:
-            self._config.settings.cache_dir = cache_dir
+            for k, v in kwargs.items():
+                if hasattr(self._config.settings, k):
+                    setattr(self._config.settings, k, v)
             await self._save()
         return self._config.settings
 

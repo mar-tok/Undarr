@@ -44,6 +44,7 @@
                     <div class="queue-controls" id="queue-controls" style="display:none">
                         <button class="btn btn-primary" id="btn-pause">Pause Queue</button>
                         <span id="pending-count"></span>
+                        <span id="schedule-indicator" style="display:none" data-tooltip="Transcoding is limited to the active hours set in Settings > Schedule.<br>Jobs stay queued and start automatically at the next active hour."></span>
                     </div>
                     <table id="queue-table" style="display:none">
                         <thead>
@@ -125,6 +126,7 @@
                 <div class="settings-tabs">
                     <button class="settings-tab active" data-stab="general">General</button>
                     <button class="settings-tab" data-stab="devices">Devices</button>
+                    <button class="settings-tab" data-stab="schedule">Schedule</button>
                 </div>
                 <div class="settings-pane active" id="stab-general">
                     <button class="btn btn-primary" id="btn-save-settings" style="margin-bottom: 16px">Save</button>
@@ -145,6 +147,31 @@
                 </div>
                 <div class="settings-pane" id="stab-devices">
                     <div id="devices-grid"></div>
+                </div>
+                <div class="settings-pane" id="stab-schedule">
+                    <div class="schedule-toolbar">
+                        <label class="schedule-toggle">
+                            <input type="checkbox" role="switch" id="schedule-enabled">
+                            Enable schedule
+                        </label>
+                        <div class="schedule-presets" id="schedule-presets">
+                            <button class="btn btn-sm" data-preset="allOn">All On</button>
+                            <button class="btn btn-sm" data-preset="allOff">Clear All</button>
+                            <button class="btn btn-sm" data-preset="nights">Nights Only</button>
+                            <button class="btn btn-sm" data-preset="weekends">Weekends</button>
+                        </div>
+                    </div>
+                    <div id="schedule-grid"></div>
+                    <div class="schedule-footer">
+                        <div class="schedule-footer-left">
+                            <span id="schedule-summary"></span>
+                            <span class="schedule-hint">Click or drag cells to toggle. Click day or hour headers to toggle entire rows and columns.</span>
+                        </div>
+                        <div class="schedule-footer-right">
+                            <span id="schedule-time-display"></span>
+                            <button class="btn btn-primary" id="btn-save-schedule">Save</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>

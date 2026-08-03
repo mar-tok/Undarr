@@ -109,6 +109,8 @@ class LibraryUpdate(BaseModel):
 
 class SettingsUpdate(BaseModel):
     cache_dir: str | None = None
+    schedule_enabled: bool | None = None
+    schedule: dict[str, list[bool]] | None = None
 
 
 class DeviceUpdate(BaseModel):

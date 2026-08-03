@@ -36,6 +36,7 @@ async def queue_events():
             "blocked": [job_to_dict(j) for j in queue_manager.blocked_jobs],
             "paused": queue_manager.paused,
             "paused_libraries": list(queue_manager.paused_libraries),
+            "schedule_active": queue_manager.schedule_active,
         }
         yield f"event: init\ndata: {json.dumps(init_data)}\n\n"
         try:

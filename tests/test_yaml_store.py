@@ -1,6 +1,12 @@
 import pytest
 
-from core.yaml_store import YamlStore, Library, SkipRule, SkipCondition
+from core.yaml_store import (
+    YamlStore,
+    Library,
+    SkipRule,
+    SkipCondition,
+    _config_from_dict,
+)
 
 
 @pytest.fixture
@@ -97,3 +103,35 @@ class TestLibraryCRUD:
         assert len(lib.skip_rules) == 1
         assert len(lib.skip_rules[0].conditions) == 2
         assert lib.skip_rules[0].conditions[1].field == "bitrate_kbps"
+
+
+# Settings
+
+
+class TestSettings:
+    async def test_defaults(self, store):
+        s = await store.get_settings()
+        assert s.cache_dir == "/tmp/undarr"
+        assert s.schedule_enabled is False
+
+    async def test_update(self, store):
+        s = await store.update_settings(schedule_enabled=True)
+        assert s.schedule_enabled is True
+
+    async def test_update_ignores_unknown_fields(self, store):
+        s = await store.update_settings(nonexistent_field="value")
+        assert not hasattr(s, "nonexistent_field")
+
+
+# Validation and migration
+
+
+class TestConfigFromDict:
+    def test_schedule_partial_days_keep_defaults(self):
+        cfg = _config_from_dict({"settings": {"schedule": {"mon": [True] * 24}}})
+        assert cfg.settings.schedule["mon"] == [True] * 24
+        assert cfg.settings.schedule["tue"] == [True] * 24
+
+    def test_schedule_wrong_length_ignored(self):
+        cfg = _config_from_dict({"settings": {"schedule": {"mon": [True] * 12}}})
+        assert cfg.settings.schedule["mon"] == [True] * 24

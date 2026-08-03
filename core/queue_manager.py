@@ -30,7 +30,7 @@ from core.ffmpeg import (
     build_scale_filter,
 )
 from core.devices import encoder_to_device_id, device_display_name
-from core.yaml_store import store
+from core.yaml_store import store, DAYS
 from core.watcher import suppress_path, unsuppress_path
 
 
@@ -105,6 +105,8 @@ class QueueManager:
         self._device_limits: dict[str, int] = {}
         self._device_active: dict[str, int] = {}
         self._paused_libraries: set[str] = set()
+        self._schedule_wakeup_handle: asyncio.TimerHandle | None = None
+        self._schedule_is_active: bool = True
 
     @property
     def pending_jobs(self) -> list[Job]:
@@ -126,10 +128,15 @@ class QueueManager:
     def paused_libraries(self) -> set[str]:
         return set(self._paused_libraries)
 
+    @property
+    def schedule_active(self) -> bool:
+        return self._schedule_is_active
+
     async def start(self, device_limits: dict[str, int]) -> None:
         self._device_limits = dict(device_limits)
         self._device_active = {dev: 0 for dev in device_limits}
         self._dispatcher_task = asyncio.create_task(self._dispatcher())
+        self._dispatch_event.set()
         log.info("Queue started, device limits: %s", device_limits)
 
     async def update_device_limit(self, device_id: str, max_jobs: int) -> None:
@@ -189,6 +196,33 @@ class QueueManager:
             await self._broadcast(
                 "library_paused", {"library_name": name, "paused": False}
             )
+
+    def _check_schedule_active(self) -> bool:
+        settings = store.config.settings
+        if not settings.schedule_enabled:
+            return True
+        now = datetime.now()
+        day_key = DAYS[now.weekday()]
+        return settings.schedule[day_key][now.hour]
+
+    def _set_schedule_wakeup(self) -> None:
+        if self._schedule_wakeup_handle is not None:
+            self._schedule_wakeup_handle.cancel()
+        now = datetime.now()
+        seconds_to_next_hour = 3600 - (now.minute * 60 + now.second) + 1
+        loop = asyncio.get_event_loop()
+        self._schedule_wakeup_handle = loop.call_later(
+            seconds_to_next_hour, self._dispatch_event.set
+        )
+
+    async def schedule_changed(self) -> None:
+        was_active = self._schedule_is_active
+        self._schedule_is_active = self._check_schedule_active()
+        if was_active != self._schedule_is_active:
+            await self._broadcast(
+                "schedule_status", {"active": self._schedule_is_active}
+            )
+        self._dispatch_event.set()
 
     async def _resolve_device(self, library_name: str) -> tuple[str, str | None]:
         library = await store.get_library(library_name)
@@ -318,6 +352,16 @@ class QueueManager:
             await self._running.wait()
             await self._dispatch_event.wait()
             self._dispatch_event.clear()
+
+            was_active = self._schedule_is_active
+            self._schedule_is_active = self._check_schedule_active()
+            if was_active != self._schedule_is_active:
+                await self._broadcast(
+                    "schedule_status", {"active": self._schedule_is_active}
+                )
+            if not self._schedule_is_active:
+                self._set_schedule_wakeup()
+                continue
 
             async with self._lock:
                 still_pending: list[Job] = []

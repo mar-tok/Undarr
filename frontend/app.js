@@ -5,6 +5,7 @@ import { initSearch } from "./search.js";
 import { initPresets, loadPresetView } from "./presets.js";
 import { initLibraries, loadLibraryView } from "./libraries.js";
 import { initSettings, loadSettings, switchSettingsTab } from "./settings.js";
+import { isScheduleDirty, discardScheduleChanges, stopScheduleClock } from "./schedule.js";
 
 const tooltip = document.getElementById("tooltip");
 let tipTarget = null;
@@ -30,7 +31,15 @@ document.addEventListener("mousemove", e => {
 const navItems = document.querySelectorAll(".nav-item");
 const views = document.querySelectorAll(".view");
 
+let currentView = "queue";
+
 function navigate(viewId) {
+    if (currentView === "settings" && viewId !== "settings" && isScheduleDirty()) {
+        if (!confirm("You have unsaved schedule changes. Leave without saving?")) return;
+        discardScheduleChanges();
+    }
+    if (currentView === "settings" && viewId !== "settings") stopScheduleClock();
+    currentView = viewId;
     navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));
     views.forEach(v => v.classList.toggle("active", v.id === "view-" + viewId));
     if (viewId === "queue") loadQueueTab();

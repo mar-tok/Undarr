@@ -56,6 +56,14 @@ class LibraryOut(BaseModel):
     paused: bool = False
 
 
+class SettingsOut(BaseModel):
+    cache_dir: str
+    schedule_enabled: bool
+    schedule: dict[str, list[bool]]
+    server_timezone: str
+    server_utc_offset: int
+
+
 class HistoryOut(BaseModel):
     id: str
     library_name: str

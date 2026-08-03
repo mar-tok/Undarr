@@ -4,6 +4,7 @@ import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
 
 let queuePaused = false;
+let scheduleActive = true;
 let activeJobs = {};
 let pendingJobs = [];
 let blockedJobs = [];
@@ -18,9 +19,20 @@ let _renderTimer = null;
 const expandedQueueIds = new Set();
 const expandedIssueIds = new Set();
 
+function updateScheduleIndicator() {
+    const el = document.getElementById("schedule-indicator");
+    if (!scheduleActive && !queuePaused) {
+        el.textContent = "Outside active hours";
+        el.style.display = "";
+    } else {
+        el.style.display = "none";
+    }
+}
+
 function updatePauseButton() {
     const btn = document.getElementById("btn-pause");
     btn.textContent = queuePaused ? "Resume Queue" : "Pause Queue";
+    updateScheduleIndicator();
 }
 
 function getAllIssueJobs() {
@@ -82,7 +94,7 @@ export function renderQueue() {
     const hasJobs = active.length || runnablePending.length;
     table.style.display = hasJobs ? "" : "none";
     emptyMsg.style.display = hasJobs ? "none" : "";
-    controls.style.display = (hasJobs || queuePaused) ? "" : "none";
+    controls.style.display = (hasJobs || queuePaused || !scheduleActive) ? "" : "none";
     document.getElementById("pending-count").textContent =
         runnablePending.length ? `${runnablePending.length} pending` : "";
 
@@ -242,6 +254,7 @@ export function connectSSE() {
         blockedJobs = data.blocked || [];
         queuePaused = !!data.paused;
         pausedLibraries = new Set(data.paused_libraries || []);
+        scheduleActive = data.schedule_active !== false;
         await loadDeviceData();
         try {
             failedJobs = await api("GET", "/api/history?status=failed&limit=500&exclude_dismissed=true");
@@ -266,6 +279,13 @@ export function connectSSE() {
             pausedLibraries.delete(data.library_name);
         }
         debouncedRenderQueue();
+    });
+
+    es.addEventListener("schedule_status", (e) => {
+        const data = JSON.parse(e.data);
+        scheduleActive = !!data.active;
+        updateScheduleIndicator();
+        renderQueue();
     });
 
     es.addEventListener("job_queued", (e) => {

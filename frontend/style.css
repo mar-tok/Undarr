@@ -368,6 +368,11 @@ button, button * {
     font-size: 13px;
 }
 
+#schedule-indicator {
+    font-size: 13px;
+    color: var(--text);
+}
+
 .status-completed {
     color: var(--success);
 }
@@ -434,7 +439,8 @@ button, button * {
     display: none;
 }
 
-#stab-general {
+#stab-general,
+#stab-schedule {
     max-width: 960px;
 }
 
@@ -1452,4 +1458,132 @@ input[type="checkbox"][role="switch"]:focus-visible {
     border: 1px solid var(--text-muted);
     padding: 1px 4px;
     font-size: 12px;
+}
+
+/* Schedule */
+
+.schedule-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.schedule-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.schedule-presets {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.schedule-presets.disabled {
+    filter: brightness(0.4);
+    pointer-events: none;
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 12px;
+}
+
+.schedule-table {
+    border-collapse: separate;
+    border-spacing: 2px;
+    user-select: none;
+}
+
+.schedule-table th {
+    padding: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+}
+
+.schedule-day-header {
+    padding: 4px 0 6px;
+    cursor: pointer;
+    min-width: 40px;
+}
+
+.schedule-day-header:hover {
+    color: var(--accent);
+}
+
+.schedule-hour-header {
+    padding: 0 8px 0 0;
+    text-align: right !important;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+}
+
+.schedule-hour-header:hover {
+    color: var(--accent);
+}
+
+.schedule-table tr.current-hour th {
+    color: var(--text);
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.schedule-table td {
+    width: 40px;
+    height: 24px;
+    cursor: pointer;
+    transition: background 0.05s;
+}
+
+.schedule-table td.active {
+    background: var(--accent);
+}
+
+.schedule-table td.inactive {
+    background: var(--bg-tertiary);
+}
+
+.schedule-table td:hover {
+    outline: 2px solid var(--text);
+    outline-offset: -2px;
+}
+
+#schedule-grid.disabled {
+    filter: brightness(0.3);
+    pointer-events: none;
+}
+
+.schedule-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.schedule-footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.schedule-footer-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.schedule-hint {
+    font-size: 12px;
+    color: var(--text);
 }

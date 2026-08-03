@@ -3,6 +3,7 @@ import { loadDeviceData } from "./devices.js";
 import { openDirBrowser } from "./dir-browser.js";
 import { renderQueue, renderIssues, clearFailedJobs } from "./queue.js";
 import { loadHistory } from "./history.js";
+import { loadSchedule, initSchedule } from "./schedule.js";
 
 let settingsOriginal = {};
 let settingsSaveBtn = null;
@@ -12,12 +13,12 @@ function checkSettingsChanged() {
     settingsSaveBtn.disabled = cacheDir === settingsOriginal.cache_dir;
 }
 
-export function loadSettings() {
-    api("GET", "/api/settings").then(s => {
-        document.getElementById("set-cache-dir").value = s.cache_dir;
-        settingsOriginal = { cache_dir: s.cache_dir };
-        settingsSaveBtn.disabled = true;
-    });
+export async function loadSettings() {
+    const s = await api("GET", "/api/settings");
+    document.getElementById("set-cache-dir").value = s.cache_dir;
+    settingsOriginal = { cache_dir: s.cache_dir };
+    settingsSaveBtn.disabled = true;
+    loadSchedule(s);
 }
 
 async function loadDevices() {
@@ -112,6 +113,8 @@ export function initSettings() {
             .then(loadSettings)
             .catch(err => alert(err.message));
     });
+
+    initSchedule();
 
     document.getElementById("btn-purge-history").addEventListener("click", async () => {
         if (!confirm("This will permanently delete all job history and processed file records. This cannot be undone.\n\nAll files will be treated as unprocessed, meaning the next scan will re-evaluate every file in every library.\n\nHistory takes up negligible disk space. There is no performance reason to purge it, and you lose the ability to review past jobs and errors.\n\nOnly do this if you have a specific reason to.\n\nContinue?")) return;

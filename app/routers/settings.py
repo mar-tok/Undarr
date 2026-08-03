@@ -3,14 +3,16 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from datetime import datetime, timezone as tz
 from importlib.metadata import version
 from urllib.request import urlopen, Request
 
 from fastapi import APIRouter, HTTPException
 
 from app.models.requests import SettingsUpdate, DeviceUpdate
+from app.models.responses import SettingsOut
 from core.logger import log
-from core.yaml_store import store
+from core.yaml_store import store, DAYS
 from core.queue_manager import queue_manager
 from core.devices import detect_devices
 
@@ -54,21 +56,61 @@ async def get_version():
     return result
 
 
-@router.get("/settings")
+def _server_tz_info() -> tuple[str, int]:
+    try:
+        now = datetime.now(tz.utc).astimezone()
+        offset_minutes = int(now.utcoffset().total_seconds() // 60)
+        name = now.strftime("%Z") or time.tzname[0] or "UTC"
+        return name, offset_minutes
+    except Exception:
+        return "UTC", 0
+
+
+def _settings_response(s) -> SettingsOut:
+    tz_name, tz_offset = _server_tz_info()
+    return SettingsOut(
+        cache_dir=s.cache_dir,
+        schedule_enabled=s.schedule_enabled,
+        schedule=s.schedule,
+        server_timezone=tz_name,
+        server_utc_offset=tz_offset,
+    )
+
+
+@router.get("/settings", response_model=SettingsOut)
 async def get_settings():
     s = await store.get_settings()
-    return {"cache_dir": s.cache_dir}
+    return _settings_response(s)
 
 
-@router.patch("/settings")
+@router.patch("/settings", response_model=SettingsOut)
 async def update_settings(body: SettingsUpdate):
-    s = await store.get_settings()
-    if body.cache_dir is not None:
-        if not body.cache_dir.strip():
-            raise HTTPException(400, "Cache directory cannot be empty")
-        s = await store.set_cache_dir(body.cache_dir)
-        log.info("Cache dir set to %s", s.cache_dir)
-    return {"cache_dir": s.cache_dir}
+    kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
+
+    if "cache_dir" in kwargs and not kwargs["cache_dir"].strip():
+        raise HTTPException(400, "Cache directory cannot be empty")
+
+    if "schedule" in kwargs:
+        sched = kwargs["schedule"]
+        if set(sched.keys()) != set(DAYS):
+            raise HTTPException(
+                400, f"Schedule must have exactly keys: {', '.join(DAYS)}"
+            )
+        for day, hours in sched.items():
+            if not isinstance(hours, list) or len(hours) != 24:
+                raise HTTPException(
+                    400, f"Schedule '{day}' must be a list of 24 booleans"
+                )
+
+    schedule_changed = "schedule" in kwargs or "schedule_enabled" in kwargs
+    s = await store.update_settings(**kwargs)
+    if kwargs:
+        log.info("Settings updated: %s", ", ".join(kwargs))
+
+    if schedule_changed:
+        await queue_manager.schedule_changed()
+
+    return _settings_response(s)
 
 
 @router.get("/devices")
