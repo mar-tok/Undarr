@@ -127,14 +127,21 @@
                     <button class="settings-tab" data-stab="devices">Devices</button>
                 </div>
                 <div class="settings-pane active" id="stab-general">
-                    <div class="form-group" style="max-width:420px">
-                        <label data-tooltip="Temporary files are stored here during transcoding.<br>Requires enough free space for the largest file being processed.<br>Cleaned up automatically after each job.">Cache Directory</label>
-                        <div class="path-manual-row">
-                            <input type="text" id="set-cache-dir" placeholder="/tmp/undarr">
-                            <button class="btn" id="btn-browse-cache" type="button">Browse</button>
+                    <button class="btn btn-primary" id="btn-save-settings" style="margin-bottom: 16px">Save</button>
+                    <div class="inline-form">
+                        <div class="form-group">
+                            <label data-tooltip="Temporary files are stored here during transcoding.<br>Requires enough free space for the largest file being processed.<br>Cleaned up automatically after each job.">Cache Directory</label>
+                            <div class="path-manual-row">
+                                <input type="text" id="set-cache-dir" placeholder="/tmp/undarr">
+                                <button class="btn" id="btn-browse-cache" type="button">Browse</button>
+                            </div>
                         </div>
                     </div>
-                    <button class="btn btn-primary" id="btn-save-settings">Save</button>
+                    <div class="inline-form">
+                        <div class="form-actions" style="justify-content:flex-start">
+                            <button class="btn btn-danger" id="btn-purge-history">Purge History</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="settings-pane" id="stab-devices">
                     <div id="devices-grid"></div>

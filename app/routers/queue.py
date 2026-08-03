@@ -146,6 +146,11 @@ async def get_job_log(job_id: str):
     return {"log": log_text}
 
 
+@router.delete("/api/history", status_code=204)
+async def clear_history(clear_processed: bool = False):
+    await db.clear_history(clear_processed=clear_processed)
+
+
 @router.get("/api/search")
 async def search_files(
     q: str = Query(""),

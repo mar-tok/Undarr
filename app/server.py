@@ -9,7 +9,7 @@ from core import db
 from core.queue_manager import queue_manager
 from core.yaml_store import store
 from core.watcher import watcher
-from core.scanner import scan_library, periodic_scanner
+from core.scanner import scan_library, mark_library_processed, periodic_scanner
 from core.devices import detect_devices
 from app.routers import queue, presets, libraries, settings, filesystem
 
@@ -17,6 +17,11 @@ from app.routers import queue, presets, libraries, settings, filesystem
 async def _startup_scan() -> None:
     libs = await store.get_libraries()
     for name, lib in libs.items():
+        if lib.mark_processed_pending:
+            log.info("Resuming interrupted mark as processed for '%s'", name)
+            await mark_library_processed(name, lib)
+            lib.mark_processed_pending = False
+            await store.update_library(name, lib)
         if not lib.preset:
             continue
 

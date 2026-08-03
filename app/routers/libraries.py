@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, HTTPException, Query
@@ -14,6 +15,7 @@ from core import db
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
 _scanning: set[str] = set()
+_mark_tasks: set[asyncio.Task] = set()
 
 
 def _paths_overlap(a: str, b: str) -> bool:
@@ -113,7 +115,24 @@ async def create_library(body: LibraryCreate):
     await store.create_library(body.name, lib)
     log.info("Library created: '%s'", body.name)
     if body.mark_existing_processed:
-        await mark_library_processed(body.name, lib)
+        lib.mark_processed_pending = True
+        await store.update_library(body.name, lib)
+
+        async def _bg_mark(name: str, lib: Library):
+            try:
+                await mark_library_processed(name, lib)
+            except Exception as e:
+                log.error("Mark as processed failed for '%s': %s", name, e)
+                return
+            current = await store.get_library(name)
+            if not current or not current.mark_processed_pending:
+                return
+            current.mark_processed_pending = False
+            await store.update_library(name, current)
+
+        task = asyncio.create_task(_bg_mark(body.name, lib))
+        _mark_tasks.add(task)
+        task.add_done_callback(_mark_tasks.discard)
     await watcher.restart(queue_manager.enqueue)
     await periodic_scanner.restart(queue_manager.enqueue)
     return LibraryOut(
@@ -153,6 +172,7 @@ async def update_library(name: str, body: LibraryUpdate):
         new_file_delay=body.new_file_delay,
         new_file_delay_unit=body.new_file_delay_unit,
         paused=old_lib.paused,
+        mark_processed_pending=old_lib.mark_processed_pending,
     )
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:
@@ -213,6 +233,8 @@ async def scan(name: str, force: bool = Query(False)):
         raise HTTPException(404, "Library not found")
     if name in _scanning:
         raise HTTPException(409, "This library is already being scanned")
+    if lib.mark_processed_pending:
+        raise HTTPException(409, "Files are still being marked as processed")
     _scanning.add(name)
     try:
         if force:
@@ -250,6 +272,14 @@ async def mark_processed(name: str):
     lib = await store.get_library(name)
     if not lib:
         raise HTTPException(404, "Library not found")
+    if lib.mark_processed_pending:
+        raise HTTPException(409, "Files are still being marked as processed")
+    lib.mark_processed_pending = True
+    await store.update_library(name, lib)
     count = await mark_library_processed(name, lib)
+    current = await store.get_library(name)
+    if current and current.mark_processed_pending:
+        current.mark_processed_pending = False
+        await store.update_library(name, current)
     log.info("Marked all files as processed in '%s'", name)
     return {"marked": count}

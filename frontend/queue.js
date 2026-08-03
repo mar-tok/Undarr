@@ -347,6 +347,12 @@ export function connectSSE() {
     };
 }
 
+export function clearFailedJobs() {
+    failedJobs = [];
+    hasUnseenFailures = false;
+    renderIssues();
+}
+
 export function loadQueueTab() {
     const active = document.querySelector("#queue-tabs .settings-tab.active");
     if (active && active.dataset.qtab === "history") { reloadHistory(); }

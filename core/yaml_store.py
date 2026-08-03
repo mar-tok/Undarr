@@ -78,6 +78,7 @@ class Library:
     new_file_delay: int = 0
     new_file_delay_unit: str = "minutes"
     paused: bool = False
+    mark_processed_pending: bool = False
 
     @property
     def new_file_delay_seconds(self) -> int:
@@ -173,6 +174,7 @@ def _config_from_dict(data: dict) -> Config:
             new_file_delay=lib.get("new_file_delay", 0),
             new_file_delay_unit=lib.get("new_file_delay_unit", "minutes"),
             paused=bool(lib.get("paused", False)),
+            mark_processed_pending=bool(lib.get("mark_processed_pending", False)),
         )
 
     return Config(settings=settings, presets=presets, libraries=libraries)
@@ -264,6 +266,11 @@ def _config_to_dict(cfg: Config) -> dict:
                 ),
                 **({"path_patterns": lib.path_patterns} if lib.path_patterns else {}),
                 **({"paused": True} if lib.paused else {}),
+                **(
+                    {"mark_processed_pending": True}
+                    if lib.mark_processed_pending
+                    else {}
+                ),
             }
             for name, lib in cfg.libraries.items()
         },

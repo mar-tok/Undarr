@@ -37,6 +37,13 @@ async def scan_library(
         log.warning("Scan skipped for '%s': no preset assigned", library_name)
         return 0, 0
 
+    if library.mark_processed_pending:
+        log.info(
+            "Scan skipped for '%s': files are still being marked as processed",
+            library_name,
+        )
+        return 0, 0
+
     files = _collect_video_files(library)
     total = len(files)
     count = 0

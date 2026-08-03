@@ -1,7 +1,8 @@
 import { api, esc, escAttr, wrapNumberInputs } from "./helpers.js";
 import { loadDeviceData } from "./devices.js";
 import { openDirBrowser } from "./dir-browser.js";
-import { renderQueue, renderIssues } from "./queue.js";
+import { renderQueue, renderIssues, clearFailedJobs } from "./queue.js";
+import { loadHistory } from "./history.js";
 
 let settingsOriginal = {};
 let settingsSaveBtn = null;
@@ -110,5 +111,16 @@ export function initSettings() {
         api("PATCH", "/api/settings", { cache_dir: dir })
             .then(loadSettings)
             .catch(err => alert(err.message));
+    });
+
+    document.getElementById("btn-purge-history").addEventListener("click", async () => {
+        if (!confirm("This will permanently delete all job history and processed file records. This cannot be undone.\n\nAll files will be treated as unprocessed, meaning the next scan will re-evaluate every file in every library.\n\nHistory takes up negligible disk space. There is no performance reason to purge it, and you lose the ability to review past jobs and errors.\n\nOnly do this if you have a specific reason to.\n\nContinue?")) return;
+        try {
+            await api("DELETE", "/api/history?clear_processed=true");
+            loadHistory();
+            clearFailedJobs();
+        } catch (e) {
+            alert(e.message);
+        }
     });
 }

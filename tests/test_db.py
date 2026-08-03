@@ -4,6 +4,9 @@ import core.db as db_mod
 from core.db import (
     SCHEMA,
     PROCESSED_SCHEMA,
+    insert_job_history,
+    get_history,
+    clear_history,
     mark_processed,
     is_processed,
     clear_processed,
@@ -25,6 +28,47 @@ async def db_setup():
     yield conn
     db_mod._db = old_db
     await conn.close()
+
+
+async def _insert_sample(id: str = "job1", status: str = "completed", **overrides):
+    defaults = dict(
+        id=id,
+        library_name="movies",
+        file_path=f"/media/{id}.mkv",
+        status=status,
+        old_size_bytes=1000000,
+        new_size_bytes=500000,
+        started_at="2026-01-01T00:00:00",
+        finished_at="2026-01-01T00:01:00",
+        duration_seconds=60.0,
+        ffmpeg_log="frame=100",
+        error_message=None,
+        preset_name="HEVC",
+        device_name="CPU",
+    )
+    defaults.update(overrides)
+    await insert_job_history(**defaults)
+
+
+class TestClearHistory:
+    async def test_clears_all(self, db_setup):
+        await _insert_sample("j1")
+        await _insert_sample("j2")
+        count = await clear_history()
+        assert count == 2
+        assert await get_history() == []
+
+    async def test_clear_processed_true(self, db_setup):
+        await _insert_sample("j1")
+        await mark_processed("/media/file.mkv", "movies", 1000.0)
+        await clear_history(clear_processed=True)
+        assert not await is_processed("/media/file.mkv", "movies", 1000.0)
+
+    async def test_clear_processed_false(self, db_setup):
+        await _insert_sample("j1")
+        await mark_processed("/media/file.mkv", "movies", 1000.0)
+        await clear_history(clear_processed=False)
+        assert await is_processed("/media/file.mkv", "movies", 1000.0)
 
 
 class TestMarkAndIsProcessed:

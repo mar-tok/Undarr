@@ -442,6 +442,13 @@ button, button * {
     display: block;
 }
 
+.inline-form {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
 .section-empty {
     font-size: 13px;
     color: var(--text);

@@ -275,3 +275,12 @@ async def remove_processed(file_path: str, library_name: str) -> None:
         (file_path, library_name),
     )
     await db.commit()
+
+
+async def clear_history(clear_processed: bool = True) -> int:
+    db = get_db()
+    cursor = await db.execute("DELETE FROM job_history")
+    if clear_processed:
+        await db.execute("DELETE FROM processed_files")
+    await db.commit()
+    return cursor.rowcount
