@@ -443,6 +443,7 @@ class QueueManager:
                 audio_maps=audio_maps,
                 subtitle_maps=subtitle_maps,
                 scale_filter=scale_filter,
+                process_priority=store.config.settings.process_priority,
             )
             ffmpeg_log = result.ffmpeg_log
 

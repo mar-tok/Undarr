@@ -228,6 +228,7 @@ async def transcode(
     audio_maps: list[str] | None = None,
     subtitle_maps: list[str] | None = None,
     scale_filter: str | None = None,
+    process_priority: str = "normal",
 ) -> TranscodeResult:
     # TODO: Needs progress parsing, duration tracking
     map_flags = ["-map", "0:V?"]
@@ -244,7 +245,14 @@ async def transcode(
     if scale_filter:
         vf_flags = ["-vf", scale_filter]
 
+    prefix: list[str] = []
+    if process_priority == "low":
+        prefix = ["nice", "-n", "10", "ionice", "-c", "2", "-n", "7"]
+    elif process_priority == "lowest":
+        prefix = ["nice", "-n", "19", "ionice", "-c", "3"]
+
     args = [
+        *prefix,
         config.FFMPEG_BIN,
         "-y",
         "-i",

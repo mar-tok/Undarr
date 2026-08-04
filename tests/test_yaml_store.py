@@ -112,6 +112,7 @@ class TestSettings:
     async def test_defaults(self, store):
         s = await store.get_settings()
         assert s.cache_dir == "/tmp/undarr"
+        assert s.process_priority == "normal"
         assert s.schedule_enabled is False
 
     async def test_update(self, store):
@@ -135,3 +136,7 @@ class TestConfigFromDict:
     def test_schedule_wrong_length_ignored(self):
         cfg = _config_from_dict({"settings": {"schedule": {"mon": [True] * 12}}})
         assert cfg.settings.schedule["mon"] == [True] * 24
+
+    def test_invalid_priority_resets(self):
+        cfg = _config_from_dict({"settings": {"process_priority": "ultra"}})
+        assert cfg.settings.process_priority == "normal"

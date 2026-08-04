@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.requests import SettingsUpdate, DeviceUpdate
 from app.models.responses import SettingsOut
 from core.logger import log
-from core.yaml_store import store, DAYS
+from core.yaml_store import store, DAYS, VALID_PRIORITIES
 from core.queue_manager import queue_manager
 from core.devices import detect_devices
 
@@ -72,6 +72,7 @@ def _settings_response(s) -> SettingsOut:
         cache_dir=s.cache_dir,
         schedule_enabled=s.schedule_enabled,
         schedule=s.schedule,
+        process_priority=s.process_priority,
         server_timezone=tz_name,
         server_utc_offset=tz_offset,
     )
@@ -101,6 +102,13 @@ async def update_settings(body: SettingsUpdate):
                 raise HTTPException(
                     400, f"Schedule '{day}' must be a list of 24 booleans"
                 )
+
+    if "process_priority" in kwargs:
+        if kwargs["process_priority"] not in VALID_PRIORITIES:
+            raise HTTPException(
+                400,
+                f"process_priority must be one of: {', '.join(VALID_PRIORITIES)}",
+            )
 
     schedule_changed = "schedule" in kwargs or "schedule_enabled" in kwargs
     s = await store.update_settings(**kwargs)

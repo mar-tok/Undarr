@@ -10,13 +10,17 @@ let settingsSaveBtn = null;
 
 function checkSettingsChanged() {
     const cacheDir = document.getElementById("set-cache-dir").value;
-    settingsSaveBtn.disabled = cacheDir === settingsOriginal.cache_dir;
+    const priority = document.getElementById("set-process-priority").value;
+    settingsSaveBtn.disabled =
+        cacheDir === settingsOriginal.cache_dir &&
+        priority === settingsOriginal.process_priority;
 }
 
 export async function loadSettings() {
     const s = await api("GET", "/api/settings");
     document.getElementById("set-cache-dir").value = s.cache_dir;
-    settingsOriginal = { cache_dir: s.cache_dir };
+    document.getElementById("set-process-priority").value = s.process_priority;
+    settingsOriginal = { cache_dir: s.cache_dir, process_priority: s.process_priority };
     settingsSaveBtn.disabled = true;
     loadSchedule(s);
 }
@@ -107,9 +111,12 @@ export function initSettings() {
         openDirBrowser(startPath, (path) => { cacheEl.value = path; checkSettingsChanged(); });
     });
 
+    document.getElementById("set-process-priority").addEventListener("change", checkSettingsChanged);
+
     document.getElementById("btn-save-settings").addEventListener("click", () => {
         const dir = document.getElementById("set-cache-dir").value.trim() || "/tmp/undarr";
-        api("PATCH", "/api/settings", { cache_dir: dir })
+        const priority = document.getElementById("set-process-priority").value;
+        api("PATCH", "/api/settings", { cache_dir: dir, process_priority: priority })
             .then(loadSettings)
             .catch(err => alert(err.message));
     });

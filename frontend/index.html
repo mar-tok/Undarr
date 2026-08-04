@@ -138,6 +138,14 @@
                                 <button class="btn" id="btn-browse-cache" type="button">Browse</button>
                             </div>
                         </div>
+                        <div class="form-group">
+                            <label data-tooltip="Controls the CPU and I/O priority of FFmpeg processes via <code>nice</code> and <code>ionice</code>.<br><br><code>Normal</code>: default system priority.<br><code>Low</code>: nice 10, best-effort I/O. Transcodes yield CPU to Undarr itself, keeping the UI and scans responsive during heavy jobs.<br><code>Lowest</code>: nice 19, idle I/O. Transcodes only use CPU that nothing else in Undarr needs.<br><br>This does not limit Undarr against other containers or services on the host. To make transcoding yield to those, set a CPU limit on the Undarr container.<br>Applies to new jobs only.">Process Priority</label>
+                            <select id="set-process-priority">
+                                <option value="normal">Normal</option>
+                                <option value="low">Low</option>
+                                <option value="lowest">Lowest</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="inline-form">
                         <div class="form-actions" style="justify-content:flex-start">
