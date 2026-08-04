@@ -11,16 +11,19 @@ let settingsSaveBtn = null;
 function checkSettingsChanged() {
     const cacheDir = document.getElementById("set-cache-dir").value;
     const priority = document.getElementById("set-process-priority").value;
+    const queueOrder = document.getElementById("set-queue-order").value;
     settingsSaveBtn.disabled =
         cacheDir === settingsOriginal.cache_dir &&
-        priority === settingsOriginal.process_priority;
+        priority === settingsOriginal.process_priority &&
+        queueOrder === settingsOriginal.queue_order;
 }
 
 export async function loadSettings() {
     const s = await api("GET", "/api/settings");
     document.getElementById("set-cache-dir").value = s.cache_dir;
     document.getElementById("set-process-priority").value = s.process_priority;
-    settingsOriginal = { cache_dir: s.cache_dir, process_priority: s.process_priority };
+    document.getElementById("set-queue-order").value = s.queue_order;
+    settingsOriginal = { cache_dir: s.cache_dir, process_priority: s.process_priority, queue_order: s.queue_order };
     settingsSaveBtn.disabled = true;
     loadSchedule(s);
 }
@@ -113,10 +116,13 @@ export function initSettings() {
 
     document.getElementById("set-process-priority").addEventListener("change", checkSettingsChanged);
 
+    document.getElementById("set-queue-order").addEventListener("change", checkSettingsChanged);
+
     document.getElementById("btn-save-settings").addEventListener("click", () => {
         const dir = document.getElementById("set-cache-dir").value.trim() || "/tmp/undarr";
         const priority = document.getElementById("set-process-priority").value;
-        api("PATCH", "/api/settings", { cache_dir: dir, process_priority: priority })
+        const queueOrder = document.getElementById("set-queue-order").value;
+        api("PATCH", "/api/settings", { cache_dir: dir, process_priority: priority, queue_order: queueOrder })
             .then(loadSettings)
             .catch(err => alert(err.message));
     });

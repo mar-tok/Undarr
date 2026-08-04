@@ -113,11 +113,15 @@ class TestSettings:
         s = await store.get_settings()
         assert s.cache_dir == "/tmp/undarr"
         assert s.process_priority == "normal"
+        assert s.queue_order == "fifo"
         assert s.schedule_enabled is False
 
     async def test_update(self, store):
-        s = await store.update_settings(schedule_enabled=True)
-        assert s.schedule_enabled is True
+        s = await store.update_settings(
+            process_priority="low", queue_order="largest_first"
+        )
+        assert s.process_priority == "low"
+        assert s.queue_order == "largest_first"
 
     async def test_update_ignores_unknown_fields(self, store):
         s = await store.update_settings(nonexistent_field="value")
@@ -140,3 +144,7 @@ class TestConfigFromDict:
     def test_invalid_priority_resets(self):
         cfg = _config_from_dict({"settings": {"process_priority": "ultra"}})
         assert cfg.settings.process_priority == "normal"
+
+    def test_invalid_queue_order_resets(self):
+        cfg = _config_from_dict({"settings": {"queue_order": "random"}})
+        assert cfg.settings.queue_order == "fifo"

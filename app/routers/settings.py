@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException
 from app.models.requests import SettingsUpdate, DeviceUpdate
 from app.models.responses import SettingsOut
 from core.logger import log
-from core.yaml_store import store, DAYS, VALID_PRIORITIES
+from core.yaml_store import store, DAYS, VALID_PRIORITIES, VALID_QUEUE_ORDERS
 from core.queue_manager import queue_manager
 from core.devices import detect_devices
 
@@ -73,6 +73,7 @@ def _settings_response(s) -> SettingsOut:
         schedule_enabled=s.schedule_enabled,
         schedule=s.schedule,
         process_priority=s.process_priority,
+        queue_order=s.queue_order,
         server_timezone=tz_name,
         server_utc_offset=tz_offset,
     )
@@ -110,13 +111,22 @@ async def update_settings(body: SettingsUpdate):
                 f"process_priority must be one of: {', '.join(VALID_PRIORITIES)}",
             )
 
+    if "queue_order" in kwargs:
+        if kwargs["queue_order"] not in VALID_QUEUE_ORDERS:
+            raise HTTPException(
+                400, f"queue_order must be one of: {', '.join(VALID_QUEUE_ORDERS)}"
+            )
+
     schedule_changed = "schedule" in kwargs or "schedule_enabled" in kwargs
+    order_changed = "queue_order" in kwargs
     s = await store.update_settings(**kwargs)
     if kwargs:
         log.info("Settings updated: %s", ", ".join(kwargs))
 
     if schedule_changed:
         await queue_manager.schedule_changed()
+    if order_changed:
+        await queue_manager.queue_order_changed()
 
     return _settings_response(s)
 

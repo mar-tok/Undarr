@@ -146,6 +146,14 @@
                                 <option value="lowest">Lowest</option>
                             </select>
                         </div>
+                        <div class="form-group">
+                            <label data-tooltip="Controls the order in which pending jobs are processed.<br><code>FIFO</code>: first in, first out. Jobs run in the order they were queued.<br><code>Largest first</code>: prioritizes the biggest files, reclaiming the most disk space early.<br><code>Highest bitrate</code>: prioritizes files with the highest bitrate, which typically benefit most from transcoding.">Processing Order</label>
+                            <select id="set-queue-order">
+                                <option value="fifo">FIFO</option>
+                                <option value="largest_first">Largest first</option>
+                                <option value="highest_bitrate">Highest bitrate</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="inline-form">
                         <div class="form-actions" style="justify-content:flex-start">

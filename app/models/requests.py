@@ -112,6 +112,7 @@ class SettingsUpdate(BaseModel):
     schedule_enabled: bool | None = None
     schedule: dict[str, list[bool]] | None = None
     process_priority: str | None = None
+    queue_order: str | None = None
 
 
 class DeviceUpdate(BaseModel):

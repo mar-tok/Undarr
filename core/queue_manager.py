@@ -58,6 +58,7 @@ class Job:
     preset_name: str = ""
     block_reason: str | None = None
     media_info: dict | None = None
+    seq: int = 0
 
 
 def job_to_dict(job: Job) -> dict:
@@ -98,6 +99,7 @@ class QueueManager:
         self._subscribers: list[asyncio.Queue[str]] = []
         self._lock = asyncio.Lock()
         self._known_paths: set[str] = set()
+        self._next_seq = 0
         self._running = asyncio.Event()
         self._running.set()
         self._dispatcher_task: asyncio.Task | None = None
@@ -146,6 +148,25 @@ class QueueManager:
                 self._device_active[device_id] = 0
         self._dispatch_event.set()
         log.info("Device %s limit set to %d", device_id, max_jobs)
+
+    def _sort_pending(self) -> None:
+        order = store.config.settings.queue_order
+        if order == "largest_first":
+            self._pending.sort(key=lambda j: j.old_size_bytes, reverse=True)
+        elif order == "highest_bitrate":
+            self._pending.sort(
+                key=lambda j: (j.media_info or {}).get("bitrate_kbps", 0),
+                reverse=True,
+            )
+        else:
+            self._pending.sort(key=lambda j: j.seq)
+
+    async def queue_order_changed(self) -> None:
+        async with self._lock:
+            self._sort_pending()
+            pending = [job_to_dict(j) for j in self._pending]
+        self._dispatch_event.set()
+        await self._broadcast("queue_changed", {"pending": pending})
 
     async def stop(self) -> None:
         if self._dispatcher_task:
@@ -280,7 +301,9 @@ class QueueManager:
                 output_container=output_container,
                 preset_name=preset_name,
                 media_info=media_info,
+                seq=self._next_seq,
             )
+            self._next_seq += 1
             if block_reason:
                 job.status = JobStatus.BLOCKED
                 job.block_reason = block_reason
@@ -289,7 +312,11 @@ class QueueManager:
                 log.info("Blocked: %s [%s] reason=%s", file_path, job.id, block_reason)
             else:
                 self._pending.append(job)
-                await self._broadcast("job_queued", job_to_dict(job))
+                self._sort_pending()
+                await self._broadcast(
+                    "job_queued",
+                    {**job_to_dict(job), "position": self._pending.index(job)},
+                )
                 self._dispatch_event.set()
                 log.info("Queued: %s [%s] device=%s", file_path, job.id, device_id)
         return job
@@ -317,8 +344,12 @@ class QueueManager:
                     log.info("Unblocked: %s [%s]", job.file_path, job.id)
                     unblocked = True
             self._blocked = still_blocked
+            if unblocked:
+                self._sort_pending()
+                pending = [job_to_dict(j) for j in self._pending]
         if unblocked:
             self._dispatch_event.set()
+            await self._broadcast("queue_changed", {"pending": pending})
 
     def search_jobs(self, query: str) -> list[dict]:
         q = query.lower()

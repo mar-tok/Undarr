@@ -288,9 +288,15 @@ export function connectSSE() {
         renderQueue();
     });
 
+    es.addEventListener("queue_changed", (e) => {
+        const data = JSON.parse(e.data);
+        pendingJobs = data.pending;
+        debouncedRenderQueue();
+    });
+
     es.addEventListener("job_queued", (e) => {
         const job = JSON.parse(e.data);
-        pendingJobs.push(job);
+        pendingJobs.splice(job.position, 0, job);
         debouncedRenderQueue();
     });
 
@@ -303,8 +309,6 @@ export function connectSSE() {
     es.addEventListener("job_unblocked", (e) => {
         const job = JSON.parse(e.data);
         blockedJobs = blockedJobs.filter(j => j.id !== job.id);
-        pendingJobs.push(job);
-        debouncedRenderQueue();
         renderIssues();
     });
 

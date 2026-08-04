@@ -53,6 +53,7 @@ class DeviceConfig:
 
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 VALID_PRIORITIES = ("normal", "low", "lowest")
+VALID_QUEUE_ORDERS = ("fifo", "largest_first", "highest_bitrate")
 
 
 def _default_schedule() -> dict[str, list[bool]]:
@@ -66,6 +67,7 @@ class Settings:
     schedule_enabled: bool = False
     schedule: dict[str, list[bool]] = field(default_factory=_default_schedule)
     process_priority: str = "normal"
+    queue_order: str = "fifo"
 
 
 @dataclass
@@ -122,12 +124,17 @@ def _config_from_dict(data: dict) -> Config:
     if priority not in VALID_PRIORITIES:
         priority = "normal"
 
+    queue_order = raw_settings.get("queue_order", "fifo")
+    if queue_order not in VALID_QUEUE_ORDERS:
+        queue_order = "fifo"
+
     settings = Settings(
         cache_dir=raw_settings.get("cache_dir", "/tmp/undarr"),
         devices=devices,
         schedule_enabled=bool(raw_settings.get("schedule_enabled", False)),
         schedule=schedule,
         process_priority=priority,
+        queue_order=queue_order,
     )
 
     presets: dict[str, Preset] = {}
@@ -251,6 +258,7 @@ def _config_to_dict(cfg: Config) -> dict:
             "schedule_enabled": cfg.settings.schedule_enabled,
             "schedule": cfg.settings.schedule,
             "process_priority": cfg.settings.process_priority,
+            "queue_order": cfg.settings.queue_order,
         },
         "presets": {
             name: {
