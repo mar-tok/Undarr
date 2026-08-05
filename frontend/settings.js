@@ -1,4 +1,4 @@
-import { api, esc, escAttr, wrapNumberInputs } from "./helpers.js";
+import { api, esc, escAttr, wrapNumberInputs, clearValidation, setError } from "./helpers.js";
 import { loadDeviceData } from "./devices.js";
 import { openDirBrowser } from "./dir-browser.js";
 import { renderQueue, renderIssues, clearFailedJobs } from "./queue.js";
@@ -11,10 +11,12 @@ let settingsSaveBtn = null;
 function checkSettingsChanged() {
     const cacheDir = document.getElementById("set-cache-dir").value;
     const priority = document.getElementById("set-process-priority").value;
+    const ratio = document.getElementById("set-max-size-ratio").value;
     const queueOrder = document.getElementById("set-queue-order").value;
     settingsSaveBtn.disabled =
         cacheDir === settingsOriginal.cache_dir &&
         priority === settingsOriginal.process_priority &&
+        ratio === settingsOriginal.max_size_ratio &&
         queueOrder === settingsOriginal.queue_order;
 }
 
@@ -22,8 +24,10 @@ export async function loadSettings() {
     const s = await api("GET", "/api/settings");
     document.getElementById("set-cache-dir").value = s.cache_dir;
     document.getElementById("set-process-priority").value = s.process_priority;
+    const ratioPercent = String(Math.round(s.max_size_ratio * 100));
+    document.getElementById("set-max-size-ratio").value = ratioPercent;
     document.getElementById("set-queue-order").value = s.queue_order;
-    settingsOriginal = { cache_dir: s.cache_dir, process_priority: s.process_priority, queue_order: s.queue_order };
+    settingsOriginal = { cache_dir: s.cache_dir, process_priority: s.process_priority, max_size_ratio: ratioPercent, queue_order: s.queue_order };
     settingsSaveBtn.disabled = true;
     loadSchedule(s);
 }
@@ -118,13 +122,25 @@ export function initSettings() {
 
     document.getElementById("set-queue-order").addEventListener("change", checkSettingsChanged);
 
-    document.getElementById("btn-save-settings").addEventListener("click", () => {
-        const dir = document.getElementById("set-cache-dir").value.trim() || "/tmp/undarr";
+    const ratioInput = document.getElementById("set-max-size-ratio");
+    ratioInput.addEventListener("input", () => { clearValidation(ratioInput.parentElement); checkSettingsChanged(); });
+
+    document.getElementById("btn-save-settings").addEventListener("click", async () => {
+        const form = document.getElementById("view-settings");
+        clearValidation(form);
+        const cacheEl = document.getElementById("set-cache-dir");
+        const cacheDir = cacheEl.value.trim() || "/tmp/undarr";
         const priority = document.getElementById("set-process-priority").value;
+        const ratioEl = document.getElementById("set-max-size-ratio");
+        const ratio = parseInt(ratioEl.value);
+        if (isNaN(ratio) || ratio < 1 || ratio > 100) { setError(ratioEl, "Max size ratio must be between 1 and 100%"); return; }
         const queueOrder = document.getElementById("set-queue-order").value;
-        api("PATCH", "/api/settings", { cache_dir: dir, process_priority: priority, queue_order: queueOrder })
-            .then(loadSettings)
-            .catch(err => alert(err.message));
+        try {
+            await api("PATCH", "/api/settings", { cache_dir: cacheDir, process_priority: priority, max_size_ratio: ratio / 100, queue_order: queueOrder });
+            loadSettings();
+        } catch (e) {
+            setError(cacheEl, e.message);
+        }
     });
 
     initSchedule();

@@ -112,6 +112,7 @@ class SettingsUpdate(BaseModel):
     schedule_enabled: bool | None = None
     schedule: dict[str, list[bool]] | None = None
     process_priority: str | None = None
+    max_size_ratio: float | None = None
     queue_order: str | None = None
 
 

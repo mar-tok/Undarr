@@ -468,13 +468,14 @@ class QueueManager:
                         estimated_final = (
                             prog.total_size / prog.out_time_us
                         ) * duration_us
-                        if estimated_final > job.old_size_bytes:
+                        size_limit = job.old_size_bytes * settings.max_size_ratio
+                        if estimated_final > size_limit:
                             job.status = JobStatus.SKIPPED
+                            ratio_pct = round(settings.max_size_ratio * 100)
                             job.error_message = (
-                                f"Aborted early: estimated output "
-                                f"({_format_size(int(estimated_final))}) exceeds "
-                                f"original size ({_format_size(job.old_size_bytes)}) "
-                                f"at {prog.percent:.0f}%"
+                                f"Aborted early: estimated output ({_format_size(int(estimated_final))}) "
+                                f"exceeds size limit ({_format_size(int(size_limit))}, "
+                                f"{ratio_pct}% of original) at {prog.percent:.0f}%"
                             )
                             log.info("Job %s: %s", job.id, job.error_message)
                             proc = self._active_procs.get(job.id)
@@ -535,13 +536,22 @@ class QueueManager:
             if job.status == JobStatus.SKIPPED:
                 temp_output.unlink(missing_ok=True)
             elif result.success:
-                if (new_size := temp_output.stat().st_size) >= job.old_size_bytes:
+                if (
+                    new_size := temp_output.stat().st_size
+                ) >= job.old_size_bytes * settings.max_size_ratio:
                     temp_output.unlink(missing_ok=True)
                     job.status = JobStatus.SKIPPED
-                    job.error_message = (
-                        f"Output ({_format_size(new_size)}) is not smaller than "
-                        f"original ({_format_size(job.old_size_bytes)}), original kept"
-                    )
+                    ratio_pct = round(settings.max_size_ratio * 100)
+                    if ratio_pct >= 100:
+                        job.error_message = (
+                            f"Output ({_format_size(new_size)}) is not smaller than "
+                            f"original ({_format_size(job.old_size_bytes)}), original kept"
+                        )
+                    else:
+                        job.error_message = (
+                            f"Output ({_format_size(new_size)}) exceeds {ratio_pct}% of "
+                            f"original ({_format_size(job.old_size_bytes)}), original kept"
+                        )
                     log.info("Job %s skipped: %s", job.id, job.error_message)
                 else:
                     job.new_size_bytes = new_size

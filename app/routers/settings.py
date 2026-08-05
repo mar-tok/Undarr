@@ -73,6 +73,7 @@ def _settings_response(s) -> SettingsOut:
         schedule_enabled=s.schedule_enabled,
         schedule=s.schedule,
         process_priority=s.process_priority,
+        max_size_ratio=s.max_size_ratio,
         queue_order=s.queue_order,
         server_timezone=tz_name,
         server_utc_offset=tz_offset,
@@ -110,6 +111,10 @@ async def update_settings(body: SettingsUpdate):
                 400,
                 f"process_priority must be one of: {', '.join(VALID_PRIORITIES)}",
             )
+
+    if "max_size_ratio" in kwargs:
+        if not (0.0 < kwargs["max_size_ratio"] <= 1.0):
+            raise HTTPException(400, "max_size_ratio must be between 0 and 100%")
 
     if "queue_order" in kwargs:
         if kwargs["queue_order"] not in VALID_QUEUE_ORDERS:

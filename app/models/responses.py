@@ -61,6 +61,7 @@ class SettingsOut(BaseModel):
     schedule_enabled: bool
     schedule: dict[str, list[bool]]
     process_priority: str
+    max_size_ratio: float
     queue_order: str
     server_timezone: str
     server_utc_offset: int

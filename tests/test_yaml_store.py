@@ -113,6 +113,7 @@ class TestSettings:
         s = await store.get_settings()
         assert s.cache_dir == "/tmp/undarr"
         assert s.process_priority == "normal"
+        assert s.max_size_ratio == 1.0
         assert s.queue_order == "fifo"
         assert s.schedule_enabled is False
 
@@ -148,3 +149,15 @@ class TestConfigFromDict:
     def test_invalid_queue_order_resets(self):
         cfg = _config_from_dict({"settings": {"queue_order": "random"}})
         assert cfg.settings.queue_order == "fifo"
+
+    def test_invalid_max_size_ratio_resets(self):
+        cfg = _config_from_dict({"settings": {"max_size_ratio": 2.0}})
+        assert cfg.settings.max_size_ratio == 1.0
+
+    def test_zero_max_size_ratio_resets(self):
+        cfg = _config_from_dict({"settings": {"max_size_ratio": 0.0}})
+        assert cfg.settings.max_size_ratio == 1.0
+
+    def test_negative_max_size_ratio_resets(self):
+        cfg = _config_from_dict({"settings": {"max_size_ratio": -0.5}})
+        assert cfg.settings.max_size_ratio == 1.0

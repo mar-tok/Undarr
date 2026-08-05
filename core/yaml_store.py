@@ -67,6 +67,7 @@ class Settings:
     schedule_enabled: bool = False
     schedule: dict[str, list[bool]] = field(default_factory=_default_schedule)
     process_priority: str = "normal"
+    max_size_ratio: float = 1.0
     queue_order: str = "fifo"
 
 
@@ -124,6 +125,12 @@ def _config_from_dict(data: dict) -> Config:
     if priority not in VALID_PRIORITIES:
         priority = "normal"
 
+    max_size_ratio = raw_settings.get("max_size_ratio", 1.0)
+    if not isinstance(max_size_ratio, (int, float)) or not (
+        0.0 < max_size_ratio <= 1.0
+    ):
+        max_size_ratio = 1.0
+
     queue_order = raw_settings.get("queue_order", "fifo")
     if queue_order not in VALID_QUEUE_ORDERS:
         queue_order = "fifo"
@@ -134,6 +141,7 @@ def _config_from_dict(data: dict) -> Config:
         schedule_enabled=bool(raw_settings.get("schedule_enabled", False)),
         schedule=schedule,
         process_priority=priority,
+        max_size_ratio=float(max_size_ratio),
         queue_order=queue_order,
     )
 
@@ -258,6 +266,7 @@ def _config_to_dict(cfg: Config) -> dict:
             "schedule_enabled": cfg.settings.schedule_enabled,
             "schedule": cfg.settings.schedule,
             "process_priority": cfg.settings.process_priority,
+            "max_size_ratio": cfg.settings.max_size_ratio,
             "queue_order": cfg.settings.queue_order,
         },
         "presets": {

@@ -680,6 +680,10 @@ tr.clickable:hover {
     margin-bottom: 0;
 }
 
+.form-row.form-row-3 {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
 .form-row.form-row-4 {
     grid-template-columns: 1fr 1fr 1fr 1fr;
 }
