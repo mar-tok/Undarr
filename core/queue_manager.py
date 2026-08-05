@@ -23,6 +23,7 @@ from core.ffprobe import (
 )
 from core.ffmpeg import (
     transcode,
+    TranscodeProgress,
     compatible_container,
     build_audio_args,
     strip_audio_flags,
@@ -40,6 +41,7 @@ class JobStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     FAILED = "failed"
+    SKIPPED = "skipped"
 
 
 @dataclass
@@ -53,6 +55,7 @@ class Job:
     new_size_bytes: int | None = None
     started_at: str | None = None
     error_message: str | None = None
+    temp_path: str | None = None
     ffmpeg_args: str = ""
     output_container: str = ""
     preset_name: str = ""
@@ -102,6 +105,7 @@ class QueueManager:
         self._next_seq = 0
         self._running = asyncio.Event()
         self._running.set()
+        self._active_procs: dict[str, asyncio.subprocess.Process] = {}
         self._dispatcher_task: asyncio.Task | None = None
         self._dispatch_event = asyncio.Event()
         self._device_limits: dict[str, int] = {}
@@ -443,6 +447,48 @@ class QueueManager:
             cache_dir = Path(settings.cache_dir)
             cache_dir.mkdir(parents=True, exist_ok=True)
             temp_output = cache_dir / f"{job.id}{out_ext}"
+            job.temp_path = str(temp_output)
+
+            progress_queue: asyncio.Queue[TranscodeProgress] = asyncio.Queue()
+
+            async def progress_relay():
+                while True:
+                    try:
+                        prog = await progress_queue.get()
+                    except asyncio.CancelledError:
+                        break
+                    # Action heavy intros skew and throw off early estimates
+                    if (
+                        duration_us > 300_000_000
+                        and job.old_size_bytes > 0
+                        and prog.total_size > 0
+                        and prog.out_time_us > 60_000_000
+                        and prog.percent >= 20.0
+                    ):
+                        estimated_final = (
+                            prog.total_size / prog.out_time_us
+                        ) * duration_us
+                        if estimated_final > job.old_size_bytes:
+                            job.status = JobStatus.SKIPPED
+                            job.error_message = (
+                                f"Aborted early: estimated output "
+                                f"({_format_size(int(estimated_final))}) exceeds "
+                                f"original size ({_format_size(job.old_size_bytes)}) "
+                                f"at {prog.percent:.0f}%"
+                            )
+                            log.info("Job %s: %s", job.id, job.error_message)
+                            proc = self._active_procs.get(job.id)
+                            if proc:
+                                try:
+                                    proc.kill()
+                                except (ProcessLookupError, OSError):
+                                    pass
+                            break
+
+            relay_task = asyncio.create_task(progress_relay())
+
+            def _register_proc(proc: asyncio.subprocess.Process) -> None:
+                self._active_procs[job.id] = proc
 
             ffmpeg_args = job.ffmpeg_args
             audio_maps = None
@@ -467,64 +513,80 @@ class QueueManager:
                         preset.resolution_cap, source_height
                     )
 
-            result = await transcode(
-                input_path=job.file_path,
-                output_path=str(temp_output),
-                ffmpeg_args=ffmpeg_args,
-                audio_maps=audio_maps,
-                subtitle_maps=subtitle_maps,
-                scale_filter=scale_filter,
-                process_priority=store.config.settings.process_priority,
-            )
+            try:
+                result = await transcode(
+                    input_path=job.file_path,
+                    output_path=str(temp_output),
+                    ffmpeg_args=ffmpeg_args,
+                    duration_us=duration_us,
+                    on_progress=progress_queue,
+                    on_proc=_register_proc,
+                    audio_maps=audio_maps,
+                    subtitle_maps=subtitle_maps,
+                    scale_filter=scale_filter,
+                    process_priority=store.config.settings.process_priority,
+                )
+            finally:
+                self._active_procs.pop(job.id, None)
+                relay_task.cancel()
+                await asyncio.gather(relay_task, return_exceptions=True)
             ffmpeg_log = result.ffmpeg_log
 
-            if result.success:
-                ok, reason = await verify_output(str(temp_output), duration_us)
-                if not ok:
+            if job.status == JobStatus.SKIPPED:
+                temp_output.unlink(missing_ok=True)
+            elif result.success:
+                if (new_size := temp_output.stat().st_size) >= job.old_size_bytes:
                     temp_output.unlink(missing_ok=True)
-                    job.status = JobStatus.FAILED
-                    job.error_message = f"Post-encode verification failed: {reason}"
-                    log.warning("Job %s verification failed: %s", job.id, reason)
-                else:
-                    if out_ext != input_path.suffix:
-                        final_path = input_path.with_suffix(out_ext)
-                    else:
-                        final_path = input_path
-                    suppress_path(str(final_path))
-                    try:
-                        try:
-                            temp_output.rename(final_path)
-                        except OSError:
-                            # cache dir and media can be on different filesystems (Docker)
-                            tmp_dest = final_path.with_suffix(
-                                final_path.suffix + ".undarr_tmp"
-                            )
-                            try:
-                                shutil.copyfile(temp_output, tmp_dest)
-                                tmp_dest.rename(final_path)
-                            except Exception:
-                                tmp_dest.unlink(missing_ok=True)
-                                raise
-                            temp_output.unlink(missing_ok=True)
-                        if final_path != input_path:
-                            input_path.unlink(missing_ok=True)
-                    except Exception:
-                        unsuppress_path(str(final_path))
-                        raise
-                    job.file_path = str(final_path)
-
-                    job.status = JobStatus.COMPLETED
-                    try:
-                        job.new_size_bytes = Path(job.file_path).stat().st_size
-                    except OSError:
-                        pass
-                    saved = job.old_size_bytes - (job.new_size_bytes or 0)
-                    log.info(
-                        "Completed: %s [%s] saved %s",
-                        job.file_path,
-                        job.id,
-                        _format_size(saved),
+                    job.status = JobStatus.SKIPPED
+                    job.error_message = (
+                        f"Output ({_format_size(new_size)}) is not smaller than "
+                        f"original ({_format_size(job.old_size_bytes)}), original kept"
                     )
+                    log.info("Job %s skipped: %s", job.id, job.error_message)
+                else:
+                    job.new_size_bytes = new_size
+                    ok, reason = await verify_output(str(temp_output), duration_us)
+                    if not ok:
+                        temp_output.unlink(missing_ok=True)
+                        job.status = JobStatus.FAILED
+                        job.error_message = f"Post-encode verification failed: {reason}"
+                        log.warning("Job %s verification failed: %s", job.id, reason)
+                    else:
+                        if out_ext != input_path.suffix:
+                            final_path = input_path.with_suffix(out_ext)
+                        else:
+                            final_path = input_path
+                        suppress_path(str(final_path))
+                        try:
+                            try:
+                                temp_output.rename(final_path)
+                            except OSError:
+                                # cache dir and media can be on different filesystems (Docker)
+                                tmp_dest = final_path.with_suffix(
+                                    final_path.suffix + ".undarr_tmp"
+                                )
+                                try:
+                                    shutil.copyfile(temp_output, tmp_dest)
+                                    tmp_dest.rename(final_path)
+                                except Exception:
+                                    tmp_dest.unlink(missing_ok=True)
+                                    raise
+                                temp_output.unlink(missing_ok=True)
+                            if final_path != input_path:
+                                input_path.unlink(missing_ok=True)
+                        except Exception:
+                            unsuppress_path(str(final_path))
+                            raise
+                        job.file_path = str(final_path)
+
+                        job.status = JobStatus.COMPLETED
+                        saved = job.old_size_bytes - (job.new_size_bytes or 0)
+                        log.info(
+                            "Completed: %s [%s] saved %s",
+                            job.file_path,
+                            job.id,
+                            _format_size(saved),
+                        )
             else:
                 temp_output.unlink(missing_ok=True)
                 job.status = JobStatus.FAILED
@@ -537,12 +599,17 @@ class QueueManager:
             job.error_message = f"[{type(e).__name__}] {e}"
             log.error("Job %s crashed: %s", job.id, e)
         finally:
+            if job.temp_path:
+                temp = Path(job.temp_path)
+                if job.status not in (JobStatus.COMPLETED,) and temp.exists():
+                    temp.unlink(missing_ok=True)
+                    log.info("Cleaned up temp file: %s", job.temp_path)
             duration_secs = time.monotonic() - started
             async with self._lock:
                 self._active.pop(job.id, None)
                 self._device_active[job.device] -= 1
                 self._known_paths.discard(job.file_path)
-            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+            if job.status in (JobStatus.COMPLETED, JobStatus.SKIPPED, JobStatus.FAILED):
                 try:
                     mtime = Path(job.file_path).stat().st_mtime
                 except OSError:

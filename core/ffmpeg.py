@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import shlex
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import config
@@ -214,6 +215,13 @@ def build_scale_filter(resolution_cap: int, source_height: int) -> str | None:
 
 
 @dataclass
+class TranscodeProgress:
+    out_time_us: int = 0
+    percent: float = 0.0
+    total_size: int = 0
+
+
+@dataclass
 class TranscodeResult:
     success: bool
     output_path: str
@@ -225,12 +233,14 @@ async def transcode(
     input_path: str,
     output_path: str,
     ffmpeg_args: str,
+    duration_us: int,
+    on_progress: asyncio.Queue[TranscodeProgress] | None = None,
+    on_proc: Callable[[asyncio.subprocess.Process], None] | None = None,
     audio_maps: list[str] | None = None,
     subtitle_maps: list[str] | None = None,
     scale_filter: str | None = None,
     process_priority: str = "normal",
 ) -> TranscodeResult:
-    # TODO: Needs progress parsing, duration tracking
     map_flags = ["-map", "0:V?"]
     if audio_maps is not None:
         map_flags.extend(audio_maps)
@@ -255,6 +265,9 @@ async def transcode(
         *prefix,
         config.FFMPEG_BIN,
         "-y",
+        "-nostats",
+        "-progress",
+        "pipe:1",
         "-i",
         input_path,
         *map_flags,
@@ -271,8 +284,72 @@ async def transcode(
         stderr=asyncio.subprocess.PIPE,
     )
 
-    stdout, stderr = await proc.communicate()
-    ffmpeg_log = stderr.decode(errors="replace")
+    if on_proc is not None:
+        on_proc(proc)
+
+    log_lines: list[str] = []
+    progress = TranscodeProgress()
+
+    async def read_stderr():
+        assert proc.stderr is not None
+        async for line in proc.stderr:
+            log_lines.append(line.decode(errors="replace"))
+
+    async def read_stdout():
+        assert proc.stdout is not None
+        frame: dict[str, str] = {}
+        async for raw_line in proc.stdout:
+            line = raw_line.decode(errors="replace").strip()
+            if "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            frame[key] = val
+            if key != "progress":
+                continue
+            # Time keys vary by ffmpeg version and can be "N/A", prefer the most precise one available
+            for time_key in ("out_time_us", "out_time_ms", "out_time"):
+                raw = frame.get(time_key, "")
+                if not raw or raw == "N/A":
+                    continue
+                try:
+                    if time_key == "out_time_us":
+                        val = int(raw)
+                    elif time_key == "out_time_ms":
+                        val = int(raw) * 1000
+                    elif ":" in raw:
+                        h, m, s = raw.split(":")
+                        val = int((int(h) * 3600 + int(m) * 60 + float(s)) * 1_000_000)
+                    else:
+                        continue
+                except (ValueError, IndexError):
+                    continue
+                if val > 0:
+                    progress.out_time_us = val
+                    break
+            try:
+                progress.total_size = int(frame.get("total_size", "0"))
+            except ValueError:
+                pass
+            if duration_us > 0:
+                progress.percent = min(
+                    (progress.out_time_us / duration_us) * 100.0, 100.0
+                )
+            if on_progress is not None:
+                await on_progress.put(
+                    TranscodeProgress(
+                        out_time_us=progress.out_time_us,
+                        percent=progress.percent,
+                        total_size=progress.total_size,
+                    )
+                )
+            frame.clear()
+
+    await asyncio.gather(read_stdout(), read_stderr())
+    await proc.wait()
+
+    ffmpeg_log = "".join(log_lines)
 
     if proc.returncode == 0:
         return TranscodeResult(
@@ -281,7 +358,7 @@ async def transcode(
             ffmpeg_log=ffmpeg_log,
         )
     else:
-        err_lines = [l.strip() for l in ffmpeg_log.splitlines() if l.strip()]
+        err_lines = [l.strip() for l in log_lines if l.strip()]
         tail = "\n".join(err_lines[-6:]) if err_lines else "(no stderr)"
         error_msg = f"FFmpeg exited with code {proc.returncode}\n{tail}"
         log.warning("FFmpeg stderr tail:\n%s", tail)

@@ -65,12 +65,12 @@ function expandHistoryRow(clickedRow) {
     const row = historyData.find(r => r.id === jobId);
     const detail = row ? buildDetailMessage(row) : "";
     const detailHtml = detail ? `<div class="history-detail">${detail}</div>` : "";
-    const isSkipped = row && row.status.startsWith("skipped");
+    const isRuleSkipped = row && row.status === "skipped (rule)";
     const cached = historyLogCache.get(jobId);
     const colspan = historyCheckboxesVisible ? 7 : 6;
     const expandRow = document.createElement("tr");
     expandRow.className = "log-row";
-    if (isSkipped) {
+    if (isRuleSkipped) {
         expandRow.innerHTML = `<td colspan="${colspan}">${detailHtml}</td>`;
     } else {
         expandRow.innerHTML = `<td colspan="${colspan}">${detailHtml}<button class="btn btn-copy-log" data-log-id="${jobId}" style="margin-bottom:8px">Copy to Clipboard</button><div class="log-expand" id="log-${jobId}">${cached != null ? esc(cached) : "Loading..."}</div></td>`;
@@ -100,7 +100,7 @@ function expandHistoryRow(clickedRow) {
             setTimeout(() => msg.remove(), 4000);
         });
     }
-    if (!isSkipped && cached == null) fetchLog(jobId);
+    if (!isRuleSkipped && cached == null) fetchLog(jobId);
 }
 
 function toggleLog(clickedRow) {
@@ -252,7 +252,7 @@ export function initHistory() {
         const th = document.getElementById("history-status-th");
         const dd = document.createElement("div");
         dd.className = "status-dropdown";
-        const options = [null, "completed", "failed", "skipped (rule)"];
+        const options = [null, "completed", "failed", "skipped", "skipped (rule)"];
         const labels = ["All", "Completed", "Failed", "Skipped (rule)"];
         options.forEach((val, i) => {
             const btn = document.createElement("button");
