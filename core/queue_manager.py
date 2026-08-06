@@ -51,6 +51,7 @@ class Job:
     library_name: str
     device: str = "cpu"
     status: JobStatus = JobStatus.PENDING
+    progress: TranscodeProgress | None = None
     old_size_bytes: int = 0
     new_size_bytes: int | None = None
     started_at: str | None = None
@@ -75,10 +76,19 @@ def job_to_dict(job: Job) -> dict:
         "new_size_bytes": job.new_size_bytes,
         "started_at": job.started_at,
     }
+    if job.progress:
+        d["progress"] = {
+            "percent": round(job.progress.percent, 1),
+            "speed": job.progress.speed,
+            "fps": job.progress.fps,
+            "bitrate": job.progress.bitrate,
+        }
     if job.error_message:
         d["error_message"] = job.error_message
     if job.block_reason:
         d["block_reason"] = job.block_reason
+    if job.preset_name:
+        d["preset_name"] = job.preset_name
     if job.media_info:
         d["media_info"] = job.media_info
     return d
@@ -452,32 +462,63 @@ class QueueManager:
             progress_queue: asyncio.Queue[TranscodeProgress] = asyncio.Queue()
 
             async def progress_relay():
+                stall_count = 0
                 while True:
                     try:
-                        prog = await progress_queue.get()
-                    except asyncio.CancelledError:
-                        break
-                    # Action heavy intros skew and throw off early estimates
-                    if (
-                        duration_us > 300_000_000
-                        and job.old_size_bytes > 0
-                        and prog.total_size > 0
-                        and prog.out_time_us > 60_000_000
-                        and prog.percent >= 20.0
-                    ):
-                        estimated_final = (
-                            prog.total_size / prog.out_time_us
-                        ) * duration_us
-                        size_limit = job.old_size_bytes * settings.max_size_ratio
-                        if estimated_final > size_limit:
-                            job.status = JobStatus.SKIPPED
-                            ratio_pct = round(settings.max_size_ratio * 100)
+                        prog = await asyncio.wait_for(progress_queue.get(), timeout=2.0)
+                        stall_count = 0
+                        job.progress = prog
+                        await self._broadcast(
+                            "job_progress",
+                            {
+                                "id": job.id,
+                                "percent": round(prog.percent, 1),
+                                "speed": prog.speed,
+                                "fps": prog.fps,
+                                "bitrate": prog.bitrate,
+                            },
+                        )
+                        # Action heavy intros skew and throw off early estimates
+                        if (
+                            duration_us > 300_000_000
+                            and job.old_size_bytes > 0
+                            and prog.total_size > 0
+                            and prog.out_time_us > 60_000_000
+                            and prog.percent >= 20.0
+                        ):
+                            estimated_final = (
+                                prog.total_size / prog.out_time_us
+                            ) * duration_us
+                            size_limit = job.old_size_bytes * settings.max_size_ratio
+                            if estimated_final > size_limit:
+                                job.status = JobStatus.SKIPPED
+                                ratio_pct = round(settings.max_size_ratio * 100)
+                                job.error_message = (
+                                    f"Aborted early: estimated output ({_format_size(int(estimated_final))}) "
+                                    f"exceeds size limit ({_format_size(int(size_limit))}, "
+                                    f"{ratio_pct}% of original) at {prog.percent:.0f}%"
+                                )
+                                log.info("Job %s: %s", job.id, job.error_message)
+                                proc = self._active_procs.get(job.id)
+                                if proc:
+                                    try:
+                                        proc.kill()
+                                    except (ProcessLookupError, OSError):
+                                        pass
+                                break
+                    except asyncio.TimeoutError:
+                        if not self._running.is_set():
+                            stall_count = 0
+                            continue
+                        stall_count += 1
+                        if stall_count >= 60:
+                            job.status = JobStatus.FAILED
                             job.error_message = (
-                                f"Aborted early: estimated output ({_format_size(int(estimated_final))}) "
-                                f"exceeds size limit ({_format_size(int(size_limit))}, "
-                                f"{ratio_pct}% of original) at {prog.percent:.0f}%"
+                                "FFmpeg stalled: no progress for 120 seconds"
                             )
-                            log.info("Job %s: %s", job.id, job.error_message)
+                            log.error(
+                                "Job %s: ffmpeg stall detected, killing process", job.id
+                            )
                             proc = self._active_procs.get(job.id)
                             if proc:
                                 try:
@@ -485,6 +526,9 @@ class QueueManager:
                                 except (ProcessLookupError, OSError):
                                     pass
                             break
+                        continue
+                    except asyncio.CancelledError:
+                        break
 
             relay_task = asyncio.create_task(progress_relay())
 
@@ -600,9 +644,10 @@ class QueueManager:
             else:
                 temp_output.unlink(missing_ok=True)
                 job.status = JobStatus.FAILED
-                job.error_message = result.error_message
+
+                job.error_message = job.error_message or result.error_message
                 log.warning(
-                    "Failed: %s [%s] %s", job.file_path, job.id, result.error_message
+                    "Failed: %s [%s] %s", job.file_path, job.id, job.error_message
                 )
         except Exception as e:
             job.status = JobStatus.FAILED

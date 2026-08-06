@@ -101,11 +101,15 @@ export function renderQueue() {
     let html = "";
     let rowIdx = 0;
     active.forEach(j => {
+        const pct = (j.progress && j.progress.percent != null) ? Math.round(j.progress.percent) + "%" : "-";
+        const fps = (j.progress && j.progress.fps) ? Math.round(j.progress.fps) : "-";
         html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
             <td>${esc(basename(j.file_path))}</td>
-            <td>${esc(j.library_name || "")}</td>
+            <td>${esc(j.library_name)}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
-            <td class="status-${j.status}">${esc(j.status)}</td>
+            <td class="q-pct">${pct}</td>
+            <td class="q-fps">${esc(fps)}</td>
+            <td>transcoding</td>
         </tr>`;
     });
     runnablePending.forEach(j => {
@@ -114,9 +118,11 @@ export function renderQueue() {
         const statusTip = libPaused ? ` data-tooltip="Library '${escAttr(j.library_name)}' is paused. Jobs stay queued but will not start until the library is resumed.<br>Resume from the library's actions menu on the Libraries page."` : "";
         html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
             <td>${esc(basename(j.file_path))}</td>
-            <td>${esc(j.library_name || "")}</td>
+            <td>${esc(j.library_name)}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
-            <td class="status-${j.status}"${statusTip}>${statusText}</td>
+            <td>-</td>
+            <td>-</td>
+            <td${statusTip}>${statusText}</td>
         </tr>`;
     });
     tbody.innerHTML = html;
@@ -317,6 +323,21 @@ export function connectSSE() {
         pendingJobs = pendingJobs.filter(j => j.id !== job.id);
         activeJobs[job.id] = job;
         renderQueue();
+    });
+
+    es.addEventListener("job_progress", (e) => {
+        const data = JSON.parse(e.data);
+        if (activeJobs[data.id]) {
+            activeJobs[data.id].progress = data;
+            const row = document.querySelector(`#queue-body tr[data-job-id="${data.id}"]`);
+            if (row) {
+                const pct = data.percent != null ? Math.round(data.percent) + "%" : "-";
+                row.querySelector(".q-pct").textContent = pct;
+                row.querySelector(".q-fps").textContent = data.fps ? Math.round(data.fps) : "-";
+            } else {
+                renderQueue();
+            }
+        }
     });
 
     es.addEventListener("job_finished", (e) => {

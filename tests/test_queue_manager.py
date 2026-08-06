@@ -2,7 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from core.queue_manager import _format_size, Job, QueueManager
+from core.queue_manager import _format_size, job_to_dict, Job, JobStatus, QueueManager
+from core.ffmpeg import TranscodeProgress
 
 
 @pytest.fixture
@@ -163,3 +164,70 @@ class TestFormatSize:
 
     def test_gb(self):
         assert _format_size(3 * 1073741824) == "3.0 GB"
+
+
+# Job serialization
+
+
+class TestJobToDict:
+    def test_minimal(self):
+        job = _make_job()
+        d = job_to_dict(job)
+        assert d["id"] == "abc123"
+        assert d["file_path"] == "/media/movie.mkv"
+        assert d["library_name"] == "movies"
+        assert d["status"] == "pending"
+        assert d["device"] == "cpu"
+        assert d["old_size_bytes"] == 0
+        assert d["new_size_bytes"] is None
+        assert d["started_at"] is None
+        # Optional fields absent when falsy
+        assert "progress" not in d
+        assert "error_message" not in d
+        assert "block_reason" not in d
+        assert "preset_name" not in d
+        assert "media_info" not in d
+
+    def test_with_progress(self):
+        prog = TranscodeProgress(
+            out_time_us=1000000,
+            speed="2.5x",
+            fps=60.0,
+            bitrate="5000kbits/s",
+            percent=50.0,
+            total_size=500000,
+        )
+        job = _make_job(progress=prog)
+        d = job_to_dict(job)
+        assert d["progress"]["percent"] == 50.0
+        assert d["progress"]["speed"] == "2.5x"
+        assert d["progress"]["fps"] == 60.0
+        assert d["progress"]["bitrate"] == "5000kbits/s"
+
+    def test_with_error_message(self):
+        job = _make_job(error_message="Something broke", status=JobStatus.FAILED)
+        d = job_to_dict(job)
+        assert d["error_message"] == "Something broke"
+        assert d["status"] == "failed"
+
+    def test_with_block_reason(self):
+        job = _make_job(block_reason="No preset assigned", status=JobStatus.BLOCKED)
+        d = job_to_dict(job)
+        assert d["block_reason"] == "No preset assigned"
+
+    def test_with_preset_name(self):
+        job = _make_job(preset_name="HEVC Transparent")
+        d = job_to_dict(job)
+        assert d["preset_name"] == "HEVC Transparent"
+
+    def test_with_media_info(self):
+        info = {"video_codec": "h264", "resolution_width": 1920}
+        job = _make_job(media_info=info)
+        d = job_to_dict(job)
+        assert d["media_info"] == info
+
+    def test_progress_percent_rounded(self):
+        prog = TranscodeProgress(percent=33.3333)
+        job = _make_job(progress=prog)
+        d = job_to_dict(job)
+        assert d["progress"]["percent"] == 33.3

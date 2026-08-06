@@ -217,6 +217,9 @@ def build_scale_filter(resolution_cap: int, source_height: int) -> str | None:
 @dataclass
 class TranscodeProgress:
     out_time_us: int = 0
+    speed: str = ""
+    fps: float = 0.0
+    bitrate: str = ""
     percent: float = 0.0
     total_size: int = 0
 
@@ -329,6 +332,12 @@ async def transcode(
                     progress.out_time_us = val
                     break
             try:
+                progress.fps = float(frame.get("fps", "0"))
+            except ValueError:
+                pass
+            progress.speed = frame.get("speed", "").strip()
+            progress.bitrate = frame.get("bitrate", "").strip()
+            try:
                 progress.total_size = int(frame.get("total_size", "0"))
             except ValueError:
                 pass
@@ -340,6 +349,9 @@ async def transcode(
                 await on_progress.put(
                     TranscodeProgress(
                         out_time_us=progress.out_time_us,
+                        speed=progress.speed,
+                        fps=progress.fps,
+                        bitrate=progress.bitrate,
                         percent=progress.percent,
                         total_size=progress.total_size,
                     )
