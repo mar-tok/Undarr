@@ -122,3 +122,23 @@ class DeviceUpdate(BaseModel):
 
 class PauseRequest(BaseModel):
     paused: bool
+
+
+class RetryRequest(BaseModel):
+    ids: list[str]
+
+
+class DismissRequest(BaseModel):
+    ids: list[str]
+
+
+class RequeueRequest(BaseModel):
+    ids: list[str]
+
+
+class SkipRequest(BaseModel):
+    ids: list[str]
+
+
+class CancelBatchRequest(BaseModel):
+    ids: list[str]

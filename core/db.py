@@ -98,6 +98,7 @@ async def insert_job_history(
     duration_seconds: float,
     ffmpeg_log: str,
     error_message: str | None,
+    dismissed: bool = False,
     preset_name: str = "",
     device_name: str = "",
 ) -> None:
@@ -105,9 +106,9 @@ async def insert_job_history(
     await db.execute(
         """INSERT INTO job_history
            (id, library_name, file_path, status, old_size_bytes, new_size_bytes,
-            started_at, finished_at, duration_seconds, ffmpeg_log, error_message,
+            started_at, finished_at, duration_seconds, ffmpeg_log, error_message, dismissed,
             preset_name, device_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             id,
             library_name,
@@ -120,6 +121,7 @@ async def insert_job_history(
             duration_seconds,
             ffmpeg_log,
             error_message,
+            int(dismissed),
             preset_name,
             device_name,
         ),
@@ -133,6 +135,7 @@ HISTORY_SORT_COLUMNS = {
     "library_name",
     "old_size_bytes",
     "new_size_bytes",
+    "status",
 }
 
 
@@ -140,6 +143,7 @@ async def get_history(
     limit: int = 50,
     offset: int = 0,
     status: str | None = None,
+    search: str | None = None,
     sort_by: str = "finished_at",
     sort_dir: str = "desc",
     exclude_dismissed: bool = False,
@@ -152,6 +156,9 @@ async def get_history(
     if status:
         conditions.append("status = ?")
         params.append(status)
+    if search:
+        conditions.append("file_path LIKE ?")
+        params.append(f"%{search}%")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     col = sort_by if sort_by in HISTORY_SORT_COLUMNS else "finished_at"

@@ -41,6 +41,7 @@ class JobStatus(str, Enum):
     ACTIVE = "active"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
     SKIPPED = "skipped"
 
 
@@ -62,6 +63,7 @@ class Job:
     preset_name: str = ""
     block_reason: str | None = None
     media_info: dict | None = None
+    is_retry: bool = False
     seq: int = 0
 
 
@@ -91,6 +93,8 @@ def job_to_dict(job: Job) -> dict:
         d["preset_name"] = job.preset_name
     if job.media_info:
         d["media_info"] = job.media_info
+    if job.is_retry:
+        d["is_retry"] = True
     return d
 
 
@@ -274,7 +278,12 @@ class QueueManager:
         return encoder_to_device_id(m.group(1)), None
 
     async def enqueue(
-        self, file_path: str, library_name: str, *, media_info: dict | None = None
+        self,
+        file_path: str,
+        library_name: str,
+        *,
+        is_retry: bool = False,
+        media_info: dict | None = None,
     ) -> Job | None:
         async with self._lock:
             if file_path in self._known_paths:
@@ -315,6 +324,7 @@ class QueueManager:
                 output_container=output_container,
                 preset_name=preset_name,
                 media_info=media_info,
+                is_retry=is_retry,
                 seq=self._next_seq,
             )
             self._next_seq += 1
@@ -335,11 +345,105 @@ class QueueManager:
                 log.info("Queued: %s [%s] device=%s", file_path, job.id, device_id)
         return job
 
+    async def cancel(self, job_id: str) -> bool:
+        async with self._lock:
+            for i, job in enumerate(self._pending):
+                if job.id == job_id:
+                    job.status = JobStatus.CANCELLED
+                    self._pending.pop(i)
+                    self._known_paths.discard(job.file_path)
+                    await self._broadcast("job_cancelled", {"id": job_id})
+                    return True
+            for i, job in enumerate(self._blocked):
+                if job.id == job_id:
+                    job.status = JobStatus.CANCELLED
+                    self._blocked.pop(i)
+                    self._known_paths.discard(job.file_path)
+                    await self._broadcast("job_cancelled", {"id": job_id})
+                    return True
+            if job_id in self._active:
+                job = self._active[job_id]
+                job.status = JobStatus.CANCELLED
+                proc = self._active_procs.get(job_id)
+                if proc:
+                    try:
+                        proc.kill()
+                    except (ProcessLookupError, OSError):
+                        pass
+                return True
+        return False
+
+    async def skip(self, job_id: str) -> bool:
+        job = None
+        is_active = False
+        async with self._lock:
+            for i, j in enumerate(self._pending):
+                if j.id == job_id:
+                    job = j
+                    job.status = JobStatus.SKIPPED
+                    job.error_message = "Manually skipped"
+                    self._pending.pop(i)
+                    self._known_paths.discard(job.file_path)
+                    break
+            if not job:
+                for i, j in enumerate(self._blocked):
+                    if j.id == job_id:
+                        job = j
+                        job.status = JobStatus.SKIPPED
+                        job.error_message = "Manually skipped"
+                        self._blocked.pop(i)
+                        self._known_paths.discard(job.file_path)
+                        break
+            if not job and job_id in self._active:
+                job = self._active[job_id]
+                job.status = JobStatus.SKIPPED
+                job.error_message = "Manually skipped"
+                is_active = True
+                proc = self._active_procs.get(job_id)
+                if proc:
+                    try:
+                        proc.kill()
+                    except (ProcessLookupError, OSError):
+                        pass
+        if not job:
+            return False
+        if is_active:
+            log.info("Job %s manually skipped (was active)", job.id)
+            return True
+        log.info("Skipped: %s [%s]", job.file_path, job.id)
+        # Active jobs get marked and recorded in _run_job's finally block, pending and blocked jobs never reach it
+        try:
+            mtime = Path(job.file_path).stat().st_mtime
+        except OSError:
+            mtime = 0.0
+        await db.mark_processed(job.file_path, job.library_name, mtime)
+        now = datetime.now(timezone.utc).isoformat()
+        await db.insert_job_history(
+            id=job.id,
+            library_name=job.library_name,
+            file_path=job.file_path,
+            status=job.status.value,
+            old_size_bytes=job.old_size_bytes,
+            new_size_bytes=None,
+            started_at=now,
+            finished_at=now,
+            duration_seconds=0,
+            ffmpeg_log="",
+            error_message=job.error_message,
+            preset_name=job.preset_name,
+            device_name=device_display_name(job.device),
+        )
+        await self._broadcast("job_finished", job_to_dict(job))
+        return True
+
     async def re_evaluate_blocked(self) -> None:
         unblocked = False
         async with self._lock:
             still_blocked = []
             for job in self._blocked:
+                if job.status == JobStatus.CANCELLED:
+                    self._known_paths.discard(job.file_path)
+                    continue
                 device_id, reason = await self._resolve_device(job.library_name)
                 if reason:
                     job.block_reason = reason
@@ -411,6 +515,9 @@ class QueueManager:
             async with self._lock:
                 still_pending: list[Job] = []
                 for job in self._pending:
+                    if job.status == JobStatus.CANCELLED:
+                        self._known_paths.discard(job.file_path)
+                        continue
                     if job.library_name in self._paused_libraries:
                         still_pending.append(job)
                         continue
@@ -577,10 +684,18 @@ class QueueManager:
                 await asyncio.gather(relay_task, return_exceptions=True)
             ffmpeg_log = result.ffmpeg_log
 
-            if job.status == JobStatus.SKIPPED:
+            if job.status in (JobStatus.CANCELLED, JobStatus.SKIPPED):
                 temp_output.unlink(missing_ok=True)
+                if job.status == JobStatus.CANCELLED:
+                    job.error_message = "Cancelled by user"
+                    log.info("Job %s cancelled by user", job.id)
             elif result.success:
-                if (
+                if not input_path.exists():
+                    temp_output.unlink(missing_ok=True)
+                    job.status = JobStatus.CANCELLED
+                    job.error_message = "Original file was deleted during transcoding"
+                    log.info("Job %s cancelled: source file removed", job.id)
+                elif (
                     new_size := temp_output.stat().st_size
                 ) >= job.old_size_bytes * settings.max_size_ratio:
                     temp_output.unlink(missing_ok=True)
@@ -682,6 +797,7 @@ class QueueManager:
                 duration_seconds=duration_secs,
                 ffmpeg_log=ffmpeg_log,
                 error_message=job.error_message,
+                dismissed=job.is_retry and job.status == JobStatus.FAILED,
                 preset_name=job.preset_name,
                 device_name=device_display_name(job.device),
             )

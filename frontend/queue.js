@@ -16,6 +16,10 @@ let _eventSource = null;
 let _reconnectTimer = null;
 let _renderTimer = null;
 
+const QUEUE_PAGE_SIZES = [25, 50, 100, 200];
+let queuePage = 0;
+let queuePageSize = 50;
+
 const expandedQueueIds = new Set();
 const expandedIssueIds = new Set();
 
@@ -30,7 +34,7 @@ function updateScheduleIndicator() {
 }
 
 function updatePauseButton() {
-    const btn = document.getElementById("btn-pause");
+    const btn = document.getElementById("btn-queue-toggle");
     btn.textContent = queuePaused ? "Resume Queue" : "Pause Queue";
     updateScheduleIndicator();
 }
@@ -70,6 +74,13 @@ function debouncedRenderQueue() {
     _renderTimer = setTimeout(() => { _renderTimer = null; renderQueue(); }, 50);
 }
 
+function updateQueueActions() {
+    const checks = document.querySelectorAll("#queue-body .queue-check");
+    const anyChecked = Array.from(checks).some(c => c.checked);
+    document.getElementById("btn-skip-selected").disabled = !anyChecked;
+    document.getElementById("btn-cancel-selected").disabled = !anyChecked;
+}
+
 function formatMediaInfo(info) {
     if (!info) return null;
     const parts = [];
@@ -89,14 +100,33 @@ export function renderQueue() {
     const tbody = document.getElementById("queue-body");
     const emptyMsg = document.getElementById("queue-empty");
     const controls = document.getElementById("queue-controls");
+    const pagEl = document.getElementById("queue-pagination");
     const active = Object.values(activeJobs);
     const runnablePending = pendingJobs.filter(j => !isDeviceDisabled(j.device));
     const hasJobs = active.length || runnablePending.length;
     table.style.display = hasJobs ? "" : "none";
     emptyMsg.style.display = hasJobs ? "none" : "";
     controls.style.display = (hasJobs || queuePaused || !scheduleActive) ? "" : "none";
-    document.getElementById("pending-count").textContent =
+    document.getElementById("queue-pending-count").textContent =
         runnablePending.length ? `${runnablePending.length} pending` : "";
+
+    const checkboxCol = document.getElementById("queue-checkbox-col");
+    const selectAll = document.getElementById("queue-select-all");
+    const skipBtn = document.getElementById("btn-skip-selected");
+    const cancelBtn = document.getElementById("btn-cancel-selected");
+    checkboxCol.style.display = hasJobs ? "" : "none";
+    table.classList.toggle("has-checkboxes", hasJobs);
+    skipBtn.style.display = hasJobs ? "" : "none";
+    cancelBtn.style.display = hasJobs ? "" : "none";
+    skipBtn.disabled = true;
+    cancelBtn.disabled = true;
+    if (selectAll) selectAll.checked = false;
+
+    const totalPages = Math.max(1, Math.ceil(runnablePending.length / queuePageSize));
+    if (queuePage >= totalPages) queuePage = totalPages - 1;
+
+    const pageStart = queuePage * queuePageSize;
+    const pagePending = runnablePending.slice(pageStart, pageStart + queuePageSize);
 
     let html = "";
     let rowIdx = 0;
@@ -104,25 +134,29 @@ export function renderQueue() {
         const pct = (j.progress && j.progress.percent != null) ? Math.round(j.progress.percent) + "%" : "-";
         const fps = (j.progress && j.progress.fps) ? Math.round(j.progress.fps) : "-";
         html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
+            <td><input type="checkbox" class="queue-check" data-job-id="${j.id}"></td>
             <td>${esc(basename(j.file_path))}</td>
             <td>${esc(j.library_name)}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
             <td class="q-pct">${pct}</td>
             <td class="q-fps">${esc(fps)}</td>
             <td>transcoding</td>
+            <td><button class="btn-icon" data-action="cancel-job" data-job-id="${j.id}" data-tooltip="Remove from queue.<br>File will be re-queued on the next scan."><img src="close.svg" alt="Cancel"></button></td>
         </tr>`;
     });
-    runnablePending.forEach(j => {
+    pagePending.forEach(j => {
         const libPaused = pausedLibraries.has(j.library_name);
         const statusText = libPaused ? "paused (library)" : "pending";
         const statusTip = libPaused ? ` data-tooltip="Library '${escAttr(j.library_name)}' is paused. Jobs stay queued but will not start until the library is resumed.<br>Resume from the library's actions menu on the Libraries page."` : "";
         html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
+            <td><input type="checkbox" class="queue-check" data-job-id="${j.id}"></td>
             <td>${esc(basename(j.file_path))}</td>
             <td>${esc(j.library_name)}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
             <td>-</td>
             <td>-</td>
             <td${statusTip}>${statusText}</td>
+            <td><button class="btn-icon" data-action="cancel-job" data-job-id="${j.id}" data-tooltip="Remove from queue.<br>File will be re-queued on the next scan."><img src="close.svg" alt="Cancel"></button></td>
         </tr>`;
     });
     tbody.innerHTML = html;
@@ -130,6 +164,26 @@ export function renderQueue() {
         const row = tbody.querySelector(`tr[data-job-id="${id}"]`);
         if (row) expandQueueRow(row);
         else expandedQueueIds.delete(id);
+    }
+
+    // Pagination
+    if (runnablePending.length > QUEUE_PAGE_SIZES[0]) {
+        const hasPrev = queuePage > 0;
+        const hasNext = queuePage < totalPages - 1;
+        const sizeOptions = QUEUE_PAGE_SIZES.map(n =>
+            `<option value="${n}"${n === queuePageSize ? " selected" : ""}>${n}</option>`
+        ).join("");
+        pagEl.innerHTML = `
+            <span class="number-wrap">
+                <button class="number-btn" type="button" id="q-prev" ${hasPrev ? "" : "disabled"}><img src="arrow-left.svg" alt="Previous"></button>
+                <input type="number" id="q-page" class="page-input" value="${queuePage + 1}" min="1" max="${totalPages}">
+                <button class="number-btn" type="button" id="q-next" ${hasNext ? "" : "disabled"}><img src="arrow-right.svg" alt="Next"></button>
+            </span>
+            <select id="q-page-size">${sizeOptions}</select>`;
+        pagEl.style.display = "";
+    } else {
+        pagEl.innerHTML = "";
+        pagEl.style.display = "none";
     }
 
     updateQueueTabs();
@@ -171,13 +225,28 @@ export function renderIssues() {
     const table = document.getElementById("issues-table");
     const tbody = document.getElementById("issues-body");
     const emptyMsg = document.getElementById("issues-empty");
+    const actionsDiv = document.getElementById("issues-actions");
+    const retryBtn = document.getElementById("btn-retry-selected");
+    const dismissBtn = document.getElementById("btn-dismiss-selected");
+    const checkboxCol = document.getElementById("issues-checkbox-col");
+    const selectAll = document.getElementById("issues-select-all");
     const issues = getAllIssueJobs();
     const hasIssues = issues.length > 0;
+    const hasFailed = issues.some(j => j.type === "failed");
     table.style.display = hasIssues ? "" : "none";
     emptyMsg.style.display = hasIssues ? "none" : "";
+    checkboxCol.style.display = hasFailed ? "" : "none";
+    table.classList.toggle("has-checkboxes", hasFailed);
+    actionsDiv.style.display = hasFailed ? "flex" : "none";
+    retryBtn.disabled = true;
+    dismissBtn.disabled = true;
+    selectAll.checked = false;
     let html = "";
     let rowIdx = 0;
     issues.forEach(j => {
+        const checkbox = j.type === "failed"
+            ? `<td><input type="checkbox" class="issue-check" data-job-id="${j.id}"></td>`
+            : (hasFailed ? "<td></td>" : "");
         let actions = "";
         if (j.type === "failed") {
             actions = `<button class="btn-icon" data-action="retry-job" data-job-id="${j.id}" data-tooltip="Retry"><img src="retry.svg" alt="Retry"></button>`
@@ -186,8 +255,9 @@ export function renderIssues() {
             actions = `<button class="btn-icon" data-action="dismiss-job" data-job-id="${j.id}" data-tooltip="Dismiss"><img src="close.svg" alt="Dismiss"></button>`;
         }
         html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}" data-issue-type="${j.type}">
+            ${checkbox}
             <td>${esc(basename(j.file_path))}</td>
-            <td>${esc(j.library_name || "")}</td>
+            <td>${esc(j.library_name)}</td>
             <td>${formatBytes(j.old_size_bytes)}</td>
             <td class="status-${j.type}">${j.type}</td>
             <td class="issue-actions">${actions}</td>
@@ -200,6 +270,13 @@ export function renderIssues() {
         else expandedIssueIds.delete(id);
     }
     updateQueueTabs();
+}
+
+function updateActionButtons() {
+    const checks = document.querySelectorAll("#issues-body .issue-check");
+    const anyChecked = Array.from(checks).some(c => c.checked);
+    document.getElementById("btn-retry-selected").disabled = !anyChecked;
+    document.getElementById("btn-dismiss-selected").disabled = !anyChecked;
 }
 
 function expandIssueRow(clickedRow) {
@@ -346,7 +423,7 @@ export function connectSSE() {
         pendingJobs = pendingJobs.filter(j => j.id !== job.id);
         blockedJobs = blockedJobs.filter(j => j.id !== job.id);
         failedJobs = failedJobs.filter(f => f.id !== job.id);
-        if (job.status === "failed") {
+        if (job.status === "failed" && !job.is_retry) {
             failedJobs.unshift(job);
         }
         if (job.status === "failed") hasUnseenFailures = true;
@@ -385,6 +462,15 @@ export function connectSSE() {
         }
     });
 
+    es.addEventListener("job_cancelled", (e) => {
+        const data = JSON.parse(e.data);
+        delete activeJobs[data.id];
+        pendingJobs = pendingJobs.filter(j => j.id !== data.id);
+        blockedJobs = blockedJobs.filter(j => j.id !== data.id);
+        renderQueue();
+        renderIssues();
+    });
+
     es.onerror = () => {
         es.close();
         _eventSource = null;
@@ -404,7 +490,7 @@ export function loadQueueTab() {
 }
 
 export function initQueue() {
-    document.getElementById("btn-pause").addEventListener("click", async () => {
+    document.getElementById("btn-queue-toggle").addEventListener("click", async () => {
         try {
             const result = await api("POST", "/api/queue/pause", { paused: !queuePaused });
             queuePaused = result.paused;
@@ -427,12 +513,111 @@ export function initQueue() {
         });
     });
 
+    const pagEl = document.getElementById("queue-pagination");
+    pagEl.addEventListener("click", (e) => {
+        if (e.target.closest("#q-prev")) { queuePage--; renderQueue(); }
+        else if (e.target.closest("#q-next")) { queuePage++; renderQueue(); }
+    });
+    pagEl.addEventListener("change", (e) => {
+        if (e.target.id === "q-page-size") {
+            queuePageSize = parseInt(e.target.value);
+            queuePage = 0;
+            renderQueue();
+        }
+    });
+    pagEl.addEventListener("keydown", (e) => {
+        if (e.target.id === "q-page" && e.key === "Enter") {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val) && val >= 1) { queuePage = val - 1; renderQueue(); }
+        }
+    });
+    pagEl.addEventListener("blur", (e) => {
+        if (e.target.id === "q-page") {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val) && val >= 1 && val - 1 !== queuePage) { queuePage = val - 1; renderQueue(); }
+            else e.target.value = queuePage + 1;
+        }
+    }, true);
+
     document.getElementById("queue-body").addEventListener("click", async (e) => {
+        const checkCell = e.target.closest("td");
+        const checkInput = e.target.type === "checkbox" ? e.target
+            : checkCell?.querySelector("input.queue-check");
+        if (checkInput) {
+            if (e.target.type !== "checkbox") checkInput.checked = !checkInput.checked;
+            updateQueueActions();
+            const checks = document.querySelectorAll("#queue-body .queue-check");
+            const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+            document.getElementById("queue-select-all").checked = allChecked;
+            return;
+        }
+        const btn = e.target.closest("[data-action]");
+        if (btn && btn.dataset.action === "cancel-job") {
+            try {
+                await api("DELETE", `/api/queue/${btn.dataset.jobId}`);
+            } catch (err) {
+                alert(err.message);
+            }
+            return;
+        }
         const row = e.target.closest("tr.clickable");
         if (row) toggleQueueDetail(row);
     });
 
+    document.getElementById("queue-select-all").addEventListener("change", (e) => {
+        const checked = e.target.checked;
+        document.querySelectorAll("#queue-body .queue-check").forEach(c => { c.checked = checked; });
+        updateQueueActions();
+    });
+
+    document.getElementById("btn-skip-selected").addEventListener("click", async () => {
+        const checks = document.querySelectorAll("#queue-body .queue-check:checked");
+        const ids = Array.from(checks).map(c => c.dataset.jobId);
+        if (!ids.length) return;
+        const btn = document.getElementById("btn-skip-selected");
+        btn.disabled = true;
+        try {
+            const result = await api("POST", "/api/queue/skip", { ids });
+            btn.textContent = `Skipped ${result.skipped}`;
+            setTimeout(() => { btn.textContent = "Skip Selected"; }, 4000);
+            document.getElementById("queue-select-all").checked = false;
+            document.querySelectorAll("#queue-body .queue-check").forEach(c => { c.checked = false; });
+        } catch (err) {
+            alert(err.message);
+        }
+        updateQueueActions();
+    });
+
+    document.getElementById("btn-cancel-selected").addEventListener("click", async () => {
+        const checks = document.querySelectorAll("#queue-body .queue-check:checked");
+        const ids = Array.from(checks).map(c => c.dataset.jobId);
+        if (!ids.length) return;
+        const btn = document.getElementById("btn-cancel-selected");
+        btn.disabled = true;
+        try {
+            const result = await api("POST", "/api/queue/cancel", { ids });
+            btn.textContent = `Cancelled ${result.cancelled}`;
+            setTimeout(() => { btn.textContent = "Cancel Selected"; }, 4000);
+            document.getElementById("queue-select-all").checked = false;
+            document.querySelectorAll("#queue-body .queue-check").forEach(c => { c.checked = false; });
+        } catch (err) {
+            alert(err.message);
+        }
+        updateQueueActions();
+    });
+
     document.getElementById("issues-body").addEventListener("click", async (e) => {
+        const checkCell = e.target.closest("td");
+        const checkInput = e.target.type === "checkbox" ? e.target
+            : checkCell?.querySelector("input.issue-check");
+        if (checkInput) {
+            if (e.target.type !== "checkbox") checkInput.checked = !checkInput.checked;
+            updateActionButtons();
+            const checks = document.querySelectorAll("#issues-body .issue-check");
+            const allChecked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+            document.getElementById("issues-select-all").checked = allChecked;
+            return;
+        }
         const btn = e.target.closest("[data-action]");
         if (btn) {
             const jobId = btn.dataset.jobId;
@@ -461,5 +646,39 @@ export function initQueue() {
         }
         const row = e.target.closest("tr.clickable");
         if (row) toggleIssueDetail(row);
+    });
+
+    document.getElementById("issues-select-all").addEventListener("change", (e) => {
+        const checked = e.target.checked;
+        document.querySelectorAll("#issues-body .issue-check").forEach(c => { c.checked = checked; });
+        updateActionButtons();
+    });
+
+    document.getElementById("btn-retry-selected").addEventListener("click", async () => {
+        const checks = document.querySelectorAll("#issues-body .issue-check:checked");
+        const ids = Array.from(checks).map(c => c.dataset.jobId);
+        if (!ids.length) return;
+        try {
+            await api("POST", "/api/queue/retry", { ids });
+            const idSet = new Set(ids);
+            failedJobs = failedJobs.filter(j => !idSet.has(j.id));
+            renderIssues();
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
+    document.getElementById("btn-dismiss-selected").addEventListener("click", async () => {
+        const checks = document.querySelectorAll("#issues-body .issue-check:checked");
+        const ids = Array.from(checks).map(c => c.dataset.jobId);
+        if (!ids.length) return;
+        try {
+            await api("POST", "/api/history/dismiss", { ids });
+            const idSet = new Set(ids);
+            failedJobs = failedJobs.filter(j => !idSet.has(j.id));
+            renderIssues();
+        } catch (err) {
+            alert(err.message);
+        }
     });
 }

@@ -10,6 +10,14 @@ from fastapi.responses import StreamingResponse
 from core.queue_manager import queue_manager, job_to_dict
 from core.yaml_store import store
 from core import db
+from app.models.requests import (
+    CancelBatchRequest,
+    DismissRequest,
+    PauseRequest,
+    RequeueRequest,
+    RetryRequest,
+    SkipRequest,
+)
 from app.models.responses import HistoryOut, SearchResultOut
 
 router = APIRouter(tags=["queue"])
@@ -55,41 +63,69 @@ async def queue_events():
 
 
 @router.post("/api/queue/pause")
-async def pause_queue(body: dict):
-    if body.get("paused"):
+async def pause_queue(body: PauseRequest):
+    if body.paused:
         await queue_manager.pause()
     else:
         await queue_manager.resume()
     return {"paused": queue_manager.paused}
 
 
+@router.delete("/api/queue/{job_id}", status_code=204)
+async def cancel_job(job_id: str):
+    if not await queue_manager.cancel(job_id):
+        raise HTTPException(404, "Job not found")
+
+
+@router.post("/api/queue/skip")
+async def skip_jobs(body: SkipRequest):
+    skipped = 0
+    for job_id in body.ids:
+        if await queue_manager.skip(job_id):
+            skipped += 1
+    return {"skipped": skipped}
+
+
+@router.post("/api/queue/cancel")
+async def cancel_jobs(body: CancelBatchRequest):
+    cancelled = 0
+    for job_id in body.ids:
+        if await queue_manager.cancel(job_id):
+            cancelled += 1
+    return {"cancelled": cancelled}
+
+
 @router.post("/api/queue/retry")
-async def retry_jobs(body: dict):
-    ids = body.get("ids", [])
+async def retry_jobs(body: RetryRequest):
     retried = 0
+    skipped = 0
     to_dismiss = []
-    for job_id in ids:
+    for job_id in body.ids:
         entry = await db.get_history_entry(job_id)
         if not entry or entry["status"] != "failed":
+            skipped += 1
             continue
         if not Path(entry["file_path"]).exists():
+            skipped += 1
             continue
-        job = await queue_manager.enqueue(entry["file_path"], entry["library_name"])
+        job = await queue_manager.enqueue(
+            entry["file_path"], entry["library_name"], is_retry=True
+        )
         if job is None:
+            skipped += 1
             continue
         to_dismiss.append(job_id)
         retried += 1
     if to_dismiss:
         await db.dismiss_history_entries(to_dismiss)
-    return {"retried": retried}
+    return {"retried": retried, "skipped": skipped}
 
 
 @router.post("/api/queue/requeue")
-async def requeue_jobs(body: dict):
-    ids = body.get("ids", [])
+async def requeue_jobs(body: RequeueRequest):
     requeued = 0
     skipped = 0
-    for job_id in ids:
+    for job_id in body.ids:
         entry = await db.get_history_entry(job_id)
         if not entry:
             skipped += 1
@@ -113,9 +149,8 @@ async def requeue_jobs(body: dict):
 
 
 @router.post("/api/history/dismiss")
-async def dismiss_history(body: dict):
-    ids = body.get("ids", [])
-    dismissed = await db.dismiss_history_entries(ids)
+async def dismiss_history(body: DismissRequest):
+    dismissed = await db.dismiss_history_entries(body.ids)
     return {"dismissed": dismissed}
 
 
@@ -124,6 +159,7 @@ async def get_history(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     status: str | None = Query(None),
+    search: str | None = Query(None),
     sort_by: str = Query("finished_at"),
     sort_dir: str = Query("desc"),
     exclude_dismissed: bool = Query(False),
@@ -132,6 +168,7 @@ async def get_history(
         limit=limit,
         offset=offset,
         status=status,
+        search=search,
         sort_by=sort_by,
         sort_dir=sort_dir,
         exclude_dismissed=exclude_dismissed,

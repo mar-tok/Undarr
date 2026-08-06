@@ -172,7 +172,7 @@ export function initSearch() {
         const th = document.getElementById("search-status-th");
         const dd = document.createElement("div");
         dd.className = "status-dropdown";
-        const options = [null, "completed", "failed", "skipped", "skipped (rule)"];
+        const options = [null, "completed", "failed", "cancelled", "skipped", "skipped (rule)"];
         const labels = ["All", "Completed", "Failed", "Skipped (rule)"];
         options.forEach((val, i) => {
             const btn = document.createElement("button");

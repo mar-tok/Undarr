@@ -6,6 +6,9 @@ from core.db import (
     PROCESSED_SCHEMA,
     insert_job_history,
     get_history,
+    get_job_log,
+    get_history_entry,
+    dismiss_history_entries,
     clear_history,
     mark_processed,
     is_processed,
@@ -48,6 +51,100 @@ async def _insert_sample(id: str = "job1", status: str = "completed", **override
     )
     defaults.update(overrides)
     await insert_job_history(**defaults)
+
+
+class TestInsertAndGetHistory:
+    async def test_insert_and_retrieve(self, db_setup):
+        await _insert_sample()
+        rows = await get_history()
+        assert len(rows) == 1
+        assert rows[0]["id"] == "job1"
+        assert rows[0]["status"] == "completed"
+
+    async def test_filter_by_status(self, db_setup):
+        await _insert_sample("j1", status="completed")
+        await _insert_sample("j2", status="failed")
+        rows = await get_history(status="failed")
+        assert len(rows) == 1
+        assert rows[0]["id"] == "j2"
+
+    async def test_filter_by_search(self, db_setup):
+        await _insert_sample("j1", file_path="/media/action/movie.mkv")
+        await _insert_sample("j2", file_path="/media/comedy/show.mkv")
+        rows = await get_history(search="comedy")
+        assert len(rows) == 1
+        assert rows[0]["id"] == "j2"
+
+    async def test_sort_by_valid_column(self, db_setup):
+        await _insert_sample("j1", file_path="/media/b.mkv")
+        await _insert_sample("j2", file_path="/media/a.mkv")
+        rows = await get_history(sort_by="file_path", sort_dir="asc")
+        assert rows[0]["id"] == "j2"
+
+    async def test_sort_by_invalid_column_fallback(self, db_setup):
+        await _insert_sample("j1", finished_at="2026-01-02T00:00:00")
+        await _insert_sample("j2", finished_at="2026-01-01T00:00:00")
+        # Invalid sort_by should fall back to finished_at desc
+        rows = await get_history(sort_by="nonexistent")
+        assert rows[0]["id"] == "j1"
+
+    async def test_sort_dir_asc(self, db_setup):
+        await _insert_sample("j1", finished_at="2026-01-02T00:00:00")
+        await _insert_sample("j2", finished_at="2026-01-01T00:00:00")
+        rows = await get_history(sort_dir="asc")
+        assert rows[0]["id"] == "j2"
+
+    async def test_limit_offset(self, db_setup):
+        for i in range(5):
+            await _insert_sample(f"j{i}", finished_at=f"2026-01-0{i+1}T00:00:00")
+        rows = await get_history(limit=2, offset=0, sort_dir="asc")
+        assert len(rows) == 2
+        assert rows[0]["id"] == "j0"
+        rows2 = await get_history(limit=2, offset=2, sort_dir="asc")
+        assert rows2[0]["id"] == "j2"
+
+    async def test_exclude_dismissed(self, db_setup):
+        await _insert_sample("j1", dismissed=False)
+        await _insert_sample("j2", dismissed=True)
+        rows = await get_history(exclude_dismissed=True)
+        assert len(rows) == 1
+        assert rows[0]["id"] == "j1"
+
+
+class TestGetJobLog:
+    async def test_existing_job(self, db_setup):
+        await _insert_sample("j1", ffmpeg_log="some log output")
+        log = await get_job_log("j1")
+        assert log == "some log output"
+
+    async def test_missing_job(self, db_setup):
+        assert await get_job_log("nonexistent") is None
+
+
+class TestGetHistoryEntry:
+    async def test_existing(self, db_setup):
+        await _insert_sample("j1")
+        entry = await get_history_entry("j1")
+        assert entry is not None
+        assert entry["id"] == "j1"
+        assert entry["library_name"] == "movies"
+
+    async def test_missing(self, db_setup):
+        assert await get_history_entry("nonexistent") is None
+
+
+class TestDismissHistoryEntries:
+    async def test_dismiss(self, db_setup):
+        await _insert_sample("j1")
+        await _insert_sample("j2")
+        count = await dismiss_history_entries(["j1"])
+        assert count == 1
+        rows = await get_history(exclude_dismissed=True)
+        assert len(rows) == 1
+        assert rows[0]["id"] == "j2"
+
+    async def test_empty_list(self, db_setup):
+        assert await dismiss_history_entries([]) == 0
 
 
 class TestClearHistory:

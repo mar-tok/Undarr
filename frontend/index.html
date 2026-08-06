@@ -42,29 +42,39 @@
                 </div>
                 <div class="queue-pane active" id="qtab-queue">
                     <div class="queue-controls" id="queue-controls" style="display:none">
-                        <button class="btn btn-primary" id="btn-pause">Pause Queue</button>
-                        <span id="pending-count"></span>
+                        <button class="btn btn-primary" id="btn-queue-toggle">Pause Queue</button>
+                        <button class="btn" id="btn-skip-selected" disabled style="display:none" data-tooltip="Mark selected files as processed.<br>They won't be re-queued on future scans.">Skip Selected</button>
+                        <button class="btn" id="btn-cancel-selected" disabled style="display:none" data-tooltip="Remove selected jobs from the queue.<br>Files will be re-queued on the next scan.">Cancel Selected</button>
+                        <span id="queue-pending-count"></span>
                         <span id="schedule-indicator" style="display:none" data-tooltip="Transcoding is limited to the active hours set in Settings > Schedule.<br>Jobs stay queued and start automatically at the next active hour."></span>
                     </div>
                     <table id="queue-table" style="display:none">
                         <thead>
                             <tr>
+                                <th id="queue-checkbox-col" style="display:none"><input type="checkbox" id="queue-select-all" data-tooltip="Select all"></th>
                                 <th>File</th>
                                 <th>Library</th>
                                 <th>Size</th>
                                 <th>Progress</th>
                                 <th>FPS</th>
                                 <th>Status</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="queue-body"></tbody>
                     </table>
+                    <div class="pagination" id="queue-pagination" style="display:none"></div>
                     <p id="queue-empty" class="section-empty">No jobs in queue.</p>
                 </div>
                 <div class="queue-pane" id="qtab-issues">
+                    <div id="issues-actions" style="margin-bottom:12px;display:none;gap:8px">
+                        <button class="btn btn-primary" id="btn-retry-selected" disabled>Retry Selected</button>
+                        <button class="btn" id="btn-dismiss-selected" disabled>Dismiss Selected</button>
+                    </div>
                     <table id="issues-table" style="display:none">
                         <thead>
                             <tr>
+                                <th id="issues-checkbox-col" style="display:none"><input type="checkbox" id="issues-select-all" data-tooltip="Select all"></th>
                                 <th>File</th>
                                 <th>Library</th>
                                 <th>Size</th>

@@ -1,9 +1,10 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
 from core.queue_manager import _format_size, job_to_dict, Job, JobStatus, QueueManager
 from core.ffmpeg import TranscodeProgress
+from core.yaml_store import Library, Preset
 
 
 @pytest.fixture
@@ -187,6 +188,7 @@ class TestJobToDict:
         assert "block_reason" not in d
         assert "preset_name" not in d
         assert "media_info" not in d
+        assert "is_retry" not in d
 
     def test_with_progress(self):
         prog = TranscodeProgress(
@@ -226,8 +228,140 @@ class TestJobToDict:
         d = job_to_dict(job)
         assert d["media_info"] == info
 
+    def test_is_retry(self):
+        job = _make_job(is_retry=True)
+        d = job_to_dict(job)
+        assert d["is_retry"] is True
+
+    def test_is_retry_false_excluded(self):
+        job = _make_job(is_retry=False)
+        d = job_to_dict(job)
+        assert "is_retry" not in d
+
     def test_progress_percent_rounded(self):
         prog = TranscodeProgress(percent=33.3333)
         job = _make_job(progress=prog)
         d = job_to_dict(job)
         assert d["progress"]["percent"] == 33.3
+
+
+# Cancel
+
+
+class TestCancel:
+    async def test_cancel_pending(self, qm):
+        job = _make_job(id="j1")
+        qm._pending.append(job)
+        qm._known_paths.add(job.file_path)
+        result = await qm.cancel("j1")
+        assert result is True
+        assert len(qm.pending_jobs) == 0
+        assert job.file_path not in qm._known_paths
+        assert job.status == JobStatus.CANCELLED
+
+    async def test_cancel_blocked(self, qm):
+        job = _make_job(id="j1", status=JobStatus.BLOCKED)
+        qm._blocked.append(job)
+        qm._known_paths.add(job.file_path)
+        result = await qm.cancel("j1")
+        assert result is True
+        assert len(qm.blocked_jobs) == 0
+        assert job.status == JobStatus.CANCELLED
+
+    async def test_cancel_active(self, qm):
+        job = _make_job(id="j1", status=JobStatus.ACTIVE)
+        qm._active["j1"] = job
+        mock_proc = MagicMock()
+        qm._active_procs["j1"] = mock_proc
+        result = await qm.cancel("j1")
+        assert result is True
+        assert job.status == JobStatus.CANCELLED
+        assert (
+            "j1" in qm._active
+        )  # removal happens in _run_job's finally block, not cancel
+        mock_proc.kill.assert_called_once()
+
+    async def test_cancel_active_no_proc(self, qm):
+        job = _make_job(id="j1", status=JobStatus.ACTIVE)
+        qm._active["j1"] = job
+        result = await qm.cancel("j1")
+        assert result is True
+        assert job.status == JobStatus.CANCELLED
+
+    async def test_cancel_nonexistent(self, qm):
+        result = await qm.cancel("nonexistent")
+        assert result is False
+
+    async def test_cancel_broadcasts_event(self, qm):
+        job = _make_job(id="j1")
+        qm._pending.append(job)
+        qm._known_paths.add(job.file_path)
+        sub = qm.subscribe()
+        await qm.cancel("j1")
+        msg = sub.get_nowait()
+        assert "job_cancelled" in msg
+
+
+# Re-evaluate blocked
+
+
+class TestReEvaluateBlocked:
+    async def test_unblocks_when_preset_available(self, qm):
+        job = _make_job(
+            id="j1", status=JobStatus.BLOCKED, block_reason="Preset 'HEVC' not found"
+        )
+        qm._blocked.append(job)
+        qm._known_paths.add(job.file_path)
+        with patch("core.queue_manager.store") as mock_store:
+            mock_store.get_library = AsyncMock(
+                return_value=Library(paths=["/media"], preset="HEVC")
+            )
+            mock_store.get_preset = AsyncMock(
+                return_value=Preset(ffmpeg_args="-c:v libx265 -crf 20")
+            )
+            mock_store.config.settings.queue_order = "fifo"
+            await qm.re_evaluate_blocked()
+        assert len(qm.blocked_jobs) == 0
+        assert len(qm.pending_jobs) == 1
+        assert job.status == JobStatus.PENDING
+        assert job.block_reason is None
+
+    async def test_stays_blocked_when_preset_missing(self, qm):
+        job = _make_job(
+            id="j1", status=JobStatus.BLOCKED, block_reason="Preset not found"
+        )
+        qm._blocked.append(job)
+        with patch("core.queue_manager.store") as mock_store:
+            mock_store.get_library = AsyncMock(
+                return_value=Library(paths=["/media"], preset="Missing")
+            )
+            mock_store.get_preset = AsyncMock(return_value=None)
+            await qm.re_evaluate_blocked()
+        assert len(qm.blocked_jobs) == 1
+        assert job.status == JobStatus.BLOCKED
+
+    async def test_cancelled_blocked_jobs_removed(self, qm):
+        job = _make_job(id="j1", status=JobStatus.CANCELLED)
+        qm._blocked.append(job)
+        qm._known_paths.add(job.file_path)
+        with patch("core.queue_manager.store") as mock_store:
+            await qm.re_evaluate_blocked()
+        assert len(qm.blocked_jobs) == 0
+        assert job.file_path not in qm._known_paths
+
+    async def test_unblock_broadcasts_event(self, qm):
+        job = _make_job(id="j1", status=JobStatus.BLOCKED, block_reason="test")
+        qm._blocked.append(job)
+        qm._known_paths.add(job.file_path)
+        sub = qm.subscribe()
+        with patch("core.queue_manager.store") as mock_store:
+            mock_store.get_library = AsyncMock(
+                return_value=Library(paths=["/media"], preset="HEVC")
+            )
+            mock_store.get_preset = AsyncMock(
+                return_value=Preset(ffmpeg_args="-c:v libx265 -crf 20")
+            )
+            mock_store.config.settings.queue_order = "fifo"
+            await qm.re_evaluate_blocked()
+        msg = sub.get_nowait()
+        assert "job_unblocked" in msg
