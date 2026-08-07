@@ -173,6 +173,10 @@ table {
 #queue-table td:nth-child(4) { width: 11%; }
 #queue-table th:nth-child(5),
 #queue-table td:nth-child(5) { width: 7%; }
+#queue-table th:nth-child(6),
+#queue-table td:nth-child(6) { width: 13%; }
+#queue-table th:nth-child(7),
+#queue-table td:nth-child(7) { width: 6%; text-align: center; padding-top: 0; padding-bottom: 0; }
 
 #queue-table.has-checkboxes th:nth-child(1),
 #queue-table.has-checkboxes td:nth-child(1) { width: 36px; overflow: visible; white-space: normal; }
@@ -624,6 +628,7 @@ th.sortable .sort-arrow {
     font-size: 13px;
 }
 
+#q-page-size,
 #hist-page-size,
 #search-page-size {
     width: auto;
