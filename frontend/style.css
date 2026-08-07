@@ -942,6 +942,56 @@ tr.clickable:hover {
     flex-shrink: 0;
 }
 
+.extra-args-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.args-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+}
+
+.args-mode-toggle img {
+    width: 12px;
+    height: 12px;
+}
+
+.args-mode-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.args-mode-label.active {
+    color: var(--text);
+}
+
+.args-mode-label.inactive {
+    color: var(--text-muted);
+}
+
+.extra-arg-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.extra-arg-row input {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+}
+
 #library-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

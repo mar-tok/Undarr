@@ -15,6 +15,7 @@ from core.logger import log
 from core.yaml_store import store, DAYS, VALID_PRIORITIES, VALID_QUEUE_ORDERS
 from core.queue_manager import queue_manager
 from core.devices import detect_devices
+from core.ffmpeg import detect_encoders
 
 router = APIRouter(prefix="/api", tags=["settings"])
 
@@ -84,6 +85,11 @@ def _settings_response(s) -> SettingsOut:
 async def get_settings():
     s = await store.get_settings()
     return _settings_response(s)
+
+
+@router.get("/encoders")
+async def get_encoders():
+    return await detect_encoders()
 
 
 @router.patch("/settings", response_model=SettingsOut)

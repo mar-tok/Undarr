@@ -1,9 +1,89 @@
-import { api, esc, escAttr, getFormSnapshot, clearValidation, setError } from "./helpers.js";
+import { api, esc, escAttr, getFormSnapshot, wrapNumberInputs, clearValidation, setError } from "./helpers.js";
 import { loadDeviceData, isEncoderDisabled, disabledDeviceTooltip } from "./devices.js";
 
 let presets = [];
 let editingPresetName = null;
 let creatingNewPreset = false;
+
+const CODEC_LABELS = { hevc: "HEVC (H.265)", h264: "H.264 (AVC)", av1: "AV1", vp9: "VP9" };
+
+const QUALITY_LABELS = {
+    libx265: "CRF", libx264: "CRF", libsvtav1: "CRF", "libaom-av1": "CRF", "libvpx-vp9": "CRF",
+    hevc_nvenc: "CQ", h264_nvenc: "CQ", av1_nvenc: "CQ",
+    hevc_qsv: "Global Quality", h264_qsv: "Global Quality", av1_qsv: "Global Quality",
+};
+
+const QUALITY_FLAGS = {
+    libx265: "crf", libx264: "crf", libsvtav1: "crf", "libaom-av1": "crf", "libvpx-vp9": "crf",
+    hevc_nvenc: "cq", h264_nvenc: "cq", av1_nvenc: "cq",
+    hevc_qsv: "global_quality", h264_qsv: "global_quality", av1_qsv: "global_quality",
+};
+
+const QUALITY_TOOLTIPS = {
+    libx264: "Constant Rate Factor (0-51).<br>Lower = better quality, larger files.<br>Good range: 18-23. Default: 23.",
+    libx265: "Constant Rate Factor (0-51).<br>Lower = better quality, larger files.<br>Good range: 20-28. Around 20 is visually transparent, 24-28 favors space savings. x265 is more efficient, so values are higher than x264 for similar quality.",
+    libsvtav1: "Constant Rate Factor (0-63).<br>Lower = better quality, larger files.<br>Good range: 25-35. AV1 uses a wider scale than H.264/H.265.",
+    "libaom-av1": "Constant Rate Factor (0-63).<br>Lower = better quality, larger files.<br>Good range: 23-35. AV1 uses a wider scale than H.264/H.265.",
+    "libvpx-vp9": "Constant Rate Factor (0-63).<br>Lower = better quality, larger files.<br>Good range: 15-35.",
+    hevc_nvenc: "Constant Quality (0-51).<br>Lower = better quality, larger files.<br>Good range: 19-28. Not directly comparable to software CRF values.",
+    h264_nvenc: "Constant Quality (0-51).<br>Lower = better quality, larger files.<br>Good range: 19-28. Not directly comparable to software CRF values.",
+    av1_nvenc: "Constant Quality (0-63).<br>Lower = better quality, larger files.<br>Good range: 19-28. Not directly comparable to software CRF values.",
+    hevc_qsv: "Intelligent Constant Quality (1-51).<br>Lower = better quality, larger files.<br>Good range: 21-25. Not directly comparable to CRF or CQ values.",
+    h264_qsv: "Intelligent Constant Quality (1-51).<br>Lower = better quality, larger files.<br>Good range: 21-25. Not directly comparable to CRF or CQ values.",
+    av1_qsv: "Intelligent Constant Quality (1-51).<br>Lower = better quality, larger files.<br>Good range: 21-25. Not directly comparable to CRF or CQ values.",
+};
+
+const SPEED_PRESETS = {
+    x26x: [
+        { value: "ultrafast", label: "ultrafast" }, { value: "superfast", label: "superfast" },
+        { value: "veryfast", label: "veryfast" }, { value: "faster", label: "faster" },
+        { value: "fast", label: "fast" }, { value: "medium", label: "medium" },
+        { value: "slow", label: "slow" }, { value: "slower", label: "slower" },
+        { value: "veryslow", label: "veryslow" },
+    ],
+    nvenc: [
+        { value: "p1", label: "p1 (fastest)" }, { value: "p2", label: "p2" },
+        { value: "p3", label: "p3" }, { value: "p4", label: "p4" },
+        { value: "p5", label: "p5" }, { value: "p6", label: "p6" },
+        { value: "p7", label: "p7 (slowest)" },
+    ],
+    qsv: [
+        { value: "veryfast", label: "veryfast" }, { value: "faster", label: "faster" },
+        { value: "fast", label: "fast" }, { value: "medium", label: "medium" },
+        { value: "slow", label: "slow" }, { value: "slower", label: "slower" },
+        { value: "veryslow", label: "veryslow" },
+    ],
+    svtav1: [
+        { value: "0", label: "0 (slowest)" }, { value: "1", label: "1" },
+        { value: "2", label: "2" }, { value: "3", label: "3" },
+        { value: "4", label: "4" }, { value: "5", label: "5" },
+        { value: "6", label: "6" }, { value: "7", label: "7" },
+        { value: "8", label: "8" }, { value: "9", label: "9" },
+        { value: "10", label: "10" }, { value: "11", label: "11" },
+        { value: "12", label: "12" }, { value: "13", label: "13 (fastest)" },
+    ],
+    aom: [
+        { value: "0", label: "0 (slowest)" }, { value: "1", label: "1" },
+        { value: "2", label: "2" }, { value: "3", label: "3" },
+        { value: "4", label: "4" }, { value: "5", label: "5" },
+        { value: "6", label: "6 (fastest)" },
+    ],
+    vpx: [
+        { value: "0", label: "0 (slowest)" }, { value: "1", label: "1" },
+        { value: "2", label: "2" }, { value: "3", label: "3" },
+        { value: "4", label: "4" }, { value: "5", label: "5 (fastest)" },
+    ],
+};
+
+const ENCODER_SPEED_MAP = {
+    libx265: "x26x", libx264: "x26x",
+    hevc_nvenc: "nvenc", h264_nvenc: "nvenc", av1_nvenc: "nvenc",
+    hevc_qsv: "qsv", h264_qsv: "qsv", av1_qsv: "qsv",
+    libsvtav1: "svtav1",
+    "libaom-av1": "aom", "libvpx-vp9": "vpx",
+};
+
+const SPEED_FLAG = { aom: "cpu-used", vpx: "cpu-used" };
 
 const AUDIO_MODE_OPTIONS = [
     { value: "copy", label: "Copy (passthrough)" },
@@ -16,6 +96,13 @@ const AUDIO_TIER_CODEC_OPTIONS = [
     { value: "ac3", label: "AC3 (Dolby Digital)" },
     { value: "eac3", label: "EAC3 (Dolby Digital Plus)" },
     { value: "libopus", label: "Opus" },
+];
+
+const CONTAINER_OPTIONS = [
+    { value: "", label: "Keep original" }, { value: "mkv", label: "mkv" },
+    { value: "mp4", label: "mp4" }, { value: "avi", label: "avi" },
+    { value: "mov", label: "mov" }, { value: "webm", label: "webm" },
+    { value: "ts", label: "ts" },
 ];
 
 const SUBTITLE_MODE_OPTIONS = [
@@ -32,6 +119,44 @@ const RESOLUTION_CAP_OPTIONS = [
     { value: "2160", label: "2160p" },
 ];
 
+let encoderCache = null;
+
+async function loadEncoderCache() {
+    if (!encoderCache) {
+        try { encoderCache = await api("GET", "/api/encoders"); } catch { return; }
+    }
+}
+
+function buildEncoderOptionsHTML() {
+    let html = '<option value="">Select encoder...</option>';
+    if (!encoderCache) return html;
+    for (const [codec, encs] of Object.entries(encoderCache)) {
+        const label = CODEC_LABELS[codec] || codec;
+        html += `<optgroup label="${escAttr(label)}">`;
+        encs.forEach(e => {
+            html += `<option value="${escAttr(e.name)}" title="${escAttr(e.description)}">${esc(e.name)}</option>`;
+        });
+        html += "</optgroup>";
+    }
+    return html;
+}
+
+function buildSpeedOptionsHTML(encoder, selected) {
+    const group = ENCODER_SPEED_MAP[encoder];
+    const options = group ? SPEED_PRESETS[group] : [];
+    let html = '<option value="">None</option>';
+    html += options.map(s =>
+        `<option value="${escAttr(s.value)}"${s.value === selected ? " selected" : ""}>${esc(s.label)}</option>`
+    ).join("");
+    return html;
+}
+
+function buildContainerOptionsHTML(selected) {
+    return CONTAINER_OPTIONS.map(c =>
+        `<option value="${escAttr(c.value)}"${c.value === selected ? " selected" : ""}>${esc(c.label)}</option>`
+    ).join("");
+}
+
 export function parsePresetData(p) {
     const audio = p.audio || null;
     let audioMode = "copy";
@@ -44,10 +169,130 @@ export function parsePresetData(p) {
     let subtitleMode = "keep";
     if (subtitle && subtitle.mode !== "keep") subtitleMode = subtitle.mode;
     const resolutionCap = p.resolution_cap || null;
-    let encoder = "";
-    const encMatch = p.ffmpeg_args.match(/-c:v\s+(\S+)/);
-    if (encMatch) encoder = encMatch[1];
-    return { audio, audioMode, subtitle, subtitleMode, resolutionCap, encoder };
+    const data = { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: p.output_container || "", extraArgs: [], audio, audioMode, subtitle, subtitleMode, resolutionCap };
+    let rest = p.ffmpeg_args;
+
+    const encMatch = rest.match(/-c:v\s+(\S+)/);
+    if (encMatch) { data.encoder = encMatch[1]; rest = rest.replace(encMatch[0], ""); }
+
+    const qMatch = rest.match(/-(crf|cq|global_quality)\s+(\S+)/);
+    if (qMatch) {
+        data.quality = qMatch[2];
+        data.qualityLabel = QUALITY_LABELS[data.encoder] || "Quality";
+        rest = rest.replace(qMatch[0], "");
+    }
+
+    const spMatch = rest.match(/-(?:preset|cpu-used)\s+(\S+)/);
+    if (spMatch) { data.speed = spMatch[1]; rest = rest.replace(spMatch[0], ""); }
+
+    rest = rest.replace(/-c\s+copy/g, "").replace(/-c:a(?::\d+)?\s+\S+/g, "").replace(/-c:s\s+copy/g, "")
+        .replace(/-b:a(?::\d+)?\s+\S+/g, "").replace(/-ac(?::a)?(?::\d+)?\s+\S+/g, "")
+        .replace(/\s+/g, " ").trim();
+    data.extraArgs = parseExtraArgs(rest);
+    return data;
+}
+
+function parseExtraArgs(str) {
+    if (!str) return [];
+    const pairs = [];
+    const tokens = str.split(/\s+/);
+    let i = 0;
+    while (i < tokens.length) {
+        if (tokens[i].startsWith("-")) {
+            const flag = tokens[i].substring(1);
+            if (i + 1 < tokens.length && !tokens[i + 1].startsWith("-")) {
+                pairs.push({ flag, value: tokens[i + 1] });
+                i += 2;
+            } else {
+                pairs.push({ flag, value: "" });
+                i++;
+            }
+        } else {
+            i++;
+        }
+    }
+    return pairs;
+}
+
+function assembleArgsFromData(encoder, quality, speed, extraPairs) {
+    let args = "-c:s copy";
+    if (encoder) {
+        args += ` -c:v ${encoder}`;
+        if (quality) {
+            const flag = QUALITY_FLAGS[encoder] || "crf";
+            args += ` -${flag} ${quality}`;
+        }
+        if (speed) {
+            const speedGroup = ENCODER_SPEED_MAP[encoder];
+            const speedFlag = SPEED_FLAG[speedGroup] || "preset";
+            args += ` -${speedFlag} ${speed}`;
+        }
+    }
+    const extra = assembleExtraArgsString(extraPairs);
+    if (extra) args += ` ${extra}`;
+    return args;
+}
+
+function addExtraArgRow(container, flag, value) {
+    const row = document.createElement("div");
+    row.className = "extra-arg-row";
+    row.innerHTML = `
+        <input class="arg-flag" value="${escAttr(flag || "")}" placeholder="flag">
+        <input class="arg-value" value="${escAttr(value || "")}" placeholder="value">
+        <button class="btn-icon btn-remove-arg" type="button"><img src="close.svg" alt="Remove"></button>
+    `;
+    row.querySelector(".btn-remove-arg").addEventListener("click", () => { row.remove(); container.dispatchEvent(new Event("input", { bubbles: true })); });
+    container.appendChild(row);
+}
+
+function collectExtraArgs(container) {
+    return Array.from(container.querySelectorAll(".extra-arg-row")).map(row => ({
+        flag: row.querySelector(".arg-flag").value.trim(),
+        value: row.querySelector(".arg-value").value.trim()
+    }));
+}
+
+function assembleExtraArgsString(pairs) {
+    return pairs.filter(p => p.flag.trim()).map(p =>
+        p.value ? `-${p.flag} ${p.value}` : `-${p.flag}`
+    ).join(" ");
+}
+
+function getArgsModePref() {
+    return localStorage.getItem("undarr-args-mode") === "raw";
+}
+
+function applyArgsMode(rawMode, labels, structuredEl, rawEl, addBtn) {
+    labels[0].classList.toggle("active", !rawMode);
+    labels[0].classList.toggle("inactive", rawMode);
+    labels[1].classList.toggle("active", rawMode);
+    labels[1].classList.toggle("inactive", !rawMode);
+    structuredEl.style.display = rawMode ? "none" : "";
+    addBtn.style.display = rawMode ? "none" : "";
+    rawEl.style.display = rawMode ? "" : "none";
+}
+
+function setupArgsToggle(toggleBtn, structuredEl, rawEl, addBtn, initialPairs) {
+    let rawMode = getArgsModePref();
+    const labels = toggleBtn.querySelectorAll(".args-mode-label");
+    if (rawMode) {
+        rawEl.value = assembleExtraArgsString(initialPairs || []);
+        applyArgsMode(true, labels, structuredEl, rawEl, addBtn);
+    }
+    toggleBtn.addEventListener("click", () => {
+        if (rawMode) {
+            const pairs = parseExtraArgs(rawEl.value.trim());
+            structuredEl.innerHTML = "";
+            pairs.forEach(p => addExtraArgRow(structuredEl, p.flag, p.value));
+        } else {
+            const pairs = collectExtraArgs(structuredEl);
+            rawEl.value = assembleExtraArgsString(pairs);
+        }
+        rawMode = !rawMode;
+        localStorage.setItem("undarr-args-mode", rawMode ? "raw" : "structured");
+        applyArgsMode(rawMode, labels, structuredEl, rawEl, addBtn);
+    });
+    return { isRaw: () => rawMode };
 }
 
 function loadPresets() {
@@ -61,16 +306,19 @@ function renderPresets() {
     const container = document.getElementById("preset-grid");
     let html = "";
     if (creatingNewPreset) {
-        html += renderPresetFormCard(null);
+        html += renderPresetFormCard("", { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: "", extraArgs: [] });
     }
     html += presets.map(p => {
-        if (editingPresetName === p.name) return renderPresetFormCard(p);
+        if (editingPresetName === p.name) return renderPresetFormCard(p.name, parsePresetData(p));
         return renderPresetViewCard(p);
     }).join("");
     container.innerHTML = html;
 
     const editCard = container.querySelector(".preset-card.editing");
-    if (editCard) attachFormCardListeners(editCard, creatingNewPreset ? null : editingPresetName);
+    if (editCard) {
+        attachFormCardListeners(editCard, creatingNewPreset ? null : editingPresetName);
+        wrapNumberInputs(editCard);
+    }
 }
 
 function renderPresetViewCard(p) {
@@ -78,8 +326,10 @@ function renderPresetViewCard(p) {
     const disabled = data.encoder && isEncoderDisabled(data.encoder);
 
     let videoHtml = "";
-    videoHtml += `<dt>Args</dt><dd>${esc(p.ffmpeg_args)}</dd>`;
-    videoHtml += `<dt>Container</dt><dd>${p.output_container ? esc(p.output_container) : "Keep original"}</dd>`;
+    if (data.encoder) videoHtml += `<dt>Encoder</dt><dd>${esc(data.encoder)}</dd>`;
+    if (data.quality) videoHtml += `<dt>${esc(data.qualityLabel)}</dt><dd>${esc(data.quality)}</dd>`;
+    if (data.speed) videoHtml += `<dt>Speed</dt><dd>${esc(data.speed)}</dd>`;
+    videoHtml += `<dt>Container</dt><dd>${data.container ? "." + esc(data.container) : "Keep original"}</dd>`;
     if (data.resolutionCap) {
         videoHtml += `<dt>Resolution Cap</dt><dd>${esc(String(data.resolutionCap))}p</dd>`;
     }
@@ -123,11 +373,19 @@ function renderPresetViewCard(p) {
         }
     }
 
+    let extraHtml = "";
+    if (data.extraArgs.length) {
+        let dlHtml = data.extraArgs.map(a =>
+            `<dt>${esc(a.flag)}</dt><dd>${esc(a.value) || "(flag)"}</dd>`
+        ).join("");
+        extraHtml = `<div class="preset-card-section"><span class="preset-card-section-label">Extra Arguments</span><dl class="preset-card-props">${dlHtml}</dl></div>`;
+    }
+
     const warnHtml = disabled
         ? `<span data-tooltip="${disabledDeviceTooltip(data.encoder, 'preset')}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`
         : "";
 
-    return `<div class="preset-card">
+    return `<div class="preset-card" data-name="${escAttr(p.name)}">
         <div class="preset-card-header">
             <span class="preset-card-name">${warnHtml}${esc(p.name)}</span>
             <div class="preset-card-actions">
@@ -135,9 +393,10 @@ function renderPresetViewCard(p) {
                 <button class="btn-icon" data-action="delete-preset" data-name="${escAttr(p.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
             </div>
         </div>
-        <div class="preset-card-section"><span class="preset-card-section-label">Video</span><dl class="preset-card-props">${videoHtml}</dl></div>
+        ${videoHtml ? `<div class="preset-card-section"><span class="preset-card-section-label">Video</span><dl class="preset-card-props">${videoHtml}</dl></div>` : ""}
         ${audioHtml ? `<div class="preset-card-section"><span class="preset-card-section-label">Audio</span><dl class="preset-card-props">${audioHtml}</dl></div>` : ""}
         ${subtitleHtml ? `<div class="preset-card-section"><span class="preset-card-section-label">Subtitles</span><dl class="preset-card-props">${subtitleHtml}</dl></div>` : ""}
+        ${extraHtml}
     </div>`;
 }
 
@@ -165,11 +424,14 @@ function buildAudioTierCodecOptionsHTML(selected) {
     ).join("");
 }
 
-function renderPresetFormCard(preset) {
-    const name = preset ? preset.name : "";
-    const args = preset ? preset.ffmpeg_args : "";
-    const container = preset ? (preset.output_container || "") : "";
-    const data = preset ? parsePresetData(preset) : {};
+function renderPresetFormCard(name, data) {
+    const extraRowsHtml = data.extraArgs.map(a => `
+        <div class="extra-arg-row">
+            <input class="arg-flag" value="${escAttr(a.flag)}" placeholder="flag">
+            <input class="arg-value" value="${escAttr(a.value)}" placeholder="value">
+            <button class="btn-icon btn-remove-arg" type="button"><img src="close.svg" alt="Remove"></button>
+        </div>
+    `).join("");
 
     const subtitleMode = data.subtitleMode || "keep";
     const sub = data.subtitle || {};
@@ -193,10 +455,10 @@ function renderPresetFormCard(preset) {
     const surroundBitrateHidden = surroundCodec === "copy" ? ' style="display:none"' : "";
     const downmixBitrateHidden = downmixMode === "never" ? ' style="display:none"' : "";
 
-    return `<div class="preset-card editing">
+    return `<div class="preset-card editing" data-name="${escAttr(name)}">
         <div class="form-group">
             <label data-tooltip="A display name for this preset.<br>Used to identify it when assigning to libraries. Does not affect encoding.">Name</label>
-            <input type="text" class="pc-name" value="${escAttr(name)}">
+            <input type="text" class="pc-name" value="${escAttr(name)}" placeholder="e.g. hevc-qsv-18">
         </div>
         <div class="preset-tabs">
             <button class="preset-tab active" data-tab="video" type="button">Video</button>
@@ -204,17 +466,40 @@ function renderPresetFormCard(preset) {
             <button class="preset-tab" data-tab="subtitle" type="button">Subtitles</button>
         </div>
         <div class="preset-tab-panel pc-tab-video">
-            <div class="form-group">
-                <label>FFmpeg Arguments</label>
-                <input type="text" class="pc-args" value="${esc(args)}" placeholder="-c:v libx265 -crf 24 -preset slow">
-            </div>
-            <div class="form-group">
-                <label>Output Container</label>
-                <input type="text" class="pc-container" value="${esc(container)}" placeholder="Leave empty to keep original">
+            <div class="form-row form-row-4">
+                <div class="form-group">
+                    <label data-tooltip="The FFmpeg <em>encoder</em> to use for the video stream.<br>Determines codec, hardware acceleration, and available quality/speed options.">Encoder</label>
+                    <select class="pc-encoder">${buildEncoderOptionsHTML()}</select>
+                </div>
+                <div class="form-group">
+                    <label class="pc-quality-label" data-tooltip="${QUALITY_TOOLTIPS[data.encoder] || 'Select an encoder to see quality guidelines for it.'}">${esc(data.qualityLabel)}</label>
+                    <input type="number" class="pc-quality" value="${escAttr(data.quality)}" placeholder="e.g. 28">
+                </div>
+                <div class="form-group">
+                    <label data-tooltip="Encoding speed preset.<br>Slower = better compression at the same quality, but takes longer.<br>For GPU encoders, the difference is small. For CPU encoders, it is significant.">Speed</label>
+                    <select class="pc-speed">${buildSpeedOptionsHTML(data.encoder, data.speed)}</select>
+                </div>
+                <div class="form-group">
+                    <label data-tooltip="Output file <em>container</em> format.<br><em>Keep original</em> preserves the source container.<br>Changing container does not re-encode, it only repackages the streams.<br>Streams the target container cannot hold will fail the job: for example, mp4 cannot hold PGS (Blu-ray) subtitles.">Container</label>
+                    <select class="pc-container">${buildContainerOptionsHTML(data.container)}</select>
+                </div>
             </div>
             <div class="form-group pc-rescap-group">
                 <label data-tooltip="Maximum output resolution (height).<br>Files above the cap are downscaled while preserving aspect ratio.<br>Files at or below the cap pass through at original resolution.">Resolution Cap</label>
                 <select class="pc-rescap">${buildResolutionCapOptionsHTML(resCap)}</select>
+            </div>
+            <div>
+                <div class="extra-args-header">
+                    <label class="section-label" data-tooltip="Additional FFmpeg flags appended to the command.<br>Use for encoder-specific options not covered by the fields above.<br>Example: <code>-look_ahead 1</code>, <code>-rdo 1</code>">Extra Arguments</label>
+                    <button class="args-mode-toggle pc-toggle-args" type="button">
+                        <span class="args-mode-label active">Structured</span>
+                        <img src="arrow-left-right.svg" alt="">
+                        <span class="args-mode-label inactive">Raw Input</span>
+                    </button>
+                </div>
+                <div class="pc-extra-args">${extraRowsHtml}</div>
+                <textarea class="pc-extra-args-raw" style="display:none" placeholder="e.g. -look_ahead 1 -rdo 1"></textarea>
+                <button class="btn pc-add-arg" type="button" style="margin-top:6px">Add Argument</button>
             </div>
         </div>
         <div class="preset-tab-panel pc-tab-audio" style="display:none">
@@ -299,6 +584,9 @@ function renderPresetFormCard(preset) {
 
 function attachFormCardListeners(card, originalName) {
     const isNew = originalName === null;
+    const data = isNew
+        ? { encoder: "", extraArgs: [] }
+        : parsePresetData(presets.find(p => p.name === originalName));
 
     const saveBtn = card.querySelector(".pc-save");
     saveBtn.disabled = true;
@@ -312,10 +600,20 @@ function attachFormCardListeners(card, originalName) {
         });
     });
 
+    const encoderSel = card.querySelector(".pc-encoder");
+    encoderSel.value = data.encoder;
+
     const initialSnapshot = getFormSnapshot(card);
     function checkChanged() { saveBtn.disabled = getFormSnapshot(card) === initialSnapshot; }
     card.addEventListener("input", checkChanged);
     card.addEventListener("change", checkChanged);
+
+    encoderSel.addEventListener("change", () => {
+        const qualityLabel = card.querySelector(".pc-quality-label");
+        qualityLabel.textContent = QUALITY_LABELS[encoderSel.value] || "Quality";
+        qualityLabel.dataset.tooltip = QUALITY_TOOLTIPS[encoderSel.value] || "Select an encoder to see quality guidelines for it.";
+        card.querySelector(".pc-speed").innerHTML = buildSpeedOptionsHTML(encoderSel.value, "");
+    });
 
     const audioModeSel = card.querySelector(".pc-audio-mode");
     const audioConfigDiv = card.querySelector(".pc-audio-config");
@@ -347,16 +645,43 @@ function attachFormCardListeners(card, originalName) {
         subtitleConfigDiv.style.display = subtitleModeSel.value === "keep_by_language" ? "" : "none";
     });
 
+    card.querySelectorAll(".btn-remove-arg").forEach(btn => {
+        btn.addEventListener("click", () => { btn.closest(".extra-arg-row").remove(); checkChanged(); });
+    });
+
+    card.querySelector(".pc-add-arg").addEventListener("click", () => {
+        addExtraArgRow(card.querySelector(".pc-extra-args"), "", "");
+        checkChanged();
+    });
+
+    const cardArgsToggle = setupArgsToggle(
+        card.querySelector(".pc-toggle-args"),
+        card.querySelector(".pc-extra-args"),
+        card.querySelector(".pc-extra-args-raw"),
+        card.querySelector(".pc-add-arg"),
+        data.extraArgs
+    );
+
     card.querySelector(".pc-save").addEventListener("click", async () => {
         clearValidation(card);
         const newName = card.querySelector(".pc-name").value.trim();
-        const argsEl = card.querySelector(".pc-args");
+        const encoderEl = card.querySelector(".pc-encoder");
+        const qualityEl = card.querySelector(".pc-quality");
+        const speedEl = card.querySelector(".pc-speed");
         let valid = true;
         if (!newName) { setError(card.querySelector(".pc-name"), "Name is required"); valid = false; }
-        if (!argsEl.value.trim()) { setError(argsEl, "Arguments are required"); valid = false; }
+        if (!encoderEl.value) { setError(encoderEl, "Encoder is required"); valid = false; }
+        if (!qualityEl.value.trim()) { setError(qualityEl, "Quality is required"); valid = false; }
+        if (!speedEl.value) { setError(speedEl, "Speed is required"); valid = false; }
         if (!valid) return;
-        const args = argsEl.value.trim();
-        const container = card.querySelector(".pc-container").value.trim() || null;
+        const encoder = encoderEl.value;
+        const quality = qualityEl.value.trim();
+        const speed = speedEl.value;
+        const container = card.querySelector(".pc-container").value || null;
+        const extraPairs = cardArgsToggle.isRaw()
+            ? parseExtraArgs(card.querySelector(".pc-extra-args-raw").value.trim())
+            : collectExtraArgs(card.querySelector(".pc-extra-args"));
+        const args = assembleArgsFromData(encoder, quality, speed, extraPairs);
 
         function validateBitrate(input) {
             const v = input.value.trim();
@@ -422,7 +747,9 @@ function attachFormCardListeners(card, originalName) {
                 await api("POST", "/api/presets", { name: newName, ffmpeg_args: args, output_container: container, audio, subtitle, resolution_cap });
                 creatingNewPreset = false;
             } else {
-                await api("PUT", `/api/presets/${encodeURIComponent(originalName)}`, { name: newName, ffmpeg_args: args, output_container: container, audio, subtitle, resolution_cap });
+                await api("PUT", `/api/presets/${encodeURIComponent(originalName)}`, {
+                    name: newName, ffmpeg_args: args, output_container: container, audio, subtitle, resolution_cap
+                });
                 editingPresetName = null;
             }
             loadPresets();
@@ -442,7 +769,7 @@ function attachFormCardListeners(card, originalName) {
 }
 
 export async function loadPresetView() {
-    await loadDeviceData();
+    await Promise.all([loadEncoderCache(), loadDeviceData()]);
     await loadPresets();
 }
 
