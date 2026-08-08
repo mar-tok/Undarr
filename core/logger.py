@@ -34,4 +34,5 @@ def get_logger() -> logging.Logger:
 
     return _logger
 
+
 log = get_logger()

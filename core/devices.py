@@ -40,18 +40,29 @@ def _classify_encoder(name: str) -> tuple[str, str, str]:
     return "cpu", "CPU", "cpu"
 
 
-async def _probe_encoder(encoder: str, semaphore: asyncio.Semaphore) -> tuple[str, bool]:
+async def _probe_encoder(
+    encoder: str, semaphore: asyncio.Semaphore
+) -> tuple[str, bool]:
     """Probe-encode a single frame to verify an encoder actually works."""
     async with semaphore:
         log.debug("Probing encoder: %s", encoder)
         try:
             proc = await asyncio.create_subprocess_exec(
                 config.FFMPEG_BIN,
-                "-hide_banner", "-loglevel", "error",
-                "-f", "lavfi", "-i", "color=black:s=256x256:d=0.04",
-                "-c:v", encoder,
-                "-frames:v", "1",
-                "-f", "null", "-",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=black:s=256x256:d=0.04",
+                "-c:v",
+                encoder,
+                "-frames:v",
+                "1",
+                "-f",
+                "null",
+                "-",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -66,7 +77,9 @@ async def _probe_encoder(encoder: str, semaphore: asyncio.Semaphore) -> tuple[st
                 pass
             ok = False
         except Exception as e:
-            log.warning("Probe failed for encoder %s: [%s] %s", encoder, type(e).__name__, e)
+            log.warning(
+                "Probe failed for encoder %s: [%s] %s", encoder, type(e).__name__, e
+            )
             ok = False
     return encoder, ok
 
@@ -120,10 +133,14 @@ async def detect_devices() -> list[Device]:
 
     devices: list[Device] = []
     if "cpu" in verified:
-        devices.append(Device(
-            id="cpu", name="CPU", type="cpu",
-            encoders=sorted(verified["cpu"]),
-        ))
+        devices.append(
+            Device(
+                id="cpu",
+                name="CPU",
+                type="cpu",
+                encoders=sorted(verified["cpu"]),
+            )
+        )
     else:
         devices.append(Device(id="cpu", name="CPU", type="cpu"))
 
@@ -131,10 +148,14 @@ async def detect_devices() -> list[Device]:
         if dev_id == "cpu":
             continue
         name, dev_type = device_meta[dev_id]
-        devices.append(Device(
-            id=dev_id, name=name, type=dev_type,
-            encoders=sorted(verified[dev_id]),
-        ))
+        devices.append(
+            Device(
+                id=dev_id,
+                name=name,
+                type=dev_type,
+                encoders=sorted(verified[dev_id]),
+            )
+        )
 
     log.info(
         "Device detection complete: %s",
