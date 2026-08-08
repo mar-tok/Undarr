@@ -35,7 +35,7 @@ def compatible_container(encoder: str, source_ext: str) -> str | None:
     allowed = _CODEC_CONTAINERS.get(codec)
     if not allowed:
         return None
-    if source_ext in allowed:
+    if source_ext.lower() in allowed:
         return None
     return ".mp4"
 

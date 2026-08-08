@@ -32,6 +32,17 @@ def clear_encoder_cache():
     ffmpeg._encoder_cache = None
 
 
+class TestCompatibleContainer:
+    def test_compatible_extension_unchanged(self):
+        assert ffmpeg.compatible_container("libx265", ".mkv") is None
+
+    def test_incompatible_extension_switched(self):
+        assert ffmpeg.compatible_container("libsvtav1", ".avi") == ".mp4"
+
+    def test_uppercase_extension_unchanged(self):
+        assert ffmpeg.compatible_container("libx265", ".MKV") is None
+
+
 class TestDetectEncoders:
     async def test_groups_by_codec_family(self):
         with patch(
