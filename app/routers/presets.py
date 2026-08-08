@@ -13,7 +13,14 @@ from app.models.responses import (
     AudioTrackConfigOut,
     SubtitleConfigOut,
 )
-from core.yaml_store import store, Preset, AudioConfig, AudioTrackConfig, SubtitleConfig
+from core.yaml_store import (
+    store,
+    Preset,
+    AudioConfig,
+    AudioTrackConfig,
+    SubtitleConfig,
+    is_builtin_preset,
+)
 from core.queue_manager import queue_manager
 
 router = APIRouter(prefix="/api/presets", tags=["presets"])
@@ -77,7 +84,7 @@ def _subtitle_to_out(sub: SubtitleConfig | None) -> SubtitleConfigOut | None:
     )
 
 
-def _preset_out(name: str, p: Preset) -> PresetOut:
+def _preset_out(name: str, p: Preset, builtin: bool = False) -> PresetOut:
     return PresetOut(
         name=name,
         ffmpeg_args=p.ffmpeg_args,
@@ -85,17 +92,22 @@ def _preset_out(name: str, p: Preset) -> PresetOut:
         audio=_audio_to_out(p.audio),
         subtitle=_subtitle_to_out(p.subtitle),
         resolution_cap=p.resolution_cap,
+        is_builtin=builtin,
     )
 
 
 @router.get("", response_model=list[PresetOut])
 async def list_presets():
     presets = await store.get_presets()
-    return [_preset_out(name, p) for name, p in presets.items()]
+    return [
+        _preset_out(name, p, is_builtin_preset(name)) for name, p in presets.items()
+    ]
 
 
 @router.post("", response_model=PresetOut, status_code=201)
 async def create_preset(body: PresetCreate):
+    if is_builtin_preset(body.name):
+        raise HTTPException(409, "A built-in preset with that name already exists")
     if await store.get_preset(body.name):
         raise HTTPException(409, "Preset already exists")
     preset = Preset(
@@ -113,6 +125,8 @@ async def create_preset(body: PresetCreate):
 
 @router.put("/{name}", response_model=PresetOut)
 async def update_preset(name: str, body: PresetUpdate):
+    if is_builtin_preset(name):
+        raise HTTPException(403, "Built-in presets cannot be modified")
     if not await store.get_preset(name):
         raise HTTPException(404, "Preset not found")
     preset = Preset(
@@ -124,6 +138,8 @@ async def update_preset(name: str, body: PresetUpdate):
     )
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:
+        if is_builtin_preset(new_name):
+            raise HTTPException(409, "A built-in preset with that name already exists")
         if await store.get_preset(new_name):
             raise HTTPException(409, "Preset with that name already exists")
         await store.rename_preset(name, new_name, preset)
@@ -137,6 +153,8 @@ async def update_preset(name: str, body: PresetUpdate):
 
 @router.delete("/{name}", status_code=204)
 async def delete_preset(name: str):
+    if is_builtin_preset(name):
+        raise HTTPException(403, "Built-in presets cannot be deleted")
     libraries = await store.get_libraries()
     in_use = [n for n, lib in libraries.items() if lib.preset == name]
     if in_use:

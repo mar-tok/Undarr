@@ -304,14 +304,27 @@ function loadPresets() {
 
 function renderPresets() {
     const container = document.getElementById("preset-grid");
+    const builtinPresets = presets.filter(p => p.is_builtin);
+    const userPresets = presets.filter(p => !p.is_builtin);
+
     let html = "";
+    if (builtinPresets.length) {
+        html += '<h3>Built-in Presets</h3>';
+        html += '<p class="section-desc">Ready-to-use presets with software encoders. They can\'t be edited directly, but you can copy one and customize it.</p>';
+        html += '<div class="preset-section-grid">';
+        html += builtinPresets.map(p => renderPresetViewCard(p, true)).join("");
+        html += '</div>';
+    }
+    html += '<h3>Presets</h3>';
+    html += '<div class="preset-section-grid">';
     if (creatingNewPreset) {
         html += renderPresetFormCard("", { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: "", extraArgs: [] });
     }
-    html += presets.map(p => {
+    html += userPresets.map(p => {
         if (editingPresetName === p.name) return renderPresetFormCard(p.name, parsePresetData(p));
-        return renderPresetViewCard(p);
+        return renderPresetViewCard(p, false);
     }).join("");
+    html += '</div>';
     container.innerHTML = html;
 
     const editCard = container.querySelector(".preset-card.editing");
@@ -321,7 +334,7 @@ function renderPresets() {
     }
 }
 
-function renderPresetViewCard(p) {
+function renderPresetViewCard(p, builtin = false) {
     const data = parsePresetData(p);
     const disabled = data.encoder && isEncoderDisabled(data.encoder);
 
@@ -385,12 +398,17 @@ function renderPresetViewCard(p) {
         ? `<span data-tooltip="${disabledDeviceTooltip(data.encoder, 'preset')}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`
         : "";
 
+    const actionsHtml = builtin
+        ? `<button class="btn-icon" data-action="copy-preset" data-name="${escAttr(p.name)}" data-tooltip="Duplicate"><img src="copy.svg" alt="Duplicate"></button>`
+        : `<button class="btn-icon" data-action="copy-preset" data-name="${escAttr(p.name)}" data-tooltip="Duplicate"><img src="copy.svg" alt="Duplicate"></button>
+                <button class="btn-icon" data-action="edit-preset" data-name="${escAttr(p.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
+                <button class="btn-icon" data-action="delete-preset" data-name="${escAttr(p.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>`;
+
     return `<div class="preset-card" data-name="${escAttr(p.name)}">
         <div class="preset-card-header">
             <span class="preset-card-name">${warnHtml}${esc(p.name)}</span>
             <div class="preset-card-actions">
-                <button class="btn-icon" data-action="edit-preset" data-name="${escAttr(p.name)}" data-tooltip="Edit"><img src="pencil.svg" alt="Edit"></button>
-                <button class="btn-icon" data-action="delete-preset" data-name="${escAttr(p.name)}" data-tooltip="Delete"><img src="trash.svg" alt="Delete"></button>
+                ${actionsHtml}
             </div>
         </div>
         ${videoHtml ? `<div class="preset-card-section"><span class="preset-card-section-label">Video</span><dl class="preset-card-props">${videoHtml}</dl></div>` : ""}
@@ -778,7 +796,28 @@ export function initPresets() {
         const btn = e.target.closest("[data-action]");
         if (!btn) return;
         const name = btn.dataset.name;
-        if (btn.dataset.action === "edit-preset") {
+        if (btn.dataset.action === "copy-preset") {
+            const source = presets.find(p => p.name === name);
+            if (!source) return;
+            const existingNames = new Set(presets.map(p => p.name));
+            let copyName, i = 2;
+            do {
+                copyName = `${name} (${i++})`;
+            } while (existingNames.has(copyName));
+            try {
+                await api("POST", "/api/presets", {
+                    name: copyName,
+                    ffmpeg_args: source.ffmpeg_args,
+                    output_container: source.output_container,
+                    audio: source.audio || null,
+                    subtitle: source.subtitle || null,
+                    resolution_cap: source.resolution_cap || null,
+                });
+                loadPresets();
+            } catch (err) {
+                alert(err.message);
+            }
+        } else if (btn.dataset.action === "edit-preset") {
             editingPresetName = name;
             creatingNewPreset = false;
             renderPresets();

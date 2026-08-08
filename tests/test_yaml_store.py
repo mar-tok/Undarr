@@ -2,10 +2,13 @@ import pytest
 
 from core.yaml_store import (
     YamlStore,
+    Preset,
     Library,
     SkipRule,
     SkipCondition,
+    BUILTIN_PRESETS,
     _config_from_dict,
+    _config_to_dict,
 )
 
 
@@ -20,10 +23,92 @@ async def store(tmp_path, monkeypatch):
     return s
 
 
+def _preset(**overrides) -> Preset:
+    defaults = {"ffmpeg_args": "-c:v libx265 -crf 20"}
+    defaults.update(overrides)
+    return Preset(**defaults)
+
+
 def _library(**overrides) -> Library:
     defaults = {"paths": ["/media/movies"], "preset": "HEVC"}
     defaults.update(overrides)
     return Library(**defaults)
+
+
+# Preset CRUD
+
+
+class TestPresetCRUD:
+    async def test_create_and_get(self, store):
+        await store.create_preset("Custom", _preset())
+        p = await store.get_preset("Custom")
+        assert p is not None
+        assert p.ffmpeg_args == "-c:v libx265 -crf 20"
+
+    async def test_get_nonexistent(self, store):
+        assert await store.get_preset("nope") is None
+
+    async def test_get_builtin(self, store):
+        p = await store.get_preset("HEVC Transparent")
+        assert p is not None
+        assert p is BUILTIN_PRESETS["HEVC Transparent"]
+
+    async def test_list_includes_builtins(self, store):
+        await store.create_preset("Custom", _preset())
+        presets = await store.get_presets()
+        assert "Custom" in presets
+        for name in BUILTIN_PRESETS:
+            assert name in presets
+
+    async def test_custom_overrides_builtin_name(self, store):
+        custom = _preset(ffmpeg_args="-c:v libx264 -crf 18")
+        await store.create_preset("HEVC Transparent", custom)
+        p = await store.get_preset("HEVC Transparent")
+        assert p.ffmpeg_args == "-c:v libx264 -crf 18"
+
+    async def test_builtins_not_persisted(self, store):
+        await store.create_preset("Custom", _preset())
+        data = _config_to_dict(store.config)
+        assert "Custom" in data["presets"]
+        for name in BUILTIN_PRESETS:
+            assert name not in data["presets"]
+
+    async def test_update(self, store):
+        await store.create_preset("P1", _preset())
+        await store.update_preset("P1", _preset(ffmpeg_args="-c:v libx264"))
+        p = await store.get_preset("P1")
+        assert p.ffmpeg_args == "-c:v libx264"
+
+    async def test_delete(self, store):
+        await store.create_preset("P1", _preset())
+        assert await store.delete_preset("P1") is True
+        assert await store.get_preset("P1") is None
+
+    async def test_delete_nonexistent(self, store):
+        assert await store.delete_preset("nope") is False
+
+    async def test_rename(self, store):
+        await store.create_preset("Old", _preset())
+        await store.rename_preset("Old", "New", _preset(ffmpeg_args="-c:v libx264"))
+        assert await store.get_preset("Old") is None
+        p = await store.get_preset("New")
+        assert p.ffmpeg_args == "-c:v libx264"
+
+    async def test_rename_cascades_to_libraries(self, store):
+        await store.create_preset("Old", _preset())
+        await store.create_library("movies", _library(preset="Old"))
+        await store.rename_preset("Old", "New", _preset())
+        lib = await store.get_library("movies")
+        assert lib.preset == "New"
+
+    async def test_rename_does_not_affect_unrelated_libraries(self, store):
+        await store.create_preset("P1", _preset())
+        await store.create_preset("P2", _preset())
+        await store.create_library("movies", _library(preset="P1"))
+        await store.create_library("tv", _library(preset="P2"))
+        await store.rename_preset("P1", "P1_new", _preset())
+        lib = await store.get_library("tv")
+        assert lib.preset == "P2"
 
 
 # Library CRUD

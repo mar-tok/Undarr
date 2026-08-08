@@ -80,6 +80,18 @@ class Preset:
     resolution_cap: int | None = None
 
 
+BUILTIN_PRESETS: dict[str, Preset] = {
+    "HEVC Transparent": Preset(ffmpeg_args="-c:v libx265 -crf 20 -preset slow"),
+    "HEVC Space Saver": Preset(ffmpeg_args="-c:v libx265 -crf 26 -preset slow"),
+    "AV1 Transparent": Preset(ffmpeg_args="-c:v libsvtav1 -crf 25 -preset 6"),
+    "AV1 Space Saver": Preset(ffmpeg_args="-c:v libsvtav1 -crf 32 -preset 6"),
+}
+
+
+def is_builtin_preset(name: str) -> bool:
+    return name in BUILTIN_PRESETS
+
+
 @dataclass
 class Library:
     paths: list[str]
@@ -375,10 +387,10 @@ class YamlStore:
         return self._config.settings.devices[device_id]
 
     async def get_presets(self) -> dict[str, Preset]:
-        return dict(self._config.presets)
+        return {**BUILTIN_PRESETS, **self._config.presets}
 
     async def get_preset(self, name: str) -> Preset | None:
-        return self._config.presets.get(name)
+        return self._config.presets.get(name) or BUILTIN_PRESETS.get(name)
 
     async def create_preset(self, name: str, preset: Preset) -> None:
         async with self._lock:

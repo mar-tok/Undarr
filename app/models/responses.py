@@ -40,6 +40,7 @@ class PresetOut(BaseModel):
     audio: AudioConfigOut | None = None
     subtitle: SubtitleConfigOut | None = None
     resolution_cap: int | None = None
+    is_builtin: bool = False
 
 
 class LibraryOut(BaseModel):
