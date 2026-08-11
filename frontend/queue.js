@@ -2,6 +2,7 @@ import { api, formatBytes, basename, esc, escAttr, formatDuration } from "./help
 import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
 import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
+import { updatePreviewProgress } from "./libraries.js";
 
 let queuePaused = false;
 let scheduleActive = true;
@@ -460,6 +461,11 @@ export function connectSSE() {
                 }
             }, 10000);
         }
+    });
+
+    es.addEventListener("preview_progress", (e) => {
+        const data = JSON.parse(e.data);
+        updatePreviewProgress(data);
     });
 
     es.addEventListener("job_cancelled", (e) => {

@@ -1,4 +1,4 @@
-import { api, esc, escAttr, getFormSnapshot, wrapNumberInputs, clearValidation, setError } from "./helpers.js";
+import { api, esc, escAttr, formatBytes, getFormSnapshot, wrapNumberInputs, clearValidation, setError } from "./helpers.js";
 import { loadDeviceData, isEncoderDisabled, disabledDeviceTooltip } from "./devices.js";
 import { parsePresetData } from "./presets.js";
 import { openDirBrowser } from "./dir-browser.js";
@@ -205,6 +205,8 @@ function renderLibraryFormCard(lib) {
             <button class="btn lc-add-rule" type="button" style="margin-top:6px">Add Rule</button>
         </div>
         <div class="form-actions">
+            <span class="lc-preview-hint" style="display:none;font-size:12px;align-self:center">Preview unavailable when marking existing files as processed.</span>
+            <button class="btn lc-preview" type="button">Preview</button>
             <button class="btn lc-cancel">Cancel</button>
             <button class="btn btn-primary lc-save">Save</button>
         </div>
@@ -530,6 +532,27 @@ function attachLibFormCardListeners(card, originalName) {
         }
     });
 
+    const markProcessedCb = card.querySelector(".lc-mark-processed");
+    const previewBtn = card.querySelector(".lc-preview");
+    const previewHint = card.querySelector(".lc-preview-hint");
+    if (markProcessedCb) {
+        markProcessedCb.addEventListener("change", () => {
+            previewBtn.disabled = markProcessedCb.checked;
+            previewHint.style.display = markProcessedCb.checked ? "" : "none";
+        });
+    }
+
+    previewBtn.addEventListener("click", () => {
+        const paths = getPathsFromChips();
+        if (!paths.length) return;
+        const name = card.querySelector(".lc-name").value.trim();
+        const skip_rules = collectSkipRules(card.querySelector(".lc-skip-rules"));
+        const path_patterns = collectPathPatterns(card.querySelector(".lc-path-patterns"));
+        const new_file_delay = parseInt(card.querySelector(".lc-new-file-delay").value) || 0;
+        const new_file_delay_unit = card.querySelector(".lc-new-file-delay-unit").value;
+        openPreviewModal(null, { name, paths, skip_rules, path_patterns, new_file_delay, new_file_delay_unit });
+    });
+
     card.querySelector(".lc-cancel").addEventListener("click", () => {
         if (isNew) {
             creatingNewLibrary = false;
@@ -596,6 +619,7 @@ export function initLibraries() {
 
             const items = [
                 { action: "toggle-pause", label: lib?.paused ? "Resume Processing" : "Pause Processing" },
+                { action: "preview", label: "Preview" },
                 { action: "scan", label: "Scan & Queue", disabled: scanDisabled },
                 { action: "force-scan", label: "Force Rescan", disabled: scanDisabled },
                 { action: "mark-processed", label: "Mark All Processed" },
@@ -617,7 +641,9 @@ export function initLibraries() {
                 const action = menuBtn.dataset.menuAction;
                 menu.remove();
 
-                if (action === "toggle-pause") {
+                if (action === "preview") {
+                    openPreviewModal(name);
+                } else if (action === "toggle-pause") {
                     const isPaused = lib?.paused;
                     try {
                         await api("POST", `/api/libraries/${encodeURIComponent(name)}/pause`, { paused: !isPaused });
@@ -677,5 +703,140 @@ export function initLibraries() {
         creatingNewLibrary = !creatingNewLibrary;
         if (creatingNewLibrary) editingLibraryName = null;
         renderLibraries();
+    });
+}
+
+let previewOverlay = null;
+
+export function updatePreviewProgress(data) {
+    if (!previewOverlay) return;
+    const loading = previewOverlay.querySelector(".preview-loading");
+    if (loading) {
+        loading.textContent = `Scanning... ${data.scanned}/${data.total}`;
+    }
+}
+
+export function openPreviewModal(libraryName, config) {
+    if (previewOverlay) previewOverlay.remove();
+
+    const title = libraryName || config?.name || "New Library";
+    const overlay = document.createElement("div");
+    overlay.className = "preview-overlay";
+    overlay.innerHTML = `
+        <div class="preview-modal">
+            <div class="preview-header">
+                <span class="preview-title">Preview: ${esc(title)}</span>
+                <button class="btn-icon preview-close" data-tooltip="Close"><img src="close.svg" alt="Close"></button>
+            </div>
+            <div class="preview-body">
+                <div class="preview-loading">Scanning...</div>
+            </div>
+            <div class="preview-footer">
+                <button class="btn preview-close-btn">Close</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    previewOverlay = overlay;
+
+    const modal = overlay.querySelector(".preview-modal");
+
+    function close() {
+        overlay.remove();
+        previewOverlay = null;
+        document.removeEventListener("keydown", onKey);
+    }
+
+    function onKey(e) {
+        if (e.key === "Escape") close();
+    }
+    document.addEventListener("keydown", onKey);
+
+    overlay.addEventListener("click", (e) => {
+        if (e.target === overlay) {
+            modal.classList.add("flash");
+            setTimeout(() => modal.classList.remove("flash"), 150);
+        }
+    });
+
+    overlay.querySelector(".preview-close").addEventListener("click", close);
+    overlay.querySelector(".preview-close-btn").addEventListener("click", close);
+
+    const body_data = config ? { ...config } : null;
+
+    const request = body_data
+        ? api("POST", "/api/libraries/preview", body_data)
+        : api("POST", `/api/libraries/${encodeURIComponent(libraryName)}/preview`);
+
+    request
+        .then(result => {
+            renderPreviewResult(overlay, result);
+        })
+        .catch(err => {
+            const body = overlay.querySelector(".preview-body");
+            if (body) body.innerHTML = `<div class="preview-error">${esc(err.message)}</div>`;
+        });
+}
+
+function renderPreviewResult(overlay, result) {
+    const body = overlay.querySelector(".preview-body");
+    if (!body) return;
+    const s = result.summary;
+
+    let summaryHtml = `<div class="preview-summary">`;
+    summaryHtml += `<span>${s.total_files} total files</span>`;
+    summaryHtml += `<span>${s.would_queue} would be queued (${formatBytes(s.would_queue_bytes)})</span>`;
+    summaryHtml += `<span>${s.already_processed} already processed</span>`;
+    if (s.skipped > 0) summaryHtml += `<span>${s.skipped} skipped</span>`;
+    summaryHtml += `</div>`;
+
+    const hasSkipped = result.skipped.length > 0;
+
+    let tabsHtml = `<div class="preview-tabs">`;
+    tabsHtml += `<button class="preview-tab active" data-ptab="queue">Would Be Queued (${result.queue.length})</button>`;
+    if (hasSkipped) tabsHtml += `<button class="preview-tab" data-ptab="skipped">Skipped (${result.skipped.length})</button>`;
+    tabsHtml += `</div>`;
+
+    let queuePane = `<div class="preview-pane active" id="preview-pane-queue">`;
+    if (result.queue.length) {
+        const sorted = [...result.queue].sort((a, b) => b.size_bytes - a.size_bytes);
+        queuePane += `<div class="preview-table-wrap">
+            <table class="preview-table queue-table">
+                <thead><tr><th>File</th><th>Codec</th><th>Resolution</th><th>Size</th></tr></thead>
+                <tbody>${sorted.map((f, i) => `<tr class="${i % 2 ? "stripe" : ""}">
+                    <td title="${escAttr(f.path)}">${esc(f.path)}</td>
+                    <td>${esc(f.video_codec.toUpperCase())}</td>
+                    <td>${esc(f.resolution)}</td>
+                    <td>${formatBytes(f.size_bytes)}</td>
+                </tr>`).join("")}</tbody>
+            </table>
+        </div>`;
+    } else {
+        queuePane += `<div class="preview-empty">No files would be queued.</div>`;
+    }
+    queuePane += `</div>`;
+
+    let skippedPane = "";
+    if (hasSkipped) {
+        skippedPane = `<div class="preview-pane" id="preview-pane-skipped">
+            <div class="preview-table-wrap">
+                <table class="preview-table skipped-table">
+                    <thead><tr><th>File</th><th>Reason</th><th>Size</th></tr></thead>
+                    <tbody>${result.skipped.map((f, i) => `<tr class="${i % 2 ? "stripe" : ""}">
+                        <td title="${escAttr(f.path)}">${esc(f.path)}</td>
+                        <td>${esc(f.reason)}</td>
+                        <td>${formatBytes(f.size_bytes)}</td>
+                    </tr>`).join("")}</tbody>
+                </table>
+            </div>
+        </div>`;
+    }
+
+    body.innerHTML = summaryHtml + tabsHtml + queuePane + skippedPane;
+
+    body.querySelectorAll(".preview-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            body.querySelectorAll(".preview-tab").forEach(t => t.classList.toggle("active", t === tab));
+            body.querySelectorAll(".preview-pane").forEach(p => p.classList.toggle("active", p.id === "preview-pane-" + tab.dataset.ptab));
+        });
     });
 }

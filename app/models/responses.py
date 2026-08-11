@@ -83,6 +83,35 @@ class HistoryOut(BaseModel):
     device_name: str = ""
 
 
+class PreviewFileOut(BaseModel):
+    path: str
+    size_bytes: int
+    video_codec: str
+    resolution: str
+    bitrate_kbps: int
+
+
+class PreviewSkippedOut(BaseModel):
+    path: str
+    size_bytes: int
+    reason: str
+
+
+class PreviewSummaryOut(BaseModel):
+    total_files: int
+    would_queue: int
+    would_queue_bytes: int
+    already_processed: int
+    skipped: int
+    too_new: int
+
+
+class PreviewOut(BaseModel):
+    summary: PreviewSummaryOut
+    queue: list[PreviewFileOut]
+    skipped: list[PreviewSkippedOut]
+
+
 class SearchResultOut(BaseModel):
     id: str
     file_path: str

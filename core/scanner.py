@@ -169,6 +169,131 @@ async def scan_single_file(
     return "queued" if result is not None else "none"
 
 
+# Must mirror scan_single_file's checks and order, or previews diverge from real scans
+async def preview_library(
+    library_name: str,
+    library: Library,
+    *,
+    progress_fn=None,
+) -> dict:
+    all_files = _collect_video_files(library)
+    total = len(all_files)
+    scanned = 0
+
+    already_processed = 0
+    too_new = 0
+    queue_list: list[dict] = []
+    skipped_list: list[dict] = []
+
+    for file in all_files:
+        scanned += 1
+        file_str = str(file)
+        try:
+            st = file.stat()
+        except OSError:
+            if progress_fn:
+                await progress_fn(scanned, total)
+            continue
+
+        file_size = st.st_size
+
+        if await db.is_processed(file_str, library_name, st.st_mtime):
+            already_processed += 1
+            if progress_fn:
+                await progress_fn(scanned, total)
+            continue
+
+        if library.new_file_delay:
+            newest = max(st.st_mtime, st.st_ctime)
+            age = time.time() - newest
+            if age < library.new_file_delay_seconds:
+                too_new += 1
+                rel = _relative_to_library(file_str, library.paths) or file_str
+                skipped_list.append(
+                    {
+                        "path": rel,
+                        "size_bytes": file_size,
+                        "reason": "Too new (file delay not elapsed)",
+                    }
+                )
+                if progress_fn:
+                    await progress_fn(scanned, total)
+                continue
+
+        if library.path_patterns:
+            rel_path = _relative_to_library(file_str, library.paths)
+            if rel_path:
+                matched = match_path_pattern(rel_path, library.path_patterns)
+                if matched:
+                    skipped_list.append(
+                        {
+                            "path": rel_path,
+                            "size_bytes": file_size,
+                            "reason": f"Path pattern: {matched}",
+                        }
+                    )
+                    if progress_fn:
+                        await progress_fn(scanned, total)
+                    continue
+
+        probe = await probe_file(file_str)
+        info = extract_media_info(probe) if probe else None
+
+        if library.skip_rules and info:
+            matched_rule = should_skip(info, library.skip_rules)
+            if matched_rule:
+                rel = _relative_to_library(file_str, library.paths) or file_str
+                skipped_list.append(
+                    {
+                        "path": rel,
+                        "size_bytes": file_size,
+                        "reason": f"Skip rule: {format_rule(matched_rule)}",
+                    }
+                )
+                if progress_fn:
+                    await progress_fn(scanned, total)
+                continue
+
+        rel = _relative_to_library(file_str, library.paths) or file_str
+        if info:
+            w = info.get("resolution_width", 0)
+            h = info.get("resolution_height", 0)
+            queue_list.append(
+                {
+                    "path": rel,
+                    "size_bytes": file_size,
+                    "video_codec": info.get("video_codec", "unknown"),
+                    "resolution": f"{w}x{h}" if w and h else "unknown",
+                    "bitrate_kbps": info.get("bitrate_kbps", 0),
+                }
+            )
+        else:
+            queue_list.append(
+                {
+                    "path": rel,
+                    "size_bytes": file_size,
+                    "video_codec": "unknown",
+                    "resolution": "unknown",
+                    "bitrate_kbps": 0,
+                }
+            )
+        if progress_fn:
+            await progress_fn(scanned, total)
+
+    return {
+        "summary": {
+            "total_files": total,
+            "would_queue": len(queue_list),
+            "would_queue_bytes": sum(f["size_bytes"] for f in queue_list),
+            "already_processed": already_processed,
+            "skipped": len(skipped_list),
+            "too_new": too_new,
+        },
+        "queue": queue_list,
+        "skipped": skipped_list,
+    }
+
+
 async def mark_library_processed(
     library_name: str,
     library: Library,

@@ -107,6 +107,15 @@ class LibraryUpdate(BaseModel):
         return _validate_name(v) if v is not None else None
 
 
+class PreviewRequest(BaseModel):
+    name: str = ""
+    paths: list[str]
+    skip_rules: list[SkipRuleIn] = []
+    path_patterns: list[str] = []
+    new_file_delay: int = 0
+    new_file_delay_unit: str = "minutes"
+
+
 class SettingsUpdate(BaseModel):
     cache_dir: str | None = None
     schedule_enabled: bool | None = None

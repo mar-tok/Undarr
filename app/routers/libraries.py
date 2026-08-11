@@ -4,10 +4,20 @@ from pathlib import PurePosixPath
 from fastapi import APIRouter, HTTPException, Query
 
 from core.logger import log
-from app.models.requests import LibraryCreate, LibraryUpdate, PauseRequest
-from app.models.responses import LibraryOut, SkipRuleOut, SkipConditionOut
+from app.models.requests import (
+    LibraryCreate,
+    LibraryUpdate,
+    PauseRequest,
+    PreviewRequest,
+)
+from app.models.responses import LibraryOut, PreviewOut, SkipRuleOut, SkipConditionOut
 from core.yaml_store import store, Library, SkipRule, SkipCondition
-from core.scanner import scan_library, periodic_scanner, mark_library_processed
+from core.scanner import (
+    scan_library,
+    preview_library,
+    periodic_scanner,
+    mark_library_processed,
+)
 from core.queue_manager import queue_manager
 from core.watcher import watcher
 from core import db
@@ -15,6 +25,7 @@ from core import db
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
 _scanning: set[str] = set()
+_previewing = False
 _mark_tasks: set[asyncio.Task] = set()
 
 
@@ -224,6 +235,58 @@ async def pause_library(name: str, body: PauseRequest):
     else:
         await queue_manager.resume_library(name)
     return {"paused": body.paused}
+
+
+async def _run_preview(library_name: str, lib: Library):
+    global _previewing
+    if _previewing:
+        raise HTTPException(409, "A preview is already running")
+    _previewing = True
+
+    last_reported = 0
+    step = 1
+
+    async def progress_fn(scanned: int, total: int) -> None:
+        nonlocal last_reported, step
+        if step == 1 and total > 0:
+            step = max(1, total // 100)
+        if scanned - last_reported < step and scanned < total:
+            return
+        last_reported = scanned
+        await queue_manager._broadcast(
+            "preview_progress",
+            {
+                "library": library_name,
+                "scanned": scanned,
+                "total": total,
+            },
+        )
+
+    try:
+        return await preview_library(library_name, lib, progress_fn=progress_fn)
+    finally:
+        _previewing = False
+
+
+@router.post("/preview", response_model=PreviewOut)
+async def preview_from_config(body: PreviewRequest):
+    lib = Library(
+        paths=body.paths,
+        preset="",
+        skip_rules=_to_skip_rules(body.skip_rules),
+        path_patterns=body.path_patterns,
+        new_file_delay=body.new_file_delay,
+        new_file_delay_unit=body.new_file_delay_unit,
+    )
+    return await _run_preview(body.name, lib)
+
+
+@router.post("/{name}/preview", response_model=PreviewOut)
+async def preview(name: str):
+    lib = await store.get_library(name)
+    if not lib:
+        raise HTTPException(404, "Library not found")
+    return await _run_preview(name, lib)
 
 
 @router.post("/{name}/scan")
