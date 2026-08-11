@@ -1,3 +1,5 @@
+import asyncio
+
 import aiosqlite
 
 import core.db as db_mod
@@ -136,3 +138,24 @@ class TestPreviewLibrary:
 
         await preview_library("movies", _library(media_dir), progress_fn=progress)
         assert calls == [(1, 3), (2, 3), (3, 3)]
+
+    async def test_abort_returns_partial_results(self, db_setup, media_dir):
+        for i in range(5):
+            _add_file(media_dir, f"f{i}.mkv")
+        abort = asyncio.Event()
+
+        async def progress(scanned, total):
+            if scanned == 2:
+                abort.set()
+
+        result = await preview_library(
+            "movies", _library(media_dir), progress_fn=progress, abort_event=abort
+        )
+        assert result["summary"]["total_files"] == 5
+        assert result["summary"]["would_queue"] == 2
+        assert result["summary"]["not_scanned"] == 3
+
+    async def test_unaborted_preview_scans_everything(self, db_setup, media_dir):
+        _add_file(media_dir, "a.mkv")
+        result = await preview_library("movies", _library(media_dir))
+        assert result["summary"]["not_scanned"] == 0

@@ -104,6 +104,7 @@ class PreviewSummaryOut(BaseModel):
     already_processed: int
     skipped: int
     too_new: int
+    not_scanned: int
 
 
 class PreviewOut(BaseModel):

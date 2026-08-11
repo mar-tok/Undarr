@@ -25,7 +25,8 @@ from core import db
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
 _scanning: set[str] = set()
-_previewing = False
+_preview_abort: asyncio.Event | None = None
+_preview_lock = asyncio.Lock()
 _mark_tasks: set[asyncio.Task] = set()
 
 
@@ -238,10 +239,12 @@ async def pause_library(name: str, body: PauseRequest):
 
 
 async def _run_preview(library_name: str, lib: Library):
-    global _previewing
-    if _previewing:
-        raise HTTPException(409, "A preview is already running")
-    _previewing = True
+    global _preview_abort
+    async with _preview_lock:
+        if _preview_abort is not None:
+            raise HTTPException(409, "A preview is already running")
+        _preview_abort = asyncio.Event()
+    abort_event = _preview_abort
 
     last_reported = 0
     step = 1
@@ -263,9 +266,17 @@ async def _run_preview(library_name: str, lib: Library):
         )
 
     try:
-        return await preview_library(library_name, lib, progress_fn=progress_fn)
+        return await preview_library(
+            library_name, lib, progress_fn=progress_fn, abort_event=abort_event
+        )
     finally:
-        _previewing = False
+        _preview_abort = None
+
+
+@router.post("/preview/cancel", status_code=204)
+async def cancel_preview():
+    if _preview_abort:
+        _preview_abort.set()
 
 
 @router.post("/preview", response_model=PreviewOut)

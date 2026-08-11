@@ -707,6 +707,7 @@ export function initLibraries() {
 }
 
 let previewOverlay = null;
+let previewScanning = false;
 
 export function updatePreviewProgress(data) {
     if (!previewOverlay) return;
@@ -716,9 +717,20 @@ export function updatePreviewProgress(data) {
     }
 }
 
-export function openPreviewModal(libraryName, config) {
-    if (previewOverlay) previewOverlay.remove();
+function cancelPreview() {
+    if (previewScanning) {
+        previewScanning = false;
+        api("POST", "/api/libraries/preview/cancel").catch(() => {});
+    }
+}
 
+export function openPreviewModal(libraryName, config) {
+    if (previewOverlay) {
+        cancelPreview();
+        previewOverlay.remove();
+    }
+
+    previewScanning = true;
     const title = libraryName || config?.name || "New Library";
     const overlay = document.createElement("div");
     overlay.className = "preview-overlay";
@@ -729,6 +741,7 @@ export function openPreviewModal(libraryName, config) {
                 <button class="btn-icon preview-close" data-tooltip="Close"><img src="close.svg" alt="Close"></button>
             </div>
             <div class="preview-body">
+                <button class="btn preview-stop-btn">Stop Scanning</button>
                 <div class="preview-loading">Scanning...</div>
             </div>
             <div class="preview-footer">
@@ -741,6 +754,7 @@ export function openPreviewModal(libraryName, config) {
     const modal = overlay.querySelector(".preview-modal");
 
     function close() {
+        cancelPreview();
         overlay.remove();
         previewOverlay = null;
         document.removeEventListener("keydown", onKey);
@@ -760,6 +774,7 @@ export function openPreviewModal(libraryName, config) {
 
     overlay.querySelector(".preview-close").addEventListener("click", close);
     overlay.querySelector(".preview-close-btn").addEventListener("click", close);
+    overlay.querySelector(".preview-stop-btn").addEventListener("click", cancelPreview);
 
     const body_data = config ? { ...config } : null;
 
@@ -769,9 +784,11 @@ export function openPreviewModal(libraryName, config) {
 
     request
         .then(result => {
+            previewScanning = false;
             renderPreviewResult(overlay, result);
         })
         .catch(err => {
+            previewScanning = false;
             const body = overlay.querySelector(".preview-body");
             if (body) body.innerHTML = `<div class="preview-error">${esc(err.message)}</div>`;
         });
@@ -787,6 +804,7 @@ function renderPreviewResult(overlay, result) {
     summaryHtml += `<span>${s.would_queue} would be queued (${formatBytes(s.would_queue_bytes)})</span>`;
     summaryHtml += `<span>${s.already_processed} already processed</span>`;
     if (s.skipped > 0) summaryHtml += `<span>${s.skipped} skipped</span>`;
+    if (s.not_scanned > 0) summaryHtml += `<span>${s.not_scanned} files not scanned</span>`;
     summaryHtml += `</div>`;
 
     const hasSkipped = result.skipped.length > 0;

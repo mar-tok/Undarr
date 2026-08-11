@@ -1752,6 +1752,10 @@ input[type="checkbox"][role="switch"]:focus-visible {
     border-top: 1px solid var(--border);
 }
 
+.preview-stop-btn {
+    margin-bottom: 12px;
+}
+
 .preview-loading {
     font-size: 13px;
     color: var(--text);

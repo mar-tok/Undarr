@@ -175,6 +175,7 @@ async def preview_library(
     library: Library,
     *,
     progress_fn=None,
+    abort_event: asyncio.Event | None = None,
 ) -> dict:
     all_files = _collect_video_files(library)
     total = len(all_files)
@@ -186,6 +187,8 @@ async def preview_library(
     skipped_list: list[dict] = []
 
     for file in all_files:
+        if abort_event and abort_event.is_set():
+            break
         scanned += 1
         file_str = str(file)
         try:
@@ -288,6 +291,7 @@ async def preview_library(
             "already_processed": already_processed,
             "skipped": len(skipped_list),
             "too_new": too_new,
+            "not_scanned": total - scanned,
         },
         "queue": queue_list,
         "skipped": skipped_list,
