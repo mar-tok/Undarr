@@ -75,16 +75,29 @@ class Settings:
 class Preset:
     ffmpeg_args: str
     output_container: str | None = None
+    description: str = ""
     audio: AudioConfig | None = None
     subtitle: SubtitleConfig | None = None
     resolution_cap: int | None = None
 
 
 BUILTIN_PRESETS: dict[str, Preset] = {
-    "HEVC Transparent": Preset(ffmpeg_args="-c:v libx265 -crf 20 -preset slow"),
-    "HEVC Space Saver": Preset(ffmpeg_args="-c:v libx265 -crf 26 -preset slow"),
-    "AV1 Transparent": Preset(ffmpeg_args="-c:v libsvtav1 -crf 25 -preset 6"),
-    "AV1 Space Saver": Preset(ffmpeg_args="-c:v libsvtav1 -crf 32 -preset 6"),
+    "HEVC Transparent": Preset(
+        ffmpeg_args="-c:v libx265 -crf 20 -preset slow",
+        description="Converts video to H.265 with no discernible quality loss. Safe default for most content. Typically saves 40-50% storage with broad device compatibility.",
+    ),
+    "HEVC Space Saver": Preset(
+        ffmpeg_args="-c:v libx265 -crf 26 -preset slow",
+        description="Converts video to H.265 with aggressive compression. Saves more space, and quality differences remain difficult to discern for most content. Broad device compatibility.",
+    ),
+    "AV1 Transparent": Preset(
+        ffmpeg_args="-c:v libsvtav1 -crf 25 -preset 6",
+        description="Converts video to AV1 with no discernible quality loss. Better compression than HEVC, but rarely compatible with older devices and players. Requires AV1-compatible playback devices.",
+    ),
+    "AV1 Space Saver": Preset(
+        ffmpeg_args="-c:v libsvtav1 -crf 32 -preset 6",
+        description="Converts video to AV1 with aggressive compression. Maximum storage savings. Better compression than HEVC, but rarely compatible with older devices and players. Requires AV1-compatible playback devices.",
+    ),
 }
 
 
@@ -101,6 +114,7 @@ class Library:
     path_patterns: list[str] = field(default_factory=list)
     scan_interval: int = 0
     scan_unit: str = "hours"
+    description: str = ""
     new_file_delay: int = 0
     new_file_delay_unit: str = "minutes"
     paused: bool = False
@@ -201,6 +215,7 @@ def _config_from_dict(data: dict) -> Config:
         presets[name] = Preset(
             ffmpeg_args=p.get("ffmpeg_args", ""),
             output_container=p.get("output_container"),
+            description=p.get("description", ""),
             audio=audio,
             subtitle=subtitle,
             resolution_cap=resolution_cap,
@@ -225,6 +240,7 @@ def _config_from_dict(data: dict) -> Config:
             path_patterns=lib.get("path_patterns", []),
             scan_interval=lib.get("scan_interval", 0),
             scan_unit=lib.get("scan_unit", "hours"),
+            description=lib.get("description", ""),
             new_file_delay=lib.get("new_file_delay", 0),
             new_file_delay_unit=lib.get("new_file_delay_unit", "minutes"),
             paused=bool(lib.get("paused", False)),
@@ -285,6 +301,7 @@ def _config_to_dict(cfg: Config) -> dict:
             name: {
                 "ffmpeg_args": p.ffmpeg_args,
                 "output_container": p.output_container,
+                **({"description": p.description} if p.description else {}),
                 **({"audio": _audio_config_to_dict(p.audio)} if p.audio else {}),
                 **(
                     {"subtitle": _subtitle_config_to_dict(p.subtitle)}
@@ -315,6 +332,7 @@ def _config_to_dict(cfg: Config) -> dict:
                 ],
                 "scan_interval": lib.scan_interval,
                 "scan_unit": lib.scan_unit,
+                **({"description": lib.description} if lib.description else {}),
                 **(
                     {"new_file_delay": lib.new_file_delay} if lib.new_file_delay else {}
                 ),

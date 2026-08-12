@@ -89,6 +89,7 @@ def _preset_out(name: str, p: Preset, builtin: bool = False) -> PresetOut:
         name=name,
         ffmpeg_args=p.ffmpeg_args,
         output_container=p.output_container,
+        description=p.description or None,
         audio=_audio_to_out(p.audio),
         subtitle=_subtitle_to_out(p.subtitle),
         resolution_cap=p.resolution_cap,
@@ -113,6 +114,7 @@ async def create_preset(body: PresetCreate):
     preset = Preset(
         ffmpeg_args=body.ffmpeg_args,
         output_container=body.output_container,
+        description=body.description or "",
         audio=_audio_from_body(body.audio),
         subtitle=_subtitle_from_body(body.subtitle),
         resolution_cap=body.resolution_cap,
@@ -132,6 +134,7 @@ async def update_preset(name: str, body: PresetUpdate):
     preset = Preset(
         ffmpeg_args=body.ffmpeg_args,
         output_container=body.output_container,
+        description=body.description or "",
         audio=_audio_from_body(body.audio),
         subtitle=_subtitle_from_body(body.subtitle),
         resolution_cap=body.resolution_cap,

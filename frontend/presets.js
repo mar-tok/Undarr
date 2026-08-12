@@ -318,10 +318,10 @@ function renderPresets() {
     html += '<h3>Presets</h3>';
     html += '<div class="preset-section-grid">';
     if (creatingNewPreset) {
-        html += renderPresetFormCard("", { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: "", extraArgs: [] });
+        html += renderPresetFormCard("", { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: "", extraArgs: [] }, "");
     }
     html += userPresets.map(p => {
-        if (editingPresetName === p.name) return renderPresetFormCard(p.name, parsePresetData(p));
+        if (editingPresetName === p.name) return renderPresetFormCard(p.name, parsePresetData(p), p.description || "");
         return renderPresetViewCard(p, false);
     }).join("");
     html += '</div>';
@@ -398,6 +398,8 @@ function renderPresetViewCard(p, builtin = false) {
         ? `<span data-tooltip="${disabledDeviceTooltip(data.encoder, 'preset')}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`
         : "";
 
+    const descHtml = p.description ? `<div class="preset-card-desc">${esc(p.description)}</div>` : "";
+
     const actionsHtml = builtin
         ? `<button class="btn-icon" data-action="copy-preset" data-name="${escAttr(p.name)}" data-tooltip="Duplicate"><img src="copy.svg" alt="Duplicate"></button>`
         : `<button class="btn-icon" data-action="copy-preset" data-name="${escAttr(p.name)}" data-tooltip="Duplicate"><img src="copy.svg" alt="Duplicate"></button>
@@ -411,6 +413,7 @@ function renderPresetViewCard(p, builtin = false) {
                 ${actionsHtml}
             </div>
         </div>
+        ${descHtml}
         ${videoHtml ? `<div class="preset-card-section"><span class="preset-card-section-label">Video</span><dl class="preset-card-props">${videoHtml}</dl></div>` : ""}
         ${audioHtml ? `<div class="preset-card-section"><span class="preset-card-section-label">Audio</span><dl class="preset-card-props">${audioHtml}</dl></div>` : ""}
         ${subtitleHtml ? `<div class="preset-card-section"><span class="preset-card-section-label">Subtitles</span><dl class="preset-card-props">${subtitleHtml}</dl></div>` : ""}
@@ -442,7 +445,7 @@ function buildAudioTierCodecOptionsHTML(selected) {
     ).join("");
 }
 
-function renderPresetFormCard(name, data) {
+function renderPresetFormCard(name, data, description) {
     const extraRowsHtml = data.extraArgs.map(a => `
         <div class="extra-arg-row">
             <input class="arg-flag" value="${escAttr(a.flag)}" placeholder="flag">
@@ -477,6 +480,10 @@ function renderPresetFormCard(name, data) {
         <div class="form-group">
             <label data-tooltip="A display name for this preset.<br>Used to identify it when assigning to libraries. Does not affect encoding.">Name</label>
             <input type="text" class="pc-name" value="${escAttr(name)}" placeholder="e.g. hevc-qsv-18">
+        </div>
+        <div class="form-group">
+            <label data-tooltip="A personal note for your own reference.<br>Displayed on the preset card. Does not affect encoding.">Description</label>
+            <input type="text" class="pc-desc" value="${escAttr(description)}" placeholder="Optional note about this preset">
         </div>
         <div class="preset-tabs">
             <button class="preset-tab active" data-tab="video" type="button">Video</button>
@@ -700,6 +707,7 @@ function attachFormCardListeners(card, originalName) {
             ? parseExtraArgs(card.querySelector(".pc-extra-args-raw").value.trim())
             : collectExtraArgs(card.querySelector(".pc-extra-args"));
         const args = assembleArgsFromData(encoder, quality, speed, extraPairs);
+        const description = card.querySelector(".pc-desc").value.trim() || null;
 
         function validateBitrate(input) {
             const v = input.value.trim();
@@ -762,11 +770,11 @@ function attachFormCardListeners(card, originalName) {
 
         try {
             if (isNew) {
-                await api("POST", "/api/presets", { name: newName, ffmpeg_args: args, output_container: container, audio, subtitle, resolution_cap });
+                await api("POST", "/api/presets", { name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap });
                 creatingNewPreset = false;
             } else {
                 await api("PUT", `/api/presets/${encodeURIComponent(originalName)}`, {
-                    name: newName, ffmpeg_args: args, output_container: container, audio, subtitle, resolution_cap
+                    name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap
                 });
                 editingPresetName = null;
             }
@@ -809,6 +817,7 @@ export function initPresets() {
                     name: copyName,
                     ffmpeg_args: source.ffmpeg_args,
                     output_container: source.output_container,
+                    description: source.description,
                     audio: source.audio || null,
                     subtitle: source.subtitle || null,
                     resolution_cap: source.resolution_cap || null,

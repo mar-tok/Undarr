@@ -77,6 +77,7 @@ function renderLibraryViewCard(lib) {
         warnHtml = `<span data-tooltip="${disabledDeviceTooltip(encoder, "library")}"><img class="warning-icon" src="warning-triangle-fill.svg" alt="Device disabled"></span>`;
     }
 
+    const descHtml = lib.description ? `<div class="lib-card-desc">${esc(lib.description)}</div>` : "";
     const statusBadge = lib.paused ? `<span class="lib-paused-badge">PAUSED</span>` : "";
 
     return `<div class="lib-card" data-name="${escAttr(lib.name)}">
@@ -90,6 +91,7 @@ function renderLibraryViewCard(lib) {
                 </div>
             </div>
         </div>
+        ${descHtml}
         <dl class="lib-card-props">${propsHtml}</dl>
     </div>`;
 }
@@ -99,6 +101,7 @@ function renderLibraryFormCard(lib) {
     const paths = lib ? lib.paths : [];
     const preset = lib ? lib.preset : (presets[0]?.name || "");
     const watch = lib ? lib.watch : true;
+    const description = lib ? (lib.description || "") : "";
     const scanInterval = lib ? (lib.scan_interval || 0) : 0;
     const scanUnit = lib ? (lib.scan_unit || "minutes") : "minutes";
     const newFileDelay = lib ? (lib.new_file_delay || 0) : 0;
@@ -154,6 +157,10 @@ function renderLibraryFormCard(lib) {
         <div class="form-group">
             <label data-tooltip="The preset defines how files in this library are transcoded.<br>It controls the <em>encoder</em>, <em>quality</em>, <em>speed</em>, <em>container</em>, and any extra FFmpeg flags.">Preset</label>
             <select class="lc-preset">${presetOptionsHtml}</select>
+        </div>
+        <div class="form-group">
+            <label data-tooltip="A personal note for your own reference.<br>Displayed on the library card. Does not affect processing.">Description</label>
+            <input type="text" class="lc-desc" value="${escAttr(description)}" placeholder="Optional note about this library">
         </div>
         <div class="form-group">
             <label data-tooltip="Directories to scan for media files.<br>All video files found in these paths (and subdirectories) will be evaluated for transcoding.">Paths</label>
@@ -513,13 +520,15 @@ function attachLibFormCardListeners(card, originalName) {
         });
         if (!valid) return;
 
+        const description = card.querySelector(".lc-desc").value.trim() || null;
+
         try {
             if (isNew) {
                 const mark_existing_processed = card.querySelector(".lc-mark-processed").checked;
-                await api("POST", "/api/libraries", { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit, mark_existing_processed, new_file_delay, new_file_delay_unit });
+                await api("POST", "/api/libraries", { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit, description, mark_existing_processed, new_file_delay, new_file_delay_unit });
                 creatingNewLibrary = false;
             } else {
-                await api("PUT", `/api/libraries/${encodeURIComponent(originalName)}`, { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit, new_file_delay, new_file_delay_unit });
+                await api("PUT", `/api/libraries/${encodeURIComponent(originalName)}`, { name, paths, preset, watch, skip_rules, path_patterns, scan_interval, scan_unit, description, new_file_delay, new_file_delay_unit });
                 editingLibraryName = null;
             }
             loadLibraries();

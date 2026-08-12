@@ -792,6 +792,11 @@ tr.clickable:hover {
     gap: 4px;
 }
 
+.preset-card-desc, .lib-card-desc {
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
 .preset-card-props {
     display: grid;
     grid-template-columns: auto 1fr;

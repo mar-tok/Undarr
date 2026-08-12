@@ -37,6 +37,7 @@ class PresetOut(BaseModel):
     name: str
     ffmpeg_args: str
     output_container: str | None = None
+    description: str | None = None
     audio: AudioConfigOut | None = None
     subtitle: SubtitleConfigOut | None = None
     resolution_cap: int | None = None
@@ -52,6 +53,7 @@ class LibraryOut(BaseModel):
     path_patterns: list[str] = []
     scan_interval: int = 0
     scan_unit: str = "hours"
+    description: str | None = None
     new_file_delay: int = 0
     new_file_delay_unit: str = "minutes"
     paused: bool = False

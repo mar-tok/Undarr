@@ -89,10 +89,10 @@ class TestPresetCRUD:
 
     async def test_rename(self, store):
         await store.create_preset("Old", _preset())
-        await store.rename_preset("Old", "New", _preset(ffmpeg_args="-c:v libx264"))
+        await store.rename_preset("Old", "New", _preset(description="renamed"))
         assert await store.get_preset("Old") is None
         p = await store.get_preset("New")
-        assert p.ffmpeg_args == "-c:v libx264"
+        assert p.description == "renamed"
 
     async def test_rename_cascades_to_libraries(self, store):
         await store.create_preset("Old", _preset())
