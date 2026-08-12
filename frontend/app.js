@@ -6,6 +6,7 @@ import { initPresets, loadPresetView } from "./presets.js";
 import { initLibraries, loadLibraryView } from "./libraries.js";
 import { initSettings, loadSettings, switchSettingsTab } from "./settings.js";
 import { isScheduleDirty, discardScheduleChanges, stopScheduleClock } from "./schedule.js";
+import { initSetup, loadSetupView, checkFirstRun } from "./quickstart.js";
 
 const tooltip = document.getElementById("tooltip");
 let tipTarget = null;
@@ -46,6 +47,7 @@ function navigate(viewId) {
     if (viewId === "presets") loadPresetView();
     if (viewId === "libraries") loadLibraryView();
     if (viewId === "settings") loadSettings();
+    if (viewId === "quickstart") loadSetupView();
     const hash = viewId === "queue" ? "" : viewId;
     if (location.hash.replace("#", "").split("/")[0] !== hash)
         history.replaceState(null, "", hash ? "#" + hash : location.pathname);
@@ -60,12 +62,25 @@ initSearch();
 initPresets();
 initLibraries();
 initSettings();
+initSetup(navigate);
 
-const validViews = ["queue", "presets", "libraries", "settings"];
-const hashParts = location.hash.replace("#", "").split("/");
-const hashView = hashParts[0];
-navigate(validViews.includes(hashView) ? hashView : "queue");
-if (hashParts[0] === "settings" && hashParts[1]) switchSettingsTab(hashParts[1]);
+const validViews = ["queue", "presets", "libraries", "settings", "quickstart"];
+
+async function initApp() {
+    const hashParts = location.hash.replace("#", "").split("/");
+    const hashView = hashParts[0];
+
+    if (!hashView) {
+        const firstRun = await checkFirstRun();
+        navigate(firstRun ? "quickstart" : "queue");
+    } else {
+        navigate(validViews.includes(hashView) ? hashView : "queue");
+    }
+
+    if (hashParts[0] === "settings" && hashParts[1]) switchSettingsTab(hashParts[1]);
+}
+
+initApp();
 connectSSE();
 
 api("GET", "/api/version").then(data => {
