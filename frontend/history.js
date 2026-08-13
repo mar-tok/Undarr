@@ -44,14 +44,15 @@ function updateSortHeaders() {
 function buildDetailMessage(r) {
     const lines = [];
     if (r.status === "completed") {
-        lines.push("Completed successfully.");
+        lines.push(r.error_message ? "Completed with warning." : "Completed successfully.");
+        if (r.error_message) lines.push(r.error_message);
         if (r.new_size_bytes != null && r.old_size_bytes > 0) {
             const saved = r.old_size_bytes - r.new_size_bytes;
             const pct = Math.round((saved / r.old_size_bytes) * 100);
             lines.push("Saved: " + formatBytes(saved) + " (" + pct + "% smaller than original)");
         }
         lines.push("Duration: " + formatDuration(r.duration_seconds));
-    } else if (r.error_message) {
+    } else {
         lines.push(r.error_message);
     }
     lines.push("Path: " + r.file_path);

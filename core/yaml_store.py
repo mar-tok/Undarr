@@ -79,6 +79,7 @@ class Preset:
     audio: AudioConfig | None = None
     subtitle: SubtitleConfig | None = None
     resolution_cap: int | None = None
+    rename_file: bool = False
 
 
 BUILTIN_PRESETS: dict[str, Preset] = {
@@ -219,6 +220,7 @@ def _config_from_dict(data: dict) -> Config:
             audio=audio,
             subtitle=subtitle,
             resolution_cap=resolution_cap,
+            rename_file=bool(p.get("rename_file", False)),
         )
 
     libraries: dict[str, Library] = {}
@@ -313,6 +315,7 @@ def _config_to_dict(cfg: Config) -> dict:
                     if p.resolution_cap is not None
                     else {}
                 ),
+                **({"rename_file": True} if p.rename_file else {}),
             }
             for name, p in cfg.presets.items()
         },

@@ -50,6 +50,7 @@ class PresetCreate(BaseModel):
     audio: AudioConfigIn | None = None
     subtitle: SubtitleConfigIn | None = None
     resolution_cap: int | None = None
+    rename_file: bool = False
 
     @field_validator("name")
     @classmethod
@@ -65,6 +66,7 @@ class PresetUpdate(BaseModel):
     audio: AudioConfigIn | None = None
     subtitle: SubtitleConfigIn | None = None
     resolution_cap: int | None = None
+    rename_file: bool = False
 
     @field_validator("name")
     @classmethod

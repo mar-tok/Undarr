@@ -41,6 +41,7 @@ class PresetOut(BaseModel):
     audio: AudioConfigOut | None = None
     subtitle: SubtitleConfigOut | None = None
     resolution_cap: int | None = None
+    rename_file: bool = False
     is_builtin: bool = False
 
 

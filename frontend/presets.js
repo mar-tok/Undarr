@@ -169,7 +169,8 @@ export function parsePresetData(p) {
     let subtitleMode = "keep";
     if (subtitle && subtitle.mode !== "keep") subtitleMode = subtitle.mode;
     const resolutionCap = p.resolution_cap || null;
-    const data = { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: p.output_container || "", extraArgs: [], audio, audioMode, subtitle, subtitleMode, resolutionCap };
+    const renameFile = p.rename_file || false;
+    const data = { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: p.output_container || "", extraArgs: [], audio, audioMode, subtitle, subtitleMode, resolutionCap, renameFile };
     let rest = p.ffmpeg_args;
 
     const encMatch = rest.match(/-c:v\s+(\S+)/);
@@ -310,7 +311,7 @@ function renderPresets() {
     let html = "";
     if (builtinPresets.length) {
         html += '<h3>Built-in Presets</h3>';
-        html += '<p class="section-desc">Ready-to-use presets with software encoders. They can\'t be edited directly, but you can copy one and customize it.</p>';
+        html += '<p class="section-desc">Ready-to-use presets with software encoders. They can\'t be edited directly, but you can copy one and customize it. These presets do not rename files after transcoding, so codec tags in filenames (e.g. x264) will be left the same. If your filenames include codec info, enable "Update filename" on a copy.</p>';
         html += '<div class="preset-section-grid">';
         html += builtinPresets.map(p => renderPresetViewCard(p, true)).join("");
         html += '</div>';
@@ -345,6 +346,9 @@ function renderPresetViewCard(p, builtin = false) {
     videoHtml += `<dt>Container</dt><dd>${data.container ? "." + esc(data.container) : "Keep original"}</dd>`;
     if (data.resolutionCap) {
         videoHtml += `<dt>Resolution Cap</dt><dd>${esc(String(data.resolutionCap))}p</dd>`;
+    }
+    if (data.renameFile) {
+        videoHtml += `<dt>Rename</dt><dd>Update filename</dd>`;
     }
 
     let audioHtml = "";
@@ -460,6 +464,7 @@ function renderPresetFormCard(name, data, description) {
     const subCommentaryChecked = sub.remove_commentary ? " checked" : "";
     const subConfigHidden = subtitleMode !== "keep_by_language" ? ' style="display:none"' : "";
     const resCap = data.resolutionCap ? String(data.resolutionCap) : "";
+    const renameChecked = data.renameFile ? " checked" : "";
 
     const audioMode = data.audioMode || "copy";
     const a = data.audio || {};
@@ -484,6 +489,9 @@ function renderPresetFormCard(name, data, description) {
         <div class="form-group">
             <label data-tooltip="A personal note for your own reference.<br>Displayed on the preset card. Does not affect encoding.">Description</label>
             <input type="text" class="pc-desc" value="${escAttr(description)}" placeholder="Optional note about this preset">
+        </div>
+        <div class="form-group">
+            <label class="audio-checkbox" style="align-self:flex-start" data-tooltip="After a successful transcode, Undarr will try to update the codec, resolution, and audio tags in the filename, so that they match the output.<br>For example, <code>Title.x264.mkv</code> becomes <code>Title.x265.mkv</code> after encoding to HEVC, and <code>AAC</code> becomes <code>Opus</code> if the audio codec changed.<br>Preserves the naming style already used in the filename. Resolution tags are only updated when the resolution cap changes the output height."><input type="checkbox" role="switch" class="pc-rename-file"${renameChecked}> Update filename after transcode</label>
         </div>
         <div class="preset-tabs">
             <button class="preset-tab active" data-tab="video" type="button">Video</button>
@@ -767,14 +775,15 @@ function attachFormCardListeners(card, originalName) {
 
         const resCapVal = card.querySelector(".pc-rescap").value;
         const resolution_cap = resCapVal ? parseInt(resCapVal, 10) : null;
+        const rename_file = card.querySelector(".pc-rename-file").checked;
 
         try {
             if (isNew) {
-                await api("POST", "/api/presets", { name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap });
+                await api("POST", "/api/presets", { name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap, rename_file });
                 creatingNewPreset = false;
             } else {
                 await api("PUT", `/api/presets/${encodeURIComponent(originalName)}`, {
-                    name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap
+                    name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap, rename_file
                 });
                 editingPresetName = null;
             }
@@ -821,6 +830,7 @@ export function initPresets() {
                     audio: source.audio || null,
                     subtitle: source.subtitle || null,
                     resolution_cap: source.resolution_cap || null,
+                    rename_file: source.rename_file || false,
                 });
                 loadPresets();
             } catch (err) {

@@ -93,6 +93,7 @@ def _preset_out(name: str, p: Preset, builtin: bool = False) -> PresetOut:
         audio=_audio_to_out(p.audio),
         subtitle=_subtitle_to_out(p.subtitle),
         resolution_cap=p.resolution_cap,
+        rename_file=p.rename_file,
         is_builtin=builtin,
     )
 
@@ -118,6 +119,7 @@ async def create_preset(body: PresetCreate):
         audio=_audio_from_body(body.audio),
         subtitle=_subtitle_from_body(body.subtitle),
         resolution_cap=body.resolution_cap,
+        rename_file=body.rename_file,
     )
     await store.create_preset(body.name, preset)
     log.info("Preset created: '%s'", body.name)
@@ -138,6 +140,7 @@ async def update_preset(name: str, body: PresetUpdate):
         audio=_audio_from_body(body.audio),
         subtitle=_subtitle_from_body(body.subtitle),
         resolution_cap=body.resolution_cap,
+        rename_file=body.rename_file,
     )
     new_name = body.name if body.name and body.name != name else name
     if new_name != name:

@@ -539,6 +539,7 @@ class QueueManager:
 
         started = time.monotonic()
         ffmpeg_log = ""
+        pre_rename_path = None
 
         try:
             probe_data = await probe_file(job.file_path)
@@ -746,6 +747,57 @@ class QueueManager:
                         except Exception:
                             unsuppress_path(str(final_path))
                             raise
+                        if preset and preset.rename_file and m:
+                            from core.rename import rename_tokens
+
+                            encoder = m.group(1)
+                            source_height = (
+                                job.media_info.get("resolution_height")
+                                if job.media_info
+                                else None
+                            )
+                            target_height = (
+                                preset.resolution_cap
+                                if (
+                                    preset.resolution_cap
+                                    and source_height
+                                    and source_height > preset.resolution_cap
+                                )
+                                else None
+                            )
+                            target_audio = None
+                            if preset.audio and job.media_info:
+                                channels = job.media_info.get("audio_channels", 0)
+                                tier = (
+                                    preset.audio.surround
+                                    if channels > 2
+                                    else preset.audio.stereo
+                                )
+                                if tier and tier.codec != "copy":
+                                    target_audio = tier.codec
+                            new_name = rename_tokens(
+                                final_path.name,
+                                encoder,
+                                source_height,
+                                target_height,
+                                target_audio,
+                            )
+                            if new_name != final_path.name:
+                                renamed = final_path.with_name(new_name)
+                                try:
+                                    suppress_path(str(renamed))
+                                    final_path.rename(renamed)
+                                    pre_rename_path = str(final_path)
+                                    final_path = renamed
+                                    log.info("Job %s renamed: %s", job.id, new_name)
+                                except OSError as e:
+                                    unsuppress_path(str(renamed))
+                                    job.error_message = f"Transcode completed. Filename update failed: {e}"
+                                    log.warning(
+                                        "Job %s rename failed, keeping original name: %s",
+                                        job.id,
+                                        e,
+                                    )
                         job.file_path = str(final_path)
 
                         job.status = JobStatus.COMPLETED
@@ -807,6 +859,8 @@ class QueueManager:
             async def _delayed_unsuppress():
                 await asyncio.sleep(5)
                 unsuppress_path(job.file_path)
+                if pre_rename_path:
+                    unsuppress_path(pre_rename_path)
 
             asyncio.create_task(_delayed_unsuppress())
 
