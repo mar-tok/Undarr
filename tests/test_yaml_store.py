@@ -73,6 +73,18 @@ class TestPresetCRUD:
         for name in BUILTIN_PRESETS:
             assert name not in data["presets"]
 
+    async def test_rename_file_round_trip(self, store):
+        await store.create_preset("Renamer", _preset(rename_file=True))
+        data = _config_to_dict(store.config)
+        assert data["presets"]["Renamer"]["rename_file"] is True
+        cfg = _config_from_dict(data)
+        assert cfg.presets["Renamer"].rename_file is True
+
+    async def test_rename_file_default_not_persisted(self, store):
+        await store.create_preset("Plain", _preset())
+        data = _config_to_dict(store.config)
+        assert "rename_file" not in data["presets"]["Plain"]
+
     async def test_update(self, store):
         await store.create_preset("P1", _preset())
         await store.update_preset("P1", _preset(ffmpeg_args="-c:v libx264"))
