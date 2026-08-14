@@ -96,6 +96,9 @@ _HEIGHT_TO_TOKEN = {
     4320: "4320p",
 }
 
+_BOUNDARY = r"(?:^|(?<=[\.\-_ \[\]\(\)]))"
+_BOUNDARY_END = r"(?=$|[\.\-_ \[\]\(\)])"
+
 _CODEC_GROUPS: dict[str, list[str]] = {
     "h264": [
         "H.264",
@@ -108,6 +111,16 @@ _CODEC_GROUPS: dict[str, list[str]] = {
         "X264",
         "AVC",
         "avc",
+        "x.264",
+        "X.264",
+        "x-264",
+        "X-264",
+        "x_264",
+        "X_264",
+        "h-264",
+        "H-264",
+        "h_264",
+        "H_264",
     ],
     "hevc": [
         "H.265",
@@ -120,6 +133,16 @@ _CODEC_GROUPS: dict[str, list[str]] = {
         "X265",
         "HEVC",
         "hevc",
+        "x.265",
+        "X.265",
+        "x-265",
+        "X-265",
+        "x_265",
+        "X_265",
+        "h-265",
+        "H-265",
+        "h_265",
+        "H_265",
     ],
     "av1": ["AV1", "av1"],
     "vp9": ["VP9", "vp9"],
@@ -132,6 +155,11 @@ _STYLE_MAP: dict[str, dict[str, str]] = {
         "h264": "short",
         "x264": "x_style",
         "avc": "formal",
+        "x.264": "x_dotted",
+        "x-264": "x_hyphen",
+        "x_264": "x_under",
+        "h-264": "h_hyphen",
+        "h_264": "h_under",
     },
     "hevc": {
         "h.265": "dotted",
@@ -139,6 +167,11 @@ _STYLE_MAP: dict[str, dict[str, str]] = {
         "h265": "short",
         "x265": "x_style",
         "hevc": "formal",
+        "x.265": "x_dotted",
+        "x-265": "x_hyphen",
+        "x_265": "x_under",
+        "h-265": "h_hyphen",
+        "h_265": "h_under",
     },
     "av1": {"av1": "formal"},
     "vp9": {"vp9": "formal"},
@@ -151,6 +184,11 @@ _STYLE_TOKENS: dict[str, dict[str, str]] = {
         "short": "H264",
         "x_style": "x264",
         "formal": "AVC",
+        "x_dotted": "x.264",
+        "x_hyphen": "x-264",
+        "x_under": "x_264",
+        "h_hyphen": "H-264",
+        "h_under": "H_264",
     },
     "hevc": {
         "dotted": "H.265",
@@ -158,6 +196,11 @@ _STYLE_TOKENS: dict[str, dict[str, str]] = {
         "short": "H265",
         "x_style": "x265",
         "formal": "HEVC",
+        "x_dotted": "x.265",
+        "x_hyphen": "x-265",
+        "x_under": "x_265",
+        "h_hyphen": "H-265",
+        "h_under": "H_265",
     },
     "av1": {"formal": "AV1"},
     "vp9": {"formal": "VP9"},
@@ -171,7 +214,8 @@ def _build_codec_pattern() -> re.Pattern:
     # Longest first so H.264 matches before H264.
     unique = sorted(set(all_tokens), key=lambda t: -len(t))
     escaped = [re.escape(t) for t in unique]
-    return re.compile(r"\b(" + "|".join(escaped) + r")\b")
+    pattern = _BOUNDARY + "(" + "|".join(escaped) + ")" + _BOUNDARY_END
+    return re.compile(pattern)
 
 
 _CODEC_RE = _build_codec_pattern()
@@ -229,14 +273,15 @@ def _build_resolution_pattern() -> re.Pattern:
         "fhd",
     ]
     escaped = [re.escape(t) for t in sorted(res_tokens, key=lambda t: -len(t))]
-    return re.compile(r"\b(" + "|".join(escaped) + r")\b")
+    pattern = _BOUNDARY + "(" + "|".join(escaped) + ")" + _BOUNDARY_END
+    return re.compile(pattern)
 
 
 _RES_RE = _build_resolution_pattern()
 
-_WXHRES_RE = re.compile(r"\b(\d{3,5})x(\d{3,5})\b")
+_WXHRES_RE = re.compile(_BOUNDARY + r"(\d{3,5})x(\d{3,5})" + _BOUNDARY_END)
 
-_CHANNEL_SUFFIX = r"([\.\- ]?\d\.\d)?"
+_CHANNEL_SUFFIX = r"([\.\-_ ]?\d\.\d)?"
 
 
 def _build_audio_codec_pattern() -> re.Pattern:
@@ -245,13 +290,16 @@ def _build_audio_codec_pattern() -> re.Pattern:
         all_tokens.extend(tokens)
     unique = sorted(set(all_tokens), key=lambda t: -len(t))
     escaped = [re.escape(t) for t in unique]
-    return re.compile(r"\b(" + "|".join(escaped) + r")" + _CHANNEL_SUFFIX + r"\b")
+    pattern = (
+        _BOUNDARY + "(" + "|".join(escaped) + ")" + _CHANNEL_SUFFIX + _BOUNDARY_END
+    )
+    return re.compile(pattern)
 
 
 # Dolby Digital only matches with a channel suffix so DD-GROUP stays untouched
-_DD_RE = re.compile(r"\b(DD|dd)([\.\- ]?\d\.\d)\b")
+_DD_RE = re.compile(_BOUNDARY + r"(DD|dd)([\.\-_ ]?\d\.\d)" + _BOUNDARY_END)
 _AUDIO_RE = _build_audio_codec_pattern()
-_ATMOS_RE = re.compile(r"[\.\- ](Atmos|ATMOS|atmos)\b")
+_ATMOS_RE = re.compile(r"[\.\-_ ](Atmos|ATMOS|atmos)" + _BOUNDARY_END)
 
 
 def _find_audio_group(token: str) -> str | None:
