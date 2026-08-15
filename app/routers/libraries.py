@@ -143,11 +143,14 @@ async def create_library(body: LibraryCreate):
                 return
             current.mark_processed_pending = False
             await store.update_library(name, current)
+            await queue_manager._broadcast(
+                "library_files_changed", {"library_name": name}
+            )
 
         task = asyncio.create_task(_bg_mark(body.name, lib))
         _mark_tasks.add(task)
         task.add_done_callback(_mark_tasks.discard)
-    await watcher.restart(queue_manager.enqueue)
+    await watcher.restart(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
     await periodic_scanner.restart(queue_manager.enqueue)
     return LibraryOut(
         name=body.name,
@@ -197,11 +200,13 @@ async def update_library(name: str, body: LibraryUpdate):
     await store.update_library(new_name, lib)
     if new_name != name:
         await store.delete_library(name)
+        await db.rename_library(name, new_name)
+        await queue_manager.rename_library_jobs(name, new_name)
         await queue_manager.rename_paused_library(name, new_name)
         log.info("Library renamed: '%s' -> '%s'", name, new_name)
     else:
         log.info("Library updated: '%s'", name)
-    await watcher.restart(queue_manager.enqueue)
+    await watcher.restart(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
     await periodic_scanner.restart(queue_manager.enqueue)
     await queue_manager.re_evaluate_blocked()
     return LibraryOut(
@@ -225,8 +230,12 @@ async def delete_library(name: str):
     if not await store.delete_library(name):
         raise HTTPException(404, "Library not found")
     log.info("Library deleted: '%s'", name)
+    await db.remove_library_files(name)
+    removed = await queue_manager.remove_library_jobs(name)
+    if removed:
+        log.info("Removed %d queued jobs for deleted library '%s'", removed, name)
     await queue_manager.clear_paused_library(name)
-    await watcher.restart(queue_manager.enqueue)
+    await watcher.restart(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
     await periodic_scanner.restart(queue_manager.enqueue)
 
 
@@ -360,5 +369,6 @@ async def mark_processed(name: str):
     if current and current.mark_processed_pending:
         current.mark_processed_pending = False
         await store.update_library(name, current)
+    await queue_manager._broadcast("library_files_changed", {"library_name": name})
     log.info("Marked all files as processed in '%s'", name)
     return {"marked": count}

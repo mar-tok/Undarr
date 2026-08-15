@@ -218,6 +218,28 @@ class QueueManager:
         self._dispatch_event.set()
         log.info("Library '%s' resumed", name)
 
+    async def rename_library_jobs(self, old: str, new: str) -> None:
+        async with self._lock:
+            for job in [*self._pending, *self._blocked, *self._active.values()]:
+                if job.library_name == old:
+                    job.library_name = new
+
+    async def remove_library_jobs(self, name: str) -> int:
+        async with self._lock:
+            removed = [
+                j for j in [*self._pending, *self._blocked] if j.library_name == name
+            ]
+            self._pending = [j for j in self._pending if j.library_name != name]
+            self._blocked = [j for j in self._blocked if j.library_name != name]
+            for job in removed:
+                self._known_paths.discard(job.file_path)
+            if removed:
+                await self._broadcast(
+                    "queue_changed",
+                    {"pending": [job_to_dict(j) for j in self._pending]},
+                )
+            return len(removed)
+
     async def rename_paused_library(self, old: str, new: str) -> None:
         if old in self._paused_libraries:
             self._paused_libraries.discard(old)
@@ -801,6 +823,36 @@ class QueueManager:
                         job.file_path = str(final_path)
 
                         job.status = JobStatus.COMPLETED
+                        try:
+                            post_probe = await probe_file(str(final_path))
+                            if post_probe:
+                                post_info = extract_media_info(post_probe)
+                                post_st = final_path.stat()
+                                await db.upsert_library_file(
+                                    str(final_path),
+                                    job.library_name,
+                                    post_info.get("video_codec", ""),
+                                    post_info.get("resolution_height", 0),
+                                    post_st.st_size,
+                                    post_st.st_mtime,
+                                    bitrate_kbps=post_info.get("bitrate_kbps", 0),
+                                    container=final_path.suffix.lstrip(".").lower(),
+                                    audio_codec=post_info.get("audio_codec", ""),
+                                    audio_channels=post_info.get("audio_channels", 0),
+                                    duration=post_info.get("duration_seconds", 0),
+                                )
+                                if final_path != input_path:
+                                    await db.remove_library_file(
+                                        str(input_path), job.library_name
+                                    )
+                            await self._broadcast(
+                                "library_files_changed",
+                                {"library_name": job.library_name},
+                            )
+                        except Exception as e:
+                            log.warning(
+                                "Post-transcode library_files update failed: %s", e
+                            )
                         saved = job.old_size_bytes - (job.new_size_bytes or 0)
                         log.info(
                             "Completed: %s [%s] saved %s",

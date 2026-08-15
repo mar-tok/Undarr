@@ -13,17 +13,50 @@ from core.yaml_store import Library, store
 from core import db
 
 
-def _collect_video_files(library: Library) -> list[Path]:
+def _collect_video_files(library: Library) -> tuple[list[Path], list[str]]:
     files: list[Path] = []
+    missing: list[str] = []
     for dir_path in library.paths:
         p = Path(dir_path)
         if not p.exists():
             log.warning("Library path does not exist: %s", dir_path)
+            missing.append(dir_path)
             continue
         for file in p.rglob("*"):
             if file.is_file() and is_video_file(str(file)):
                 files.append(file)
-    return files
+    return files, missing
+
+
+async def _probe_and_upsert(file_path: str, library_name: str, st) -> dict | None:
+    container = Path(file_path).suffix.lstrip(".").lower()
+    probe_data = await probe_file(file_path)
+    if probe_data:
+        info = extract_media_info(probe_data)
+        await db.upsert_library_file(
+            file_path,
+            library_name,
+            info.get("video_codec", ""),
+            info.get("resolution_height", 0),
+            st.st_size,
+            st.st_mtime,
+            bitrate_kbps=info.get("bitrate_kbps", 0),
+            container=container,
+            audio_codec=info.get("audio_codec", ""),
+            audio_channels=info.get("audio_channels", 0),
+            duration=info.get("duration_seconds", 0),
+        )
+    else:
+        await db.upsert_library_file(
+            file_path,
+            library_name,
+            "",
+            0,
+            st.st_size,
+            st.st_mtime,
+            container=container,
+        )
+    return probe_data
 
 
 async def scan_library(
@@ -33,10 +66,6 @@ async def scan_library(
     *,
     progress_fn=None,
 ) -> tuple[int, int]:
-    if not library.preset:
-        log.warning("Scan skipped for '%s': no preset assigned", library_name)
-        return 0, 0
-
     if library.mark_processed_pending:
         log.info(
             "Scan skipped for '%s': files are still being marked as processed",
@@ -44,12 +73,15 @@ async def scan_library(
         )
         return 0, 0
 
-    files = _collect_video_files(library)
-    total = len(files)
+    all_files, missing_paths = await asyncio.to_thread(_collect_video_files, library)
+    total = len(all_files)
     count = 0
     skipped = 0
     scanned = 0
-    for file in files:
+
+    cached_mtimes = await db.get_library_files_mtimes(library_name)
+
+    for file in all_files:
         scanned += 1
         try:
             st = file.stat()
@@ -59,11 +91,23 @@ async def scan_library(
             continue
 
         file_str = str(file)
+        cached_mtime = cached_mtimes.get(file_str)
+        probe_data = None
+        if cached_mtime is None or abs(cached_mtime - st.st_mtime) >= 0.001:
+            probe_data = await _probe_and_upsert(file_str, library_name, st)
+
         if await db.is_processed(file_str, library_name, st.st_mtime):
             if progress_fn:
                 await progress_fn(scanned, total, count)
             continue
-
+        # If the file was renamed, its processed record is still under the old path
+        old_path = await db.find_rename_candidate(file_str, library_name, st.st_size)
+        if old_path:
+            await db.rename_file(old_path, file_str, library_name, st.st_mtime)
+            log.debug("Renamed tracked file: %s -> %s", old_path, file_str)
+            if progress_fn:
+                await progress_fn(scanned, total, count)
+            continue
         if library.new_file_delay:
             newest = max(st.st_mtime, st.st_ctime)
             age = time.time() - newest
@@ -71,8 +115,9 @@ async def scan_library(
                 if progress_fn:
                     await progress_fn(scanned, total, count)
                 continue
-
-        result = await scan_single_file(file_str, library_name, library, enqueue_fn)
+        result = await scan_single_file(
+            file_str, library_name, library, enqueue_fn, probe_data=probe_data
+        )
         if result == "queued":
             count += 1
         elif result == "skipped":
@@ -80,6 +125,8 @@ async def scan_library(
         if progress_fn:
             await progress_fn(scanned, total, count)
 
+    if not missing_paths:
+        await db.cleanup_library_files(library_name, {str(f) for f in all_files})
     log.info("Scan of '%s': queued %d, skipped %d", library_name, count, skipped)
     return count, skipped
 
@@ -129,6 +176,8 @@ async def scan_single_file(
     library_name: str,
     library: Library,
     enqueue_fn,
+    *,
+    probe_data: dict | None = None,
 ) -> str:
     """Returns 'queued', 'skipped', or 'none'."""
     if library.path_patterns:
@@ -146,9 +195,28 @@ async def scan_single_file(
                 return "skipped"
 
     media_info = None
-    probe_data = await probe_file(file_path)
+    if probe_data is None:
+        probe_data = await probe_file(file_path)
     if probe_data:
         media_info = extract_media_info(probe_data)
+        try:
+            st = Path(file_path).stat()
+            container = Path(file_path).suffix.lstrip(".").lower()
+            await db.upsert_library_file(
+                file_path,
+                library_name,
+                media_info.get("video_codec", ""),
+                media_info.get("resolution_height", 0),
+                st.st_size,
+                st.st_mtime,
+                bitrate_kbps=media_info.get("bitrate_kbps", 0),
+                container=container,
+                audio_codec=media_info.get("audio_codec", ""),
+                audio_channels=media_info.get("audio_channels", 0),
+                duration=media_info.get("duration_seconds", 0),
+            )
+        except OSError:
+            pass
     if library.skip_rules and media_info:
         matched_rule = should_skip(media_info, library.skip_rules)
         if matched_rule:
@@ -177,7 +245,7 @@ async def preview_library(
     progress_fn=None,
     abort_event: asyncio.Event | None = None,
 ) -> dict:
-    all_files = _collect_video_files(library)
+    all_files, _ = await asyncio.to_thread(_collect_video_files, library)
     total = len(all_files)
     scanned = 0
 
@@ -303,12 +371,14 @@ async def mark_library_processed(
     library: Library,
 ) -> int:
     count = 0
-    for file in _collect_video_files(library):
+    for file in (await asyncio.to_thread(_collect_video_files, library))[0]:
         try:
             st = file.stat()
         except OSError:
             continue
-        await db.mark_processed(str(file), library_name, st.st_mtime)
+        file_str = str(file)
+        await _probe_and_upsert(file_str, library_name, st)
+        await db.mark_processed(file_str, library_name, st.st_mtime)
         count += 1
     log.info("Marked %d files as processed in '%s'", count, library_name)
     return count

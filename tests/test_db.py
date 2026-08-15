@@ -4,6 +4,7 @@ import core.db as db_mod
 from core.db import (
     SCHEMA,
     PROCESSED_SCHEMA,
+    LIBRARY_FILES_SCHEMA,
     insert_job_history,
     get_history,
     get_job_log,
@@ -14,6 +15,19 @@ from core.db import (
     is_processed,
     clear_processed,
     remove_processed,
+    upsert_library_file,
+    remove_library_file,
+    find_rename_candidate,
+    rename_file,
+    rename_library,
+    remove_library_files,
+    cleanup_library_files,
+    get_library_files_mtimes,
+    get_stats_totals,
+    get_stats_by_library,
+    get_stats_composition,
+    get_stats_file_counts,
+    get_stats_processed_counts,
 )
 
 import pytest
@@ -25,6 +39,7 @@ async def db_setup():
     conn.row_factory = aiosqlite.Row
     await conn.executescript(SCHEMA)
     await conn.executescript(PROCESSED_SCHEMA)
+    await conn.executescript(LIBRARY_FILES_SCHEMA)
     await conn.commit()
     old_db = db_mod._db
     db_mod._db = conn
@@ -201,3 +216,118 @@ class TestRemoveProcessed:
         await mark_processed("/a.mkv", "lib1", 1.0)
         await remove_processed("/a.mkv", "lib1")
         assert not await is_processed("/a.mkv", "lib1", 1.0)
+
+
+class TestLibraryFiles:
+    async def test_upsert_and_mtimes(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/b.mkv", "lib1", "hevc", 2160, 2000, 2.0)
+        mtimes = await get_library_files_mtimes("lib1")
+        assert mtimes == {"/a.mkv": 1.0, "/b.mkv": 2.0}
+
+    async def test_upsert_replaces(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/a.mkv", "lib1", "hevc", 1080, 800, 5.0)
+        mtimes = await get_library_files_mtimes("lib1")
+        assert mtimes == {"/a.mkv": 5.0}
+
+    async def test_remove(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await remove_library_file("/a.mkv", "lib1")
+        assert await get_library_files_mtimes("lib1") == {}
+
+    async def test_cleanup_removes_stale(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/b.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await cleanup_library_files("lib1", {"/a.mkv"})
+        assert await get_library_files_mtimes("lib1") == {"/a.mkv": 1.0}
+
+    async def test_remove_library_files_scoped(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/b.mkv", "lib2", "h264", 1080, 1000, 1.0)
+        await remove_library_files("lib1")
+        assert await get_library_files_mtimes("lib1") == {}
+        assert await get_library_files_mtimes("lib2") == {"/b.mkv": 1.0}
+
+    async def test_rename_library(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await mark_processed("/a.mkv", "lib1", 1.0)
+        await _insert_sample("job1", library_name="lib1")
+        await rename_library("lib1", "lib2")
+        assert await get_library_files_mtimes("lib1") == {}
+        assert await get_library_files_mtimes("lib2") == {"/a.mkv": 1.0}
+        assert await is_processed("/a.mkv", "lib2", 1.0)
+        assert not await is_processed("/a.mkv", "lib1", 1.0)
+        rows = await get_history()
+        assert rows[0]["library_name"] == "lib2"
+
+
+class TestRenameDetection:
+    async def test_candidate_must_be_gone_from_disk(self, db_setup, tmp_path):
+        still_here = tmp_path / "old.mkv"
+        still_here.write_bytes(b"x")
+        await upsert_library_file(str(still_here), "lib1", "h264", 1080, 1000, 1.0)
+        assert await find_rename_candidate("/new.mkv", "lib1", 1000) is None
+        await upsert_library_file("/gone.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        assert await find_rename_candidate("/new.mkv", "lib1", 1000) == "/gone.mkv"
+
+    async def test_candidate_requires_matching_size(self, db_setup):
+        await upsert_library_file("/gone.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        assert await find_rename_candidate("/new.mkv", "lib1", 999) is None
+
+    async def test_rename_file_moves_records(self, db_setup):
+        await upsert_library_file("/old.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await mark_processed("/old.mkv", "lib1", 1.0)
+        assert await rename_file("/old.mkv", "/new.mkv", "lib1", 7.0) is True
+        assert await is_processed("/new.mkv", "lib1", 7.0)
+        assert await get_library_files_mtimes("lib1") == {"/new.mkv": 7.0}
+
+    async def test_rename_file_no_records(self, db_setup):
+        assert await rename_file("/old.mkv", "/new.mkv", "lib1", 7.0) is False
+
+    async def test_rename_file_new_path_already_scanned(self, db_setup):
+        # scan_library upserts the new path before rename detection runs
+        await upsert_library_file("/old.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await mark_processed("/old.mkv", "lib1", 1.0)
+        await upsert_library_file("/new.mkv", "lib1", "h264", 1080, 1000, 7.0)
+        assert await rename_file("/old.mkv", "/new.mkv", "lib1", 7.0) is True
+        assert await is_processed("/new.mkv", "lib1", 7.0)
+        assert await get_library_files_mtimes("lib1") == {"/new.mkv": 7.0}
+
+
+class TestStatsQueries:
+    async def test_totals(self, db_setup):
+        await _insert_sample("j1", status="completed")
+        await _insert_sample("j2", status="failed", new_size_bytes=None)
+        await _insert_sample("j3", status="skipped (rule)", new_size_bytes=None)
+        totals = await get_stats_totals()
+        assert totals["completed"] == 1
+        assert totals["failed"] == 1
+        assert totals["skipped"] == 1
+        assert totals["space_saved_bytes"] == 500000
+
+    async def test_totals_exclude_dismissed(self, db_setup):
+        await _insert_sample("j1", status="completed")
+        await dismiss_history_entries(["j1"])
+        totals = await get_stats_totals()
+        assert totals["completed"] == 0
+
+    async def test_by_library(self, db_setup):
+        await _insert_sample("j1", library_name="lib1", status="completed")
+        await _insert_sample(
+            "j2", library_name="lib1", status="skipped", new_size_bytes=None
+        )
+        await _insert_sample("j3", library_name="lib2", status="completed")
+        by_lib = {r["library"]: r for r in await get_stats_by_library()}
+        assert by_lib["lib1"]["completed"] == 1
+        assert by_lib["lib1"]["processed"] == 2
+        assert by_lib["lib2"]["completed"] == 1
+
+    async def test_composition_and_counts(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/b.mkv", "lib1", "hevc", 1080, 1000, 1.0)
+        await upsert_library_file("/c.mkv", "lib1", "hevc", 1080, 1000, 1.0)
+        await mark_processed("/b.mkv", "lib1", 1.0)
+        assert await get_stats_composition() == {"lib1": {"h264": 1, "hevc": 2}}
+        assert await get_stats_file_counts() == {"lib1": 3}
+        assert await get_stats_processed_counts() == {"lib1": 1}

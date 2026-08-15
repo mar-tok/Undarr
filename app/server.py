@@ -11,7 +11,7 @@ from core.yaml_store import store
 from core.watcher import watcher
 from core.scanner import scan_library, mark_library_processed, periodic_scanner
 from core.devices import detect_devices
-from app.routers import queue, presets, libraries, settings, filesystem
+from app.routers import queue, presets, libraries, settings, filesystem, stats
 
 
 async def _startup_scan() -> None:
@@ -22,6 +22,9 @@ async def _startup_scan() -> None:
             await mark_library_processed(name, lib)
             lib.mark_processed_pending = False
             await store.update_library(name, lib)
+            await queue_manager._broadcast(
+                "library_files_changed", {"library_name": name}
+            )
         if not lib.preset:
             continue
 
@@ -69,7 +72,7 @@ async def lifespan(app: FastAPI):
     paused_libs = {name for name, lib in store.config.libraries.items() if lib.paused}
     queue_manager.load_paused_libraries(paused_libs)
     await queue_manager.start(limits)
-    await watcher.start(queue_manager.enqueue)
+    await watcher.start(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
     await periodic_scanner.start(queue_manager.enqueue)
     scan_task = asyncio.create_task(_startup_scan())
     yield
@@ -88,6 +91,7 @@ app.include_router(presets.router)
 app.include_router(libraries.router)
 app.include_router(settings.router)
 app.include_router(filesystem.router)
+app.include_router(stats.router)
 
 
 @app.get("/api/health")

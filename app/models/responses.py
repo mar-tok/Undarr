@@ -125,3 +125,46 @@ class SearchResultOut(BaseModel):
     new_size_bytes: int | None = None
     date: str | None = None
     source: str
+
+
+class StatsTotals(BaseModel):
+    completed: int
+    failed: int
+    skipped: int
+    space_saved_bytes: int
+    original_bytes: int
+    processing_seconds: float
+
+
+class StatsDaily(BaseModel):
+    date: str
+    completed: int
+    failed: int
+    space_saved_bytes: int
+
+
+class StatsLibrary(BaseModel):
+    library: str
+    completed: int
+    failed: int
+    processed: int
+    skipped: int
+    space_saved_bytes: int
+    original_bytes: int
+
+
+class StatsTopSaving(BaseModel):
+    file_path: str
+    old_size_bytes: int
+    new_size_bytes: int
+    library_name: str
+
+
+class StatsOut(BaseModel):
+    totals: StatsTotals
+    daily: list[StatsDaily]
+    by_library: list[StatsLibrary]
+    top_savings: list[StatsTopSaving]
+    composition: dict[str, dict[str, int]]
+    file_counts: dict[str, int]
+    processed_counts: dict[str, int]
