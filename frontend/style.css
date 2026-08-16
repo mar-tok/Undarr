@@ -2111,6 +2111,33 @@ input[type="checkbox"][role="switch"]:focus-visible {
     background: #272727;
 }
 
+#overview-chart {
+    margin-bottom: 24px;
+}
+
+#overview-chart .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+#overview-chart .chart-header h3 { margin: 0; }
+
+#overview-chart .chart-wrap {
+    position: relative;
+    height: 240px;
+}
+
+.chart-range-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.chart-range-btns button.active {
+    border-color: var(--accent);
+}
+
 .progress-cell {
     display: flex;
     align-items: center;

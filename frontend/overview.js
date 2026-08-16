@@ -4,6 +4,8 @@ let statsData = null;
 let activeJobs = {};
 let pendingCount = 0;
 let knownLibraries = new Set();
+let chartInstance = null;
+let chartRange = "week";
 
 function isVisible() {
     return document.getElementById("view-overview").classList.contains("active");
@@ -31,6 +33,126 @@ function renderStatCards() {
             <div class="stat-value">${t.failed}</div>
             <div class="stat-label">Errors</div>
         </div>`;
+}
+
+function fillDays(daily, days) {
+    const lookup = {};
+    for (const d of daily) lookup[d.date] = d;
+    const result = [];
+    const now = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+        const dt = new Date(now);
+        dt.setDate(dt.getDate() - i);
+        const key = dt.toISOString().slice(0, 10);
+        result.push(lookup[key] || { date: key, completed: 0, failed: 0, space_saved_bytes: 0 });
+    }
+    return result;
+}
+
+function bucketByMonth(daily) {
+    const months = {};
+    for (const d of daily) {
+        const key = d.date.slice(0, 7);
+        months[key] = (months[key] || 0) + (d.space_saved_bytes || 0);
+    }
+    const sorted = Object.keys(months).sort();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return {
+        labels: sorted.map(k => { const [y, m] = k.split("-"); return monthNames[+m - 1] + " " + y.slice(2); }),
+        data: sorted.map(k => months[k]),
+    };
+}
+
+function chartData(daily) {
+    if (chartRange === "year") {
+        return bucketByMonth(fillDays(daily, 365));
+    }
+    const days = chartRange === "month" ? 30 : 7;
+    const filled = fillDays(daily, days);
+    return { labels: filled.map(d => d.date.slice(5)), data: filled.map(d => d.space_saved_bytes || 0) };
+}
+
+function renderChart() {
+    const el = document.getElementById("overview-chart");
+    const daily = statsData?.daily || [];
+    if (daily.length < 2) {
+        el.innerHTML = "";
+        chartInstance?.destroy();
+        chartInstance = null;
+        return;
+    }
+
+    if (!el.querySelector("canvas")) {
+        el.innerHTML = `<div class="chart-header"><h3>Space Saved</h3>
+            <div class="chart-range-btns">
+                <button data-range="week" class="btn btn-sm active">Week</button>
+                <button data-range="month" class="btn btn-sm">Month</button>
+                <button data-range="year" class="btn btn-sm">Year</button>
+            </div></div>
+            <div class="chart-wrap"><canvas id="overview-chart-canvas"></canvas></div>`;
+        el.querySelector(".chart-range-btns").addEventListener("click", e => {
+            const btn = e.target.closest("button[data-range]");
+            if (!btn || btn.dataset.range === chartRange) return;
+            chartRange = btn.dataset.range;
+            el.querySelectorAll(".chart-range-btns button").forEach(b => b.classList.toggle("active", b === btn));
+            renderChart();
+        });
+    }
+
+    const { labels, data } = chartData(daily);
+    const wrap = el.querySelector(".chart-wrap");
+    if (labels.length < 2) {
+        chartInstance?.destroy();
+        chartInstance = null;
+        wrap.innerHTML = '<p class="section-empty">Not enough data for this range yet.</p>';
+        return;
+    }
+    if (!wrap.querySelector("canvas")) {
+        wrap.innerHTML = '<canvas id="overview-chart-canvas"></canvas>';
+    }
+    const canvas = document.getElementById("overview-chart-canvas");
+
+    chartInstance?.destroy();
+    chartInstance = new Chart(canvas, {
+        type: "bar",
+        data: {
+            labels,
+            datasets: [{
+                data,
+                backgroundColor: "#da7722",
+                borderRadius: 0,
+            }],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    displayColors: false,
+                    callbacks: {
+                        label: ctx => formatBytesLarge(ctx.parsed.y),
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: "#e0e0e0", maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+                    border: { color: "#333" },
+                },
+                y: {
+                    grid: { color: "#333" },
+                    ticks: {
+                        color: "#e0e0e0",
+                        callback: v => formatBytesLarge(v),
+                    },
+                    border: { color: "#333" },
+                    beginAtZero: true,
+                },
+            },
+        },
+    });
 }
 
 function renderActiveStrip() {
@@ -135,6 +257,7 @@ function renderBiggestWins() {
 
 function renderAll() {
     renderStatCards();
+    renderChart();
     renderActiveStrip();
     renderLibraryTable();
     renderBiggestWins();
