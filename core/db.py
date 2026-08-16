@@ -562,6 +562,28 @@ async def get_stats_top_savings(limit: int = 10) -> list[dict]:
     ]
 
 
+async def get_stats_by_device() -> list[dict]:
+    db = get_db()
+    cursor = await db.execute("""
+        SELECT
+            device_name,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+            SUM(CASE WHEN status = 'completed' THEN duration_seconds ELSE 0 END) AS processing_seconds
+        FROM job_history
+        WHERE device_name != '' AND dismissed = 0
+        GROUP BY device_name
+    """)
+    rows = await cursor.fetchall()
+    return [
+        {
+            "device": r[0],
+            "completed": r[1],
+            "processing_seconds": r[2] or 0.0,
+        }
+        for r in rows
+    ]
+
+
 async def get_stats_composition() -> dict[str, dict[str, int]]:
     db = get_db()
     cursor = await db.execute("""

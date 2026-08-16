@@ -1,4 +1,4 @@
-import { api, formatBytes, formatBytesLarge, basename, esc, escAttr, renderCodecBar } from "./helpers.js";
+import { api, formatBytes, formatBytesLarge, formatDuration, basename, esc, escAttr, renderCodecBar } from "./helpers.js";
 
 let statsData = null;
 let activeJobs = {};
@@ -228,6 +228,28 @@ function renderLibraryTable() {
     el.innerHTML = html;
 }
 
+function renderDeviceCards() {
+    const el = document.getElementById("overview-devices");
+    const devices = statsData?.by_device || [];
+    if (!devices.length) {
+        el.innerHTML = "";
+        return;
+    }
+    let html = '<h3>Devices</h3><div class="overview-stats">';
+    for (const d of devices) {
+        html += `<div class="stat-card device-card">
+            <div class="device-label">${esc(d.device)}</div>
+            <div class="device-stats">
+                <div data-tooltip="Completed transcodes on this device"><span class="stat-value">${d.completed}</span><span class="stat-label">Jobs</span></div>
+                <div data-tooltip="Cumulative processing time across all completed jobs"><span class="stat-value">${formatDuration(d.processing_seconds)}</span><span class="stat-label">Total Time</span></div>
+                <div data-tooltip="Average encoding time per completed transcode on this device. Skipped and failed jobs are excluded."><span class="stat-value">${formatDuration(d.avg_duration_seconds)}</span><span class="stat-label">Avg Per Job</span></div>
+            </div>
+        </div>`;
+    }
+    html += "</div>";
+    el.innerHTML = html;
+}
+
 function renderBiggestWins() {
     const el = document.getElementById("overview-wins");
     if (!statsData || !statsData.top_savings || !statsData.top_savings.length) {
@@ -260,6 +282,7 @@ function renderAll() {
     renderChart();
     renderActiveStrip();
     renderLibraryTable();
+    renderDeviceCards();
     renderBiggestWins();
 }
 

@@ -160,11 +160,19 @@ class StatsTopSaving(BaseModel):
     library_name: str
 
 
+class StatsDevice(BaseModel):
+    device: str
+    completed: int
+    processing_seconds: float
+    avg_duration_seconds: float
+
+
 class StatsOut(BaseModel):
     totals: StatsTotals
     daily: list[StatsDaily]
     by_library: list[StatsLibrary]
     top_savings: list[StatsTopSaving]
+    by_device: list[StatsDevice]
     composition: dict[str, dict[str, int]]
     file_counts: dict[str, int]
     processed_counts: dict[str, int]

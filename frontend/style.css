@@ -2138,6 +2138,42 @@ input[type="checkbox"][role="switch"]:focus-visible {
     border-color: var(--accent);
 }
 
+.device-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 0 1 auto;
+}
+
+.device-label {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.device-stats {
+    display: flex;
+    gap: 24px;
+}
+
+.device-stats > div {
+    display: flex;
+    flex-direction: column;
+}
+
+.device-stats .stat-value {
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.device-stats .stat-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+}
+
 .progress-cell {
     display: flex;
     align-items: center;
