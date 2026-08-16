@@ -258,7 +258,7 @@ function renderSummary() {
             if (state.importType === "scan") {
                 api("POST", `/api/libraries/${encodeURIComponent(name)}/scan`).catch(() => {});
             }
-            navigateFn("queue");
+            navigateFn("overview");
         } catch (e) {
             btn.disabled = false;
             btn.textContent = "Create Library";

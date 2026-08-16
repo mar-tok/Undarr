@@ -1,4 +1,5 @@
 import { api } from "./helpers.js";
+import { initOverview, loadOverview } from "./overview.js";
 import { initQueue, connectSSE, loadQueueTab } from "./queue.js";
 import { initHistory } from "./history.js";
 import { initSearch } from "./search.js";
@@ -32,7 +33,7 @@ document.addEventListener("mousemove", e => {
 const navItems = document.querySelectorAll(".nav-item");
 const views = document.querySelectorAll(".view");
 
-let currentView = "queue";
+let currentView = "overview";
 
 function navigate(viewId) {
     if (currentView === "settings" && viewId !== "settings" && isScheduleDirty()) {
@@ -43,19 +44,21 @@ function navigate(viewId) {
     currentView = viewId;
     navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));
     views.forEach(v => v.classList.toggle("active", v.id === "view-" + viewId));
+    if (viewId === "overview") loadOverview();
     if (viewId === "queue") loadQueueTab();
     if (viewId === "presets") loadPresetView();
     if (viewId === "libraries") loadLibraryView();
     if (viewId === "settings") loadSettings();
     if (viewId === "quickstart") loadSetupView();
-    const hash = viewId === "queue" ? "" : viewId;
+    const hash = viewId === "overview" ? "" : viewId;
     if (location.hash.replace("#", "").split("/")[0] !== hash)
         history.replaceState(null, "", hash ? "#" + hash : location.pathname);
 }
 
 navItems.forEach(n => n.addEventListener("click", () => navigate(n.dataset.view)));
-document.getElementById("sidebar-title").addEventListener("click", () => navigate("queue"));
+document.getElementById("sidebar-title").addEventListener("click", () => navigate("overview"));
 
+initOverview();
 initQueue();
 initHistory();
 initSearch();
@@ -64,7 +67,7 @@ initLibraries();
 initSettings();
 initSetup(navigate);
 
-const validViews = ["queue", "presets", "libraries", "settings", "quickstart"];
+const validViews = ["overview", "queue", "presets", "libraries", "settings", "quickstart"];
 
 async function initApp() {
     const hashParts = location.hash.replace("#", "").split("/");
@@ -72,9 +75,9 @@ async function initApp() {
 
     if (!hashView) {
         const firstRun = await checkFirstRun();
-        navigate(firstRun ? "quickstart" : "queue");
+        navigate(firstRun ? "quickstart" : "overview");
     } else {
-        navigate(validViews.includes(hashView) ? hashView : "queue");
+        navigate(validViews.includes(hashView) ? hashView : "overview");
     }
 
     if (hashParts[0] === "settings" && hashParts[1]) switchSettingsTab(hashParts[1]);

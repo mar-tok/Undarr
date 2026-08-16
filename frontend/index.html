@@ -11,7 +11,8 @@
     <div id="layout">
         <nav id="sidebar">
             <h1 id="sidebar-title"><span class="accent">Un</span>darr</h1>
-            <button class="nav-item active" data-view="queue"><img src="list.svg" alt="">Queue</button>
+            <button class="nav-item active" data-view="overview"><img src="chart.svg" alt="">Overview</button>
+            <button class="nav-item" data-view="queue"><img src="list.svg" alt="">Queue</button>
             <button class="nav-item" data-view="presets"><img src="sliders.svg" alt="">Presets</button>
             <button class="nav-item" data-view="libraries"><img src="folder.svg" alt="">Libraries</button>
             <button class="nav-item" data-view="settings"><img src="gear.svg" alt="">Settings</button>
@@ -34,7 +35,14 @@
         <main id="content">
             <div id="scan-status" style="display:none"></div>
 
-            <div id="view-queue" class="view active">
+            <div id="view-overview" class="view active">
+                <div class="overview-stats" id="overview-stats"></div>
+                <div id="overview-active" style="display:none"></div>
+                <div id="overview-libraries"></div>
+                <div id="overview-wins"></div>
+            </div>
+
+            <div id="view-queue" class="view">
                 <div class="settings-tabs" id="queue-tabs">
                     <button class="settings-tab active" data-qtab="queue">Queue</button>
                     <button class="settings-tab" data-qtab="issues">Issues</button>

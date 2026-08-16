@@ -23,6 +23,13 @@ export function formatBytes(bytes) {
     return (bytes / 1073741824).toFixed(1) + " GB";
 }
 
+export function formatBytesLarge(bytes) {
+    if (bytes == null || bytes === 0) return "0 B";
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + " MB";
+    if (bytes < 1099511627776) return (bytes / 1073741824).toFixed(1) + " GB";
+    return (bytes / 1099511627776).toFixed(1) + " TB";
+}
+
 export function basename(path) {
     return path.split(/[\\/]/).pop() || path;
 }
@@ -58,6 +65,43 @@ export function formatDate(iso) {
     const sameYear = d.getFullYear() === now.getFullYear();
     const date = pad(d.getDate()) + "/" + pad(d.getMonth() + 1);
     return sameYear ? date + " " + time : date + "/" + d.getFullYear() + " " + time;
+}
+
+const CODEC_COLORS = {
+    hevc: "#4caf50", h265: "#4caf50",
+    h264: "#daa520",
+    av1: "#4a9eff",
+};
+
+function codecColor(codec) {
+    const c = codec.toLowerCase();
+    return CODEC_COLORS[c] || "#666";
+}
+
+function codecLabel(codec) {
+    const c = codec.toLowerCase();
+    if (c === "hevc" || c === "h265") return "HEVC";
+    if (c === "h264") return "H.264";
+    if (c === "av1") return "AV1";
+    return codec.toUpperCase();
+}
+
+export function renderCodecBar(composition) {
+    if (!composition || !Object.keys(composition).length) return { html: "-", tooltip: "" };
+    const entries = Object.entries(composition);
+    const total = entries.reduce((s, [, n]) => s + n, 0);
+    if (!total) return { html: "-", tooltip: "" };
+    let html = '<div class="codec-bar">';
+    entries.sort((a, b) => b[1] - a[1]);
+    const parts = [];
+    entries.forEach(([codec, count]) => {
+        const w = (count / total * 100).toFixed(1);
+        const label = codecLabel(codec);
+        parts.push(`${label}: ${count} (${Math.round(count / total * 100)}%)`);
+        html += `<div class="codec-segment" style="flex-basis:${w}%;background:${codecColor(codec)}"></div>`;
+    });
+    html += "</div>";
+    return { html, tooltip: parts.join("<br>") };
 }
 
 export function getFormSnapshot(container) {

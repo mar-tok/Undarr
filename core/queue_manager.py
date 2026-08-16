@@ -73,6 +73,7 @@ def job_to_dict(job: Job) -> dict:
         "file_path": job.file_path,
         "library_name": job.library_name,
         "device": job.device,
+        "device_name": device_display_name(job.device),
         "status": job.status.value,
         "old_size_bytes": job.old_size_bytes,
         "new_size_bytes": job.new_size_bytes,

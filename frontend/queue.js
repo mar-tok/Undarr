@@ -3,6 +3,7 @@ import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
 import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
 import { updatePreviewProgress } from "./libraries.js";
+import { onOverviewSSE } from "./overview.js";
 
 let queuePaused = false;
 let scheduleActive = true;
@@ -346,6 +347,7 @@ export function connectSSE() {
         updatePauseButton();
         renderQueue();
         renderIssues();
+        onOverviewSSE("init", data);
     });
 
     es.addEventListener("queue_paused", (e) => {
@@ -376,12 +378,14 @@ export function connectSSE() {
         const data = JSON.parse(e.data);
         pendingJobs = data.pending;
         debouncedRenderQueue();
+        onOverviewSSE("queue_changed", data);
     });
 
     es.addEventListener("job_queued", (e) => {
         const job = JSON.parse(e.data);
         pendingJobs.splice(job.position, 0, job);
         debouncedRenderQueue();
+        onOverviewSSE("job_queued", job);
     });
 
     es.addEventListener("job_blocked", (e) => {
@@ -401,6 +405,7 @@ export function connectSSE() {
         pendingJobs = pendingJobs.filter(j => j.id !== job.id);
         activeJobs[job.id] = job;
         renderQueue();
+        onOverviewSSE("job_started", job);
     });
 
     es.addEventListener("job_progress", (e) => {
@@ -416,6 +421,7 @@ export function connectSSE() {
                 renderQueue();
             }
         }
+        onOverviewSSE("job_progress", data);
     });
 
     es.addEventListener("job_finished", (e) => {
@@ -434,6 +440,7 @@ export function connectSSE() {
             hasUnseenFailures = false;
             loadHistory().catch(() => {});
         }
+        onOverviewSSE("job_finished", job);
     });
 
     es.addEventListener("scan_progress", (e) => {
@@ -447,6 +454,7 @@ export function connectSSE() {
 
     es.addEventListener("scan_complete", (e) => {
         const data = JSON.parse(e.data);
+        onOverviewSSE("scan_complete", data);
         const el = document.getElementById("scan-status");
         if (!el) return;
         if (data.library === null) {
@@ -475,6 +483,11 @@ export function connectSSE() {
         blockedJobs = blockedJobs.filter(j => j.id !== data.id);
         renderQueue();
         renderIssues();
+        onOverviewSSE("job_cancelled", data);
+    });
+
+    es.addEventListener("library_files_changed", (e) => {
+        onOverviewSSE("library_files_changed", JSON.parse(e.data));
     });
 
     es.onerror = () => {
