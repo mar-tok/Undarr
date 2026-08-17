@@ -127,6 +127,8 @@ class QueueManager:
         self._device_limits: dict[str, int] = {}
         self._device_active: dict[str, int] = {}
         self._paused_libraries: set[str] = set()
+        self._unavailable_libraries: dict[str, str] = {}
+        self._missing_paths: dict[str, list[str]] = {}
         self._schedule_wakeup_handle: asyncio.TimerHandle | None = None
         self._schedule_is_active: bool = True
 
@@ -258,6 +260,95 @@ class QueueManager:
             self._paused_libraries.discard(name)
             await self._broadcast(
                 "library_paused", {"library_name": name, "paused": False}
+            )
+
+    @property
+    def unavailable_libraries(self) -> dict[str, str]:
+        return dict(self._unavailable_libraries)
+
+    @property
+    def missing_paths_by_library(self) -> dict[str, list[str]]:
+        return dict(self._missing_paths)
+
+    async def mark_unavailable(self, name: str, reason: str) -> None:
+        if self._unavailable_libraries.get(name) == reason:
+            return
+        self._unavailable_libraries[name] = reason
+        await self._broadcast(
+            "library_unavailable",
+            {"library_name": name, "unavailable": True, "reason": reason},
+        )
+        log.warning("Library '%s' unavailable: %s", name, reason)
+
+    async def mark_available(self, name: str) -> None:
+        if name not in self._unavailable_libraries:
+            return
+        del self._unavailable_libraries[name]
+        await self._broadcast(
+            "library_unavailable",
+            {"library_name": name, "unavailable": False, "reason": ""},
+        )
+        self._dispatch_event.set()
+        log.info("Library '%s' available again", name)
+
+    async def clear_unavailable_library(self, name: str) -> None:
+        if name in self._unavailable_libraries:
+            del self._unavailable_libraries[name]
+            await self._broadcast(
+                "library_unavailable",
+                {"library_name": name, "unavailable": False, "reason": ""},
+            )
+        if name in self._missing_paths:
+            del self._missing_paths[name]
+            await self._broadcast(
+                "library_missing_paths", {"library_name": name, "missing_paths": []}
+            )
+
+    async def rename_unavailable_library(self, old: str, new: str) -> None:
+        if old in self._unavailable_libraries:
+            reason = self._unavailable_libraries.pop(old)
+            self._unavailable_libraries[new] = reason
+            await self._broadcast(
+                "library_unavailable",
+                {"library_name": old, "unavailable": False, "reason": ""},
+            )
+            await self._broadcast(
+                "library_unavailable",
+                {"library_name": new, "unavailable": True, "reason": reason},
+            )
+        if old in self._missing_paths:
+            paths = self._missing_paths.pop(old)
+            self._missing_paths[new] = paths
+            await self._broadcast(
+                "library_missing_paths", {"library_name": old, "missing_paths": []}
+            )
+            await self._broadcast(
+                "library_missing_paths", {"library_name": new, "missing_paths": paths}
+            )
+
+    async def on_unavailable(
+        self,
+        library_name: str,
+        unavailable: bool,
+        reason: str,
+        missing_paths: list[str] | None = None,
+    ) -> None:
+        if unavailable:
+            await self.mark_unavailable(library_name, reason)
+        else:
+            await self.mark_available(library_name)
+        if missing_paths:
+            if self._missing_paths.get(library_name) != missing_paths:
+                self._missing_paths[library_name] = missing_paths
+                await self._broadcast(
+                    "library_missing_paths",
+                    {"library_name": library_name, "missing_paths": missing_paths},
+                )
+        elif library_name in self._missing_paths:
+            del self._missing_paths[library_name]
+            await self._broadcast(
+                "library_missing_paths",
+                {"library_name": library_name, "missing_paths": []},
             )
 
     def _check_schedule_active(self) -> bool:
@@ -586,6 +677,9 @@ class QueueManager:
                         self._known_paths.discard(job.file_path)
                         continue
                     if job.library_name in self._paused_libraries:
+                        still_pending.append(job)
+                        continue
+                    if job.library_name in self._unavailable_libraries:
                         still_pending.append(job)
                         continue
                     limit = self._device_limits.get(job.device, 1)

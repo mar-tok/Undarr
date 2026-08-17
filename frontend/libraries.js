@@ -8,6 +8,8 @@ let presets = [];
 let editingLibraryName = null;
 let creatingNewLibrary = false;
 let librariesGeneration = 0;
+let unavailableLibraries = {};
+let missingPathsByLibrary = {};
 
 const SCAN_UNITS = [
     { value: "seconds", label: "seconds" },
@@ -61,6 +63,16 @@ function renderLibraryViewCard(lib) {
     const disabled = encoder && isEncoderDisabled(encoder);
     let propsHtml = "";
     propsHtml += `<dt>Preset</dt><dd>${lib.preset ? esc(lib.preset) : "(none)"}</dd>`;
+    const libMissing = missingPathsByLibrary[lib.name] || [];
+    lib.paths.forEach((p, i) => {
+        const pathMissing = libMissing.includes(p);
+        if (pathMissing) {
+            propsHtml += `<dt>${i === 0 ? "Paths" : ""}</dt><dd class="lib-path-cell path-missing" data-tooltip="This path is not accessible.<br>Files on this path are not being scanned."><img class="path-warning-icon" src="warning-triangle-fill.svg" alt="Missing"><span class="path-text-rtl">${esc(p)}</span></dd>`;
+        } else {
+            propsHtml += `<dt>${i === 0 ? "Paths" : ""}</dt><dd class="lib-path-cell" title="${escAttr(p)}">${esc(p)}</dd>`;
+        }
+    });
+    if (!lib.paths.length) propsHtml += `<dt>Paths</dt><dd>0</dd>`;
     propsHtml += `<dt>Watch</dt><dd>${lib.watch ? "Yes" : "No"}</dd>`;
     if (lib.scan_interval > 0) {
         propsHtml += `<dt>Scan</dt><dd>Every ${lib.scan_interval} ${esc(lib.scan_unit)}</dd>`;
@@ -68,7 +80,6 @@ function renderLibraryViewCard(lib) {
     if (lib.new_file_delay) {
         propsHtml += `<dt>Delay</dt><dd>${esc(String(lib.new_file_delay))} ${esc(lib.new_file_delay_unit || "minutes")}</dd>`;
     }
-    propsHtml += `<dt>Paths</dt><dd>${esc(lib.paths.join(", "))}</dd>`;
 
     let warnHtml = "";
     if (!lib.preset) {
@@ -78,7 +89,10 @@ function renderLibraryViewCard(lib) {
     }
 
     const descHtml = lib.description ? `<div class="lib-card-desc">${esc(lib.description)}</div>` : "";
-    const statusBadge = lib.paused ? `<span class="lib-paused-badge">PAUSED</span>` : "";
+    const libUnavailable = unavailableLibraries[lib.name];
+    const statusBadge = libUnavailable
+        ? `<span class="lib-unavailable-badge" data-tooltip="${escAttr(libUnavailable)}">UNAVAILABLE</span>`
+        : lib.paused ? `<span class="lib-paused-badge">PAUSED</span>` : "";
 
     return `<div class="lib-card" data-name="${escAttr(lib.name)}">
         <div class="lib-card-header">
@@ -724,6 +738,24 @@ export function updatePreviewProgress(data) {
     if (loading) {
         loading.textContent = `Scanning... ${data.scanned}/${data.total}`;
     }
+}
+
+export function onLibraryMissingPaths(data) {
+    if (data.missing_paths && data.missing_paths.length) {
+        missingPathsByLibrary[data.library_name] = data.missing_paths;
+    } else {
+        delete missingPathsByLibrary[data.library_name];
+    }
+    if (!editingLibraryName && !creatingNewLibrary) renderLibraries();
+}
+
+export function onLibraryUnavailable(data) {
+    if (data.unavailable) {
+        unavailableLibraries[data.library_name] = data.reason;
+    } else {
+        delete unavailableLibraries[data.library_name];
+    }
+    if (!editingLibraryName && !creatingNewLibrary) renderLibraries();
 }
 
 function cancelPreview() {

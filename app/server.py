@@ -45,7 +45,11 @@ async def _startup_scan() -> None:
             if not await store.get_library(name):
                 continue
             count, _ = await scan_library(
-                name, lib, queue_manager.enqueue, progress_fn=progress_fn
+                name,
+                lib,
+                queue_manager.enqueue,
+                progress_fn=progress_fn,
+                on_unavailable=queue_manager.on_unavailable,
             )
             await queue_manager._broadcast(
                 "scan_complete", {"library": name, "queued": count}
@@ -73,7 +77,9 @@ async def lifespan(app: FastAPI):
     queue_manager.load_paused_libraries(paused_libs)
     await queue_manager.start(limits)
     await watcher.start(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
-    await periodic_scanner.start(queue_manager.enqueue)
+    await periodic_scanner.start(
+        queue_manager.enqueue, on_unavailable=queue_manager.on_unavailable
+    )
     scan_task = asyncio.create_task(_startup_scan())
     yield
     scan_task.cancel()

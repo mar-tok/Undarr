@@ -1077,6 +1077,37 @@ tr.clickable:hover {
     text-align: right;
 }
 
+.lib-path-cell {
+    direction: rtl;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lib-path-cell.path-missing {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    direction: ltr;
+    color: var(--accent);
+}
+
+.path-text-rtl {
+    direction: rtl;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.path-warning-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin-right: 4px;
+    filter: brightness(0) saturate(100%) invert(75%) sepia(60%) saturate(500%) hue-rotate(5deg);
+}
+
 .lib-card-props dt:nth-of-type(odd),
 .lib-card-props dd:nth-of-type(odd) {
     background: var(--bg-tertiary);
@@ -1101,6 +1132,18 @@ tr.clickable:hover {
     letter-spacing: 0.5px;
     border: 1px solid var(--accent);
     color: #fff;
+    padding: 1px 6px;
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.lib-unavailable-badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--error);
+    color: var(--error);
     padding: 1px 6px;
     margin-left: 8px;
     flex-shrink: 0;

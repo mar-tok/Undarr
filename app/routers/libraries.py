@@ -151,7 +151,9 @@ async def create_library(body: LibraryCreate):
         _mark_tasks.add(task)
         task.add_done_callback(_mark_tasks.discard)
     await watcher.restart(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
-    await periodic_scanner.restart(queue_manager.enqueue)
+    await periodic_scanner.restart(
+        queue_manager.enqueue, on_unavailable=queue_manager.on_unavailable
+    )
     return LibraryOut(
         name=body.name,
         paths=lib.paths,
@@ -203,11 +205,14 @@ async def update_library(name: str, body: LibraryUpdate):
         await db.rename_library(name, new_name)
         await queue_manager.rename_library_jobs(name, new_name)
         await queue_manager.rename_paused_library(name, new_name)
+        await queue_manager.rename_unavailable_library(name, new_name)
         log.info("Library renamed: '%s' -> '%s'", name, new_name)
     else:
         log.info("Library updated: '%s'", name)
     await watcher.restart(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
-    await periodic_scanner.restart(queue_manager.enqueue)
+    await periodic_scanner.restart(
+        queue_manager.enqueue, on_unavailable=queue_manager.on_unavailable
+    )
     await queue_manager.re_evaluate_blocked()
     return LibraryOut(
         name=new_name,
@@ -235,8 +240,11 @@ async def delete_library(name: str):
     if removed:
         log.info("Removed %d queued jobs for deleted library '%s'", removed, name)
     await queue_manager.clear_paused_library(name)
+    await queue_manager.clear_unavailable_library(name)
     await watcher.restart(queue_manager.enqueue, broadcast_fn=queue_manager._broadcast)
-    await periodic_scanner.restart(queue_manager.enqueue)
+    await periodic_scanner.restart(
+        queue_manager.enqueue, on_unavailable=queue_manager.on_unavailable
+    )
 
 
 @router.post("/{name}/pause")
@@ -345,7 +353,11 @@ async def scan(name: str, force: bool = Query(False)):
             )
 
         count, skipped = await scan_library(
-            name, lib, queue_manager.enqueue, progress_fn=progress_fn
+            name,
+            lib,
+            queue_manager.enqueue,
+            progress_fn=progress_fn,
+            on_unavailable=queue_manager.on_unavailable,
         )
         await queue_manager._broadcast(
             "scan_complete", {"library": name, "queued": count}

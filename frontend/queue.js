@@ -2,7 +2,7 @@ import { api, formatBytes, basename, esc, escAttr, formatDuration } from "./help
 import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
 import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
-import { updatePreviewProgress } from "./libraries.js";
+import { updatePreviewProgress, onLibraryUnavailable, onLibraryMissingPaths } from "./libraries.js";
 import { onOverviewSSE } from "./overview.js";
 
 let queuePaused = false;
@@ -13,6 +13,8 @@ let blockedJobs = [];
 let failedJobs = [];
 let hasUnseenFailures = false;
 let pausedLibraries = new Set();
+let unavailableLibraries = {};
+let missingPathsByLibrary = {};
 
 let _eventSource = null;
 let _reconnectTimer = null;
@@ -147,9 +149,12 @@ export function renderQueue() {
         </tr>`;
     });
     pagePending.forEach(j => {
+        const libUnavailable = j.library_name in unavailableLibraries;
         const libPaused = pausedLibraries.has(j.library_name);
-        const statusText = libPaused ? "paused (library)" : "pending";
-        const statusTip = libPaused ? ` data-tooltip="Library '${escAttr(j.library_name)}' is paused. Jobs stay queued but will not start until the library is resumed.<br>Resume from the library's actions menu on the Libraries page."` : "";
+        const statusText = libUnavailable ? "unavailable" : libPaused ? "paused (library)" : "pending";
+        const statusTip = libUnavailable
+            ? ` data-tooltip="Library '${escAttr(j.library_name)}' is unavailable. All of its paths are missing, so jobs stay queued and will not start until the paths are accessible again."`
+            : libPaused ? ` data-tooltip="Library '${escAttr(j.library_name)}' is paused. Jobs stay queued but will not start until the library is resumed.<br>Resume from the library's actions menu on the Libraries page."` : "";
         html += `<tr class="clickable${rowIdx++ % 2 ? " stripe" : ""}" data-job-id="${j.id}">
             <td><input type="checkbox" class="queue-check" data-job-id="${j.id}"></td>
             <td>${esc(basename(j.file_path))}</td>
@@ -339,6 +344,8 @@ export function connectSSE() {
         blockedJobs = data.blocked || [];
         queuePaused = !!data.paused;
         pausedLibraries = new Set(data.paused_libraries || []);
+        unavailableLibraries = data.unavailable_libraries || {};
+        missingPathsByLibrary = data.missing_paths || {};
         scheduleActive = data.schedule_active !== false;
         await loadDeviceData();
         try {
@@ -347,6 +354,12 @@ export function connectSSE() {
         updatePauseButton();
         renderQueue();
         renderIssues();
+        for (const [name, reason] of Object.entries(unavailableLibraries)) {
+            onLibraryUnavailable({ library_name: name, unavailable: true, reason });
+        }
+        for (const [name, paths] of Object.entries(missingPathsByLibrary)) {
+            onLibraryMissingPaths({ library_name: name, missing_paths: paths });
+        }
         onOverviewSSE("init", data);
     });
 
@@ -365,6 +378,27 @@ export function connectSSE() {
             pausedLibraries.delete(data.library_name);
         }
         debouncedRenderQueue();
+    });
+
+    es.addEventListener("library_unavailable", (e) => {
+        const data = JSON.parse(e.data);
+        if (data.unavailable) {
+            unavailableLibraries[data.library_name] = data.reason;
+        } else {
+            delete unavailableLibraries[data.library_name];
+        }
+        debouncedRenderQueue();
+        onLibraryUnavailable(data);
+    });
+
+    es.addEventListener("library_missing_paths", (e) => {
+        const data = JSON.parse(e.data);
+        if (data.missing_paths && data.missing_paths.length) {
+            missingPathsByLibrary[data.library_name] = data.missing_paths;
+        } else {
+            delete missingPathsByLibrary[data.library_name];
+        }
+        onLibraryMissingPaths(data);
     });
 
     es.addEventListener("schedule_status", (e) => {

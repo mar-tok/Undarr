@@ -4,8 +4,14 @@ import aiosqlite
 
 import core.db as db_mod
 import core.scanner as scanner_mod
-from core.db import SCHEMA, PROCESSED_SCHEMA, mark_processed, is_processed
-from core.scanner import preview_library
+from core.db import (
+    SCHEMA,
+    PROCESSED_SCHEMA,
+    LIBRARY_FILES_SCHEMA,
+    mark_processed,
+    is_processed,
+)
+from core.scanner import preview_library, scan_library
 from core.yaml_store import Library, SkipRule, SkipCondition
 
 import pytest
@@ -17,6 +23,7 @@ async def db_setup():
     conn.row_factory = aiosqlite.Row
     await conn.executescript(SCHEMA)
     await conn.executescript(PROCESSED_SCHEMA)
+    await conn.executescript(LIBRARY_FILES_SCHEMA)
     await conn.commit()
     old_db = db_mod._db
     db_mod._db = conn
@@ -159,3 +166,27 @@ class TestPreviewLibrary:
         _add_file(media_dir, "a.mkv")
         result = await preview_library("movies", _library(media_dir))
         assert result["summary"]["not_scanned"] == 0
+
+
+class TestScanUnavailable:
+    async def test_all_paths_missing_reports_unavailable(self, db_setup, tmp_path):
+        missing = str(tmp_path / "gone")
+        calls = []
+
+        async def on_unavailable(name, unavailable, reason, missing_paths):
+            calls.append((name, unavailable, reason, missing_paths))
+
+        lib = Library(paths=[missing], preset="HEVC")
+        await scan_library("movies", lib, None, on_unavailable=on_unavailable)
+        assert calls == [("movies", True, f"All paths missing: {missing}", [missing])]
+
+    async def test_partial_missing_reports_paths(self, db_setup, media_dir, tmp_path):
+        missing = str(tmp_path / "gone")
+        calls = []
+
+        async def on_unavailable(name, unavailable, reason, missing_paths):
+            calls.append((name, unavailable, reason, missing_paths))
+
+        lib = _library(media_dir, paths=[str(media_dir), missing])
+        await scan_library("movies", lib, None, on_unavailable=on_unavailable)
+        assert calls == [("movies", False, "", [missing])]

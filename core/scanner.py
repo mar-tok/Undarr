@@ -65,6 +65,7 @@ async def scan_library(
     enqueue_fn,
     *,
     progress_fn=None,
+    on_unavailable=None,
 ) -> tuple[int, int]:
     if library.mark_processed_pending:
         log.info(
@@ -74,6 +75,16 @@ async def scan_library(
         return 0, 0
 
     all_files, missing_paths = await asyncio.to_thread(_collect_video_files, library)
+    if on_unavailable and library.paths:
+        if len(missing_paths) == len(library.paths):
+            await on_unavailable(
+                library_name,
+                True,
+                f"All paths missing: {', '.join(missing_paths)}",
+                missing_paths,
+            )
+        else:
+            await on_unavailable(library_name, False, "", missing_paths)
     total = len(all_files)
     count = 0
     skipped = 0
@@ -392,9 +403,12 @@ def _to_seconds(interval: int, unit: str) -> int:
 class PeriodicScanner:
     def __init__(self) -> None:
         self._tasks: list[asyncio.Task] = []
+        self._on_unavailable = None
 
-    async def start(self, enqueue_fn) -> None:
+    async def start(self, enqueue_fn, *, on_unavailable=None) -> None:
         await self.stop()
+        if on_unavailable is not None:
+            self._on_unavailable = on_unavailable
         libraries = await store.get_libraries()
         for name, lib in libraries.items():
             if lib.scan_interval <= 0:
@@ -410,9 +424,11 @@ class PeriodicScanner:
         await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
 
-    async def restart(self, enqueue_fn) -> None:
+    async def restart(self, enqueue_fn, *, on_unavailable=None) -> None:
+        if on_unavailable is not None:
+            self._on_unavailable = on_unavailable
         await self.stop()
-        await self.start(enqueue_fn)
+        await self.start(enqueue_fn, on_unavailable=self._on_unavailable)
 
     async def _run_loop(
         self, library_name: str, interval_secs: int, enqueue_fn
@@ -427,7 +443,9 @@ class PeriodicScanner:
                     )
                     return
                 log.info("Periodic scan starting for '%s'", library_name)
-                await scan_library(library_name, lib, enqueue_fn)
+                await scan_library(
+                    library_name, lib, enqueue_fn, on_unavailable=self._on_unavailable
+                )
         except asyncio.CancelledError:
             pass
 

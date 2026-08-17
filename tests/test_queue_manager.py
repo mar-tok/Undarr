@@ -85,6 +85,46 @@ class TestPauseResume:
         assert qm.paused_libraries == {"a", "b"}
 
 
+# Library availability
+
+
+class TestUnavailable:
+    async def test_mark_unavailable(self, qm):
+        await qm.mark_unavailable("movies", "All paths missing: /media")
+        assert qm.unavailable_libraries == {"movies": "All paths missing: /media"}
+
+    async def test_mark_unavailable_broadcasts(self, qm):
+        sub = qm.subscribe()
+        await qm.mark_unavailable("movies", "gone")
+        msg = sub.get_nowait()
+        assert "library_unavailable" in msg
+
+    async def test_mark_available_wakes_dispatcher(self, qm):
+        await qm.mark_unavailable("movies", "gone")
+        qm._dispatch_event.clear()
+        await qm.mark_available("movies")
+        assert "movies" not in qm.unavailable_libraries
+        assert qm._dispatch_event.is_set()
+
+    async def test_on_unavailable_tracks_missing_paths(self, qm):
+        await qm.on_unavailable("movies", False, "", ["/media/two"])
+        assert qm.missing_paths_by_library == {"movies": ["/media/two"]}
+        await qm.on_unavailable("movies", False, "", [])
+        assert qm.missing_paths_by_library == {}
+
+    async def test_rename_unavailable_library(self, qm):
+        await qm.on_unavailable("movies", True, "gone", ["/media"])
+        await qm.rename_unavailable_library("movies", "films")
+        assert qm.unavailable_libraries == {"films": "gone"}
+        assert qm.missing_paths_by_library == {"films": ["/media"]}
+
+    async def test_clear_unavailable_library(self, qm):
+        await qm.on_unavailable("movies", True, "gone", ["/media"])
+        await qm.clear_unavailable_library("movies")
+        assert qm.unavailable_libraries == {}
+        assert qm.missing_paths_by_library == {}
+
+
 # Sorting
 
 
