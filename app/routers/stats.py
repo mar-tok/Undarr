@@ -9,6 +9,7 @@ from app.models.responses import (
     StatsDevice,
 )
 from core import db
+from core.queue_manager import queue_manager
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
@@ -23,6 +24,10 @@ async def get_stats():
     composition = await db.get_stats_composition()
     file_counts = await db.get_stats_file_counts()
     processed_counts = await db.get_stats_processed_counts()
+    avg_durations = await db.get_device_avg_duration()
+    library_sizes = await db.get_stats_library_sizes()
+
+    totals["eta_seconds"] = queue_manager.compute_eta(avg_durations)
 
     devices = []
     for d in by_dev:
@@ -38,4 +43,5 @@ async def get_stats():
         composition=composition,
         file_counts=file_counts,
         processed_counts=processed_counts,
+        library_sizes=library_sizes,
     )

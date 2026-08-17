@@ -9,6 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from math import ceil
 from pathlib import Path
 
 from core.logger import log
@@ -285,6 +286,49 @@ class QueueManager:
                 "schedule_status", {"active": self._schedule_is_active}
             )
         self._dispatch_event.set()
+
+    def compute_eta(self, avg_durations: dict[str, float]) -> float | None:
+        if not avg_durations:
+            return None
+        if not self._pending and not self._active:
+            return None
+
+        pending_by_device: dict[str, int] = {}
+        for job in self._pending:
+            name = device_display_name(job.device)
+            pending_by_device[name] = pending_by_device.get(name, 0) + 1
+
+        device_etas: list[float] = []
+        for name, avg in avg_durations.items():
+            pending_count = pending_by_device.get(name, 0)
+            max_concurrent = self._device_limits.get(
+                self._device_id_for_display(name), 1
+            )
+
+            batches = ceil(pending_count / max_concurrent) if pending_count else 0
+            pending_time = batches * avg
+
+            # The slowest active job decides when the next batch starts
+            active_remaining = 0.0
+            for job in self._active.values():
+                if device_display_name(job.device) != name:
+                    continue
+                pct = job.progress.percent if job.progress else 0.0
+                remaining = avg * (1 - pct / 100)
+                active_remaining = max(active_remaining, remaining)
+
+            if pending_count == 0 and active_remaining == 0.0:
+                continue
+
+            device_etas.append(active_remaining + pending_time)
+
+        return max(device_etas) if device_etas else None
+
+    def _device_id_for_display(self, display_name: str) -> str:
+        for dev_id in self._device_limits:
+            if device_display_name(dev_id) == display_name:
+                return dev_id
+        return "cpu"
 
     async def _resolve_device(self, library_name: str) -> tuple[str, str | None]:
         library = await store.get_library(library_name)

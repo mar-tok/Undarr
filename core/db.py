@@ -584,6 +584,29 @@ async def get_stats_by_device() -> list[dict]:
     ]
 
 
+async def get_device_avg_duration() -> dict[str, float]:
+    db = get_db()
+    cursor = await db.execute("""
+        SELECT device_name, AVG(duration_seconds)
+        FROM job_history
+        WHERE status = 'completed' AND dismissed = 0 AND device_name != ''
+        GROUP BY device_name
+    """)
+    rows = await cursor.fetchall()
+    return {r[0]: r[1] for r in rows}
+
+
+async def get_stats_library_sizes() -> dict[str, int]:
+    db = get_db()
+    cursor = await db.execute("""
+        SELECT library_name, SUM(file_size)
+        FROM library_files
+        GROUP BY library_name
+    """)
+    rows = await cursor.fetchall()
+    return {r[0]: r[1] or 0 for r in rows}
+
+
 async def get_stats_composition() -> dict[str, dict[str, int]]:
     db = get_db()
     cursor = await db.execute("""

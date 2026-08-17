@@ -26,6 +26,8 @@ from core.db import (
     get_stats_totals,
     get_stats_by_library,
     get_stats_by_device,
+    get_device_avg_duration,
+    get_stats_library_sizes,
     get_stats_composition,
     get_stats_file_counts,
     get_stats_processed_counts,
@@ -337,6 +339,20 @@ class TestStatsQueries:
     async def test_by_device_excludes_empty_name(self, db_setup):
         await _insert_sample("j1", device_name="")
         assert await get_stats_by_device() == []
+
+    async def test_device_avg_duration(self, db_setup):
+        await _insert_sample("j1", device_name="CPU", duration_seconds=60.0)
+        await _insert_sample("j2", device_name="CPU", duration_seconds=120.0)
+        await _insert_sample(
+            "j3", status="failed", device_name="CPU", duration_seconds=500.0
+        )
+        assert await get_device_avg_duration() == {"CPU": 90.0}
+
+    async def test_library_sizes(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/b.mkv", "lib1", "hevc", 1080, 2000, 1.0)
+        await upsert_library_file("/c.mkv", "lib2", "hevc", 1080, 500, 1.0)
+        assert await get_stats_library_sizes() == {"lib1": 3000, "lib2": 500}
 
     async def test_composition_and_counts(self, db_setup):
         await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)

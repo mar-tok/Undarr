@@ -6,15 +6,60 @@ let pendingCount = 0;
 let knownLibraries = new Set();
 let chartInstance = null;
 let chartRange = "week";
+let etaTarget = null;
+let etaInterval = null;
 
 function isVisible() {
     return document.getElementById("view-overview").classList.contains("active");
+}
+
+function formatEta(seconds) {
+    if (seconds < 60) return "< 1m";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return `~${h}h ${m}m`;
+    return `~${m}m`;
+}
+
+function updateEtaDisplay() {
+    const el = document.getElementById("overview-eta-sub");
+    if (!el) return;
+    if (!etaTarget) {
+        el.textContent = "";
+        return;
+    }
+    const remaining = Math.max(0, (etaTarget - Date.now()) / 1000);
+    if (remaining <= 0) {
+        el.textContent = "";
+        etaTarget = null;
+        return;
+    }
+    el.textContent = formatEta(remaining);
+}
+
+function startEtaCountdown() {
+    if (etaInterval) clearInterval(etaInterval);
+    if (!etaTarget) return;
+    etaInterval = setInterval(updateEtaDisplay, 1000);
+}
+
+export function stopEtaCountdown() {
+    if (etaInterval) {
+        clearInterval(etaInterval);
+        etaInterval = null;
+    }
 }
 
 function renderStatCards() {
     const el = document.getElementById("overview-stats");
     const t = statsData ? statsData.totals : { completed: 0, failed: 0, skipped: 0, space_saved_bytes: 0 };
     const queueCount = pendingCount + Object.keys(activeJobs).length;
+
+    if (t.eta_seconds != null && queueCount > 0) {
+        etaTarget = Date.now() + t.eta_seconds * 1000;
+    } else {
+        etaTarget = null;
+    }
 
     el.innerHTML = `
         <div class="stat-card" data-tooltip="Total size reduction across all completed transcodes. Original size minus new size.">
@@ -25,14 +70,17 @@ function renderStatCards() {
             <div class="stat-value">${t.completed}</div>
             <div class="stat-label">Files Processed</div>
         </div>
-        <div class="stat-card" data-tooltip="Active and pending jobs waiting to be processed.">
+        <div class="stat-card" data-tooltip="Active and pending jobs waiting to be processed.${etaTarget ? " ETA is based on average job duration per device, accounting for concurrent jobs and active progress." : ""}">
             <div class="stat-value">${queueCount}</div>
             <div class="stat-label">In Queue</div>
+            <div class="stat-sub" id="overview-eta-sub">${etaTarget ? formatEta(t.eta_seconds) : ""}</div>
         </div>
         <div class="stat-card" data-tooltip="Jobs that failed due to FFmpeg errors, verification failures, or other issues.">
             <div class="stat-value">${t.failed}</div>
             <div class="stat-label">Errors</div>
         </div>`;
+
+    startEtaCountdown();
 }
 
 function fillDays(daily, days) {
@@ -204,8 +252,10 @@ function renderLibraryTable() {
     const libMap = {};
     byLib.forEach(l => { libMap[l.library] = l; });
 
+    const librarySizes = statsData.library_sizes || {};
+
     let html = `<h3>Libraries</h3><table class="overview-table"><thead><tr>
-        <th style="width:40%">Library</th><th style="width:12%">Progress</th><th style="width:8%">Skipped</th><th style="width:14%">Space Saved</th><th style="width:26%">Codecs</th>
+        <th style="width:30%">Library</th><th style="width:10%">Size</th><th style="width:12%">Progress</th><th style="width:8%">Skipped</th><th style="width:14%">Space Saved</th><th style="width:26%">Codecs</th>
     </tr></thead><tbody>`;
     let i = 0;
     for (const lib of libs) {
@@ -215,9 +265,13 @@ function renderLibraryTable() {
         const codec = renderCodecBar(composition[lib]);
         const progressText = total > 0 ? `${processed} / ${total}` : "-";
 
+        const currentSize = librarySizes[lib] || 0;
+        const sizeText = formatBytesLarge(currentSize);
+
         const codecTip = codec.tooltip ? ` data-tooltip="${escAttr(codec.tooltip)}"` : "";
         html += `<tr${i++ % 2 ? ' class="stripe"' : ""}>
             <td>${esc(lib)}</td>
+            <td>${sizeText}</td>
             <td>${progressText}</td>
             <td>${info.skipped || 0}</td>
             <td>${formatBytes(info.space_saved_bytes)}</td>

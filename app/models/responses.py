@@ -134,6 +134,7 @@ class StatsTotals(BaseModel):
     space_saved_bytes: int
     original_bytes: int
     processing_seconds: float
+    eta_seconds: float | None = None
 
 
 class StatsDaily(BaseModel):
@@ -176,3 +177,4 @@ class StatsOut(BaseModel):
     composition: dict[str, dict[str, int]]
     file_counts: dict[str, int]
     processed_counts: dict[str, int]
+    library_sizes: dict[str, int]

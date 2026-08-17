@@ -2079,6 +2079,14 @@ input[type="checkbox"][role="switch"]:focus-visible {
     color: var(--accent);
 }
 
+.stat-card .stat-sub {
+    font-size: 13px;
+    color: var(--text);
+    margin-top: 4px;
+}
+
+.stat-card .stat-sub:empty { display: none; }
+
 .overview-table {
     width: 100%;
     border-collapse: collapse;

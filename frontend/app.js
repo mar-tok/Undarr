@@ -1,5 +1,5 @@
 import { api } from "./helpers.js";
-import { initOverview, loadOverview } from "./overview.js";
+import { initOverview, loadOverview, stopEtaCountdown } from "./overview.js";
 import { initQueue, connectSSE, loadQueueTab } from "./queue.js";
 import { initHistory } from "./history.js";
 import { initSearch } from "./search.js";
@@ -41,6 +41,7 @@ function navigate(viewId) {
         discardScheduleChanges();
     }
     if (currentView === "settings" && viewId !== "settings") stopScheduleClock();
+    if (currentView === "overview" && viewId !== "overview") stopEtaCountdown();
     currentView = viewId;
     navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));
     views.forEach(v => v.classList.toggle("active", v.id === "view-" + viewId));
