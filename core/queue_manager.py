@@ -660,6 +660,9 @@ class QueueManager:
             await self._dispatch_event.wait()
             self._dispatch_event.clear()
 
+            if not self._running.is_set():
+                continue
+
             was_active = self._schedule_is_active
             self._schedule_is_active = self._check_schedule_active()
             if was_active != self._schedule_is_active:

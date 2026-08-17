@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
@@ -83,6 +84,28 @@ class TestPauseResume:
     async def test_load_paused_libraries(self, qm):
         qm.load_paused_libraries({"a", "b"})
         assert qm.paused_libraries == {"a", "b"}
+
+    async def test_no_dispatch_on_wake_after_pause(self, qm):
+        started = []
+
+        async def fake_run(job):
+            started.append(job.id)
+
+        qm._run_job = fake_run
+        task = asyncio.create_task(qm._dispatcher())
+        await asyncio.sleep(0.01)
+        await qm.pause()
+        qm._pending.append(_make_job(device="cpu"))
+        qm._dispatch_event.set()
+        await asyncio.sleep(0.01)
+        try:
+            assert started == []
+            assert len(qm._pending) == 1
+            await qm.resume()
+            await asyncio.sleep(0.01)
+            assert started == ["abc123"]
+        finally:
+            task.cancel()
 
 
 # Library availability
