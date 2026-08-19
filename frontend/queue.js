@@ -4,6 +4,7 @@ import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
 import { updatePreviewProgress, onLibraryUnavailable, onLibraryMissingPaths } from "./libraries.js";
 import { onOverviewSSE } from "./overview.js";
+import { onStorageSSE } from "./storage.js";
 
 let queuePaused = false;
 let scheduleActive = true;
@@ -475,6 +476,7 @@ export function connectSSE() {
             loadHistory().catch(() => {});
         }
         onOverviewSSE("job_finished", job);
+        onStorageSSE();
     });
 
     es.addEventListener("scan_progress", (e) => {
@@ -522,6 +524,7 @@ export function connectSSE() {
 
     es.addEventListener("library_files_changed", (e) => {
         onOverviewSSE("library_files_changed", JSON.parse(e.data));
+        onStorageSSE();
     });
 
     es.onerror = () => {

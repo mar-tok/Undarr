@@ -647,3 +647,51 @@ async def get_stats_processed_counts() -> dict[str, int]:
     """)
     rows = await cursor.fetchall()
     return {r[0]: r[1] for r in rows}
+
+
+# Storage queries
+
+
+async def get_storage_files(
+    library_name: str, path_prefix: str | None = None
+) -> list[tuple[str, int, str]]:
+    db = get_db()
+    if path_prefix:
+        cursor = await db.execute(
+            "SELECT file_path, file_size, video_codec FROM library_files WHERE library_name = ? AND file_path LIKE ? || '/%'",
+            (library_name, path_prefix),
+        )
+    else:
+        cursor = await db.execute(
+            "SELECT file_path, file_size, video_codec FROM library_files WHERE library_name = ?",
+            (library_name,),
+        )
+    return [(r[0], r[1], r[2]) for r in await cursor.fetchall()]
+
+
+async def get_storage_savings(
+    library_name: str, path_prefix: str | None = None
+) -> dict[str, int]:
+    db = get_db()
+    if path_prefix:
+        cursor = await db.execute(
+            """SELECT file_path, (old_size_bytes - new_size_bytes)
+               FROM job_history
+               WHERE library_name = ? AND status = 'completed'
+                 AND new_size_bytes IS NOT NULL AND dismissed = 0
+                 AND file_path LIKE ? || '/%'""",
+            (library_name, path_prefix),
+        )
+    else:
+        cursor = await db.execute(
+            """SELECT file_path, (old_size_bytes - new_size_bytes)
+               FROM job_history
+               WHERE library_name = ? AND status = 'completed'
+                 AND new_size_bytes IS NOT NULL AND dismissed = 0""",
+            (library_name,),
+        )
+    rows = await cursor.fetchall()
+    result: dict[str, int] = {}
+    for r in rows:
+        result[r[0]] = result.get(r[0], 0) + r[1]
+    return result

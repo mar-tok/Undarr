@@ -73,12 +73,12 @@ const CODEC_COLORS = {
     av1: "#4a9eff",
 };
 
-function codecColor(codec) {
+export function codecColor(codec) {
     const c = codec.toLowerCase();
     return CODEC_COLORS[c] || "#666";
 }
 
-function codecLabel(codec) {
+export function codecLabel(codec) {
     const c = codec.toLowerCase();
     if (c === "hevc" || c === "h265") return "HEVC";
     if (c === "h264") return "H.264";

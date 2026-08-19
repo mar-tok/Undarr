@@ -556,7 +556,8 @@ button, button * {
 #search-table th:nth-child(5),
 #search-table td:nth-child(5) { width: 12%; }
 
-#queue-search::placeholder {
+#queue-search::placeholder,
+#tree-search::placeholder {
     color: var(--text);
 }
 
@@ -2263,4 +2264,70 @@ input[type="checkbox"][role="switch"]:focus-visible {
 
 .codec-segment {
     min-width: 2px;
+}
+
+/* Storage */
+.storage-breadcrumb {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.storage-crumb {
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.storage-crumb:hover {
+    text-decoration: underline;
+}
+
+.storage-crumb-current {
+    color: var(--text);
+}
+
+.storage-sep {
+    color: var(--text-muted);
+    margin: 0 2px;
+}
+
+.dir-link {
+    cursor: pointer;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.dir-link:hover {
+    text-decoration: underline;
+}
+
+.storage-icon {
+    width: 14px;
+    height: 14px;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+.storage-size-cell span {
+    min-width: 70px;
+}
+
+.storage-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.storage-filters select {
+    width: auto;
+}
+
+#storage-lib-select {
+    min-width: 160px;
+}
+
+.storage-stats {
+    font-size: 13px;
+    color: var(--text);
+    align-self: center;
 }

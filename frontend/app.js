@@ -6,6 +6,7 @@ import { initSearch } from "./search.js";
 import { initPresets, loadPresetView } from "./presets.js";
 import { initLibraries, loadLibraryView } from "./libraries.js";
 import { initSettings, loadSettings, switchSettingsTab } from "./settings.js";
+import { initStorage, loadStorageView } from "./storage.js";
 import { isScheduleDirty, discardScheduleChanges, stopScheduleClock } from "./schedule.js";
 import { initSetup, loadSetupView, checkFirstRun } from "./quickstart.js";
 
@@ -49,6 +50,7 @@ function navigate(viewId) {
     if (viewId === "queue") loadQueueTab();
     if (viewId === "presets") loadPresetView();
     if (viewId === "libraries") loadLibraryView();
+    if (viewId === "storage") loadStorageView();
     if (viewId === "settings") loadSettings();
     if (viewId === "quickstart") loadSetupView();
     const hash = viewId === "overview" ? "" : viewId;
@@ -66,9 +68,10 @@ initSearch();
 initPresets();
 initLibraries();
 initSettings();
+initStorage();
 initSetup(navigate);
 
-const validViews = ["overview", "queue", "presets", "libraries", "settings", "quickstart"];
+const validViews = ["overview", "queue", "presets", "libraries", "storage", "settings", "quickstart"];
 
 async function initApp() {
     const hashParts = location.hash.replace("#", "").split("/");

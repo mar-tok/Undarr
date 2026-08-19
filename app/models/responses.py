@@ -168,6 +168,26 @@ class StatsDevice(BaseModel):
     avg_duration_seconds: float
 
 
+class StorageEntry(BaseModel):
+    name: str
+    path: str
+    is_dir: bool
+    total_size: int
+    file_count: int
+    codecs: dict[str, int]
+    space_saved: int
+
+
+class StorageTreeOut(BaseModel):
+    library: str
+    path: str | None
+    parent: str | None
+    total_size: int
+    total_files: int
+    total_saved: int
+    entries: list[StorageEntry]
+
+
 class StatsOut(BaseModel):
     totals: StatsTotals
     daily: list[StatsDaily]

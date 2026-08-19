@@ -11,7 +11,7 @@ from core.yaml_store import store
 from core.watcher import watcher
 from core.scanner import scan_library, mark_library_processed, periodic_scanner
 from core.devices import detect_devices
-from app.routers import queue, presets, libraries, settings, filesystem, stats
+from app.routers import queue, presets, libraries, settings, filesystem, stats, storage
 
 
 async def _startup_scan() -> None:
@@ -98,6 +98,7 @@ app.include_router(libraries.router)
 app.include_router(settings.router)
 app.include_router(filesystem.router)
 app.include_router(stats.router)
+app.include_router(storage.router)
 
 
 @app.get("/api/health")

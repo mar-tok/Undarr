@@ -31,6 +31,8 @@ from core.db import (
     get_stats_composition,
     get_stats_file_counts,
     get_stats_processed_counts,
+    get_storage_files,
+    get_storage_savings,
 )
 
 import pytest
@@ -362,3 +364,59 @@ class TestStatsQueries:
         assert await get_stats_composition() == {"lib1": {"h264": 1, "hevc": 2}}
         assert await get_stats_file_counts() == {"lib1": 3}
         assert await get_stats_processed_counts() == {"lib1": 1}
+
+
+class TestStorageQueries:
+    async def test_files_scoped_to_library(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/media/sub/b.mkv", "lib1", "hevc", 1080, 2000, 1.0)
+        await upsert_library_file("/other/c.mkv", "lib2", "hevc", 1080, 500, 1.0)
+        files = await get_storage_files("lib1")
+        assert sorted(files) == [
+            ("/media/a.mkv", 1000, "h264"),
+            ("/media/sub/b.mkv", 2000, "hevc"),
+        ]
+
+    async def test_files_prefix(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/media/sub/b.mkv", "lib1", "hevc", 1080, 2000, 1.0)
+        files = await get_storage_files("lib1", "/media/sub")
+        assert files == [("/media/sub/b.mkv", 2000, "hevc")]
+
+    async def test_files_prefix_needs_full_segment(self, db_setup):
+        await upsert_library_file(
+            "/media/subtitle/x.mkv", "lib1", "h264", 1080, 1000, 1.0
+        )
+        assert await get_storage_files("lib1", "/media/sub") == []
+
+    async def test_savings_sums_per_path(self, db_setup):
+        await _insert_sample("j1", library_name="lib1", file_path="/media/a.mkv")
+        await _insert_sample(
+            "j2",
+            library_name="lib1",
+            file_path="/media/a.mkv",
+            old_size_bytes=800000,
+            new_size_bytes=600000,
+        )
+        await _insert_sample("j3", library_name="lib1", file_path="/media/b.mkv")
+        savings = await get_storage_savings("lib1")
+        assert savings == {"/media/a.mkv": 700000, "/media/b.mkv": 500000}
+
+    async def test_savings_only_completed_undismissed(self, db_setup):
+        await _insert_sample(
+            "j1", library_name="lib1", file_path="/media/a.mkv", status="failed"
+        )
+        await _insert_sample(
+            "j2", library_name="lib1", file_path="/media/b.mkv", dismissed=True
+        )
+        await _insert_sample(
+            "j3", library_name="lib1", file_path="/media/c.mkv", new_size_bytes=None
+        )
+        assert await get_storage_savings("lib1") == {}
+
+    async def test_savings_prefix(self, db_setup):
+        await _insert_sample("j1", library_name="lib1", file_path="/media/sub/a.mkv")
+        await _insert_sample("j2", library_name="lib1", file_path="/media/b.mkv")
+        assert await get_storage_savings("lib1", "/media/sub") == {
+            "/media/sub/a.mkv": 500000
+        }
