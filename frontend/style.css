@@ -638,7 +638,8 @@ th.sortable .sort-arrow {
 
 #q-page-size,
 #hist-page-size,
-#search-page-size {
+#search-page-size,
+#files-page-size {
     width: auto;
     height: 36px;
     padding: 4px 8px;
@@ -2300,6 +2301,16 @@ input[type="checkbox"][role="switch"]:focus-visible {
     text-decoration: underline;
 }
 
+.files-table {
+    table-layout: fixed;
+}
+
+.files-table td:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .storage-icon {
     width: 14px;
     height: 14px;
@@ -2330,4 +2341,8 @@ input[type="checkbox"][role="switch"]:focus-visible {
     font-size: 13px;
     color: var(--text);
     align-self: center;
+}
+
+.status-processed {
+    color: var(--success);
 }

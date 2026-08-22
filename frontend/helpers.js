@@ -67,6 +67,31 @@ export function formatDate(iso) {
     return sameYear ? date + " " + time : date + "/" + d.getFullYear() + " " + time;
 }
 
+export function formatBitrate(kbps) {
+    if (!kbps) return "-";
+    if (kbps >= 1000) return (kbps / 1000).toFixed(1) + " Mbps";
+    return kbps + " kbps";
+}
+
+export function formatFileDuration(secs) {
+    if (!secs) return "-";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    const pad = n => String(n).padStart(2, "0");
+    if (h > 0) return h + ":" + pad(m) + ":" + pad(s);
+    return m + ":" + pad(s);
+}
+
+export function formatChannels(channels) {
+    if (!channels) return "";
+    if (channels === 1) return "1.0";
+    if (channels === 2) return "2.0";
+    if (channels === 6) return "5.1";
+    if (channels === 8) return "7.1";
+    return channels + "ch";
+}
+
 const CODEC_COLORS = {
     hevc: "#4caf50", h265: "#4caf50",
     h264: "#daa520",

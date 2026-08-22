@@ -33,6 +33,7 @@ from core.db import (
     get_stats_processed_counts,
     get_storage_files,
     get_storage_savings,
+    get_library_files_page,
 )
 
 import pytest
@@ -420,3 +421,99 @@ class TestStorageQueries:
         assert await get_storage_savings("lib1", "/media/sub") == {
             "/media/sub/a.mkv": 500000
         }
+
+
+class TestLibraryFilesPage:
+    async def test_default_sort_size_desc(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/media/b.mkv", "lib1", "hevc", 1080, 3000, 1.0)
+        await upsert_library_file("/media/c.mkv", "lib1", "hevc", 1080, 2000, 1.0)
+        rows, total = await get_library_files_page("lib1")
+        assert total == 3
+        assert [r["file_path"] for r in rows] == [
+            "/media/b.mkv",
+            "/media/c.mkv",
+            "/media/a.mkv",
+        ]
+
+    async def test_scoped_to_library(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 100, 1.0)
+        await upsert_library_file("/other/b.mkv", "lib2", "h264", 1080, 100, 1.0)
+        rows, total = await get_library_files_page("lib1")
+        assert total == 1
+        assert rows[0]["file_path"] == "/media/a.mkv"
+
+    async def test_limit_offset(self, db_setup):
+        for i in range(5):
+            await upsert_library_file(
+                f"/media/f{i}.mkv", "lib1", "h264", 1080, (i + 1) * 100, 1.0
+            )
+        rows, total = await get_library_files_page("lib1", limit=2, offset=2)
+        assert total == 5
+        assert [r["file_path"] for r in rows] == ["/media/f2.mkv", "/media/f1.mkv"]
+
+    async def test_sort_path_asc(self, db_setup):
+        await upsert_library_file("/media/b.mkv", "lib1", "h264", 1080, 200, 1.0)
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 100, 1.0)
+        rows, _ = await get_library_files_page(
+            "lib1", sort_by="file_path", sort_dir="asc"
+        )
+        assert [r["file_path"] for r in rows] == ["/media/a.mkv", "/media/b.mkv"]
+
+    async def test_unknown_sort_falls_back_to_size(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 100, 1.0)
+        await upsert_library_file("/media/b.mkv", "lib1", "h264", 1080, 200, 1.0)
+        rows, _ = await get_library_files_page(
+            "lib1", sort_by="mtime; DROP TABLE library_files"
+        )
+        assert [r["file_path"] for r in rows] == ["/media/b.mkv", "/media/a.mkv"]
+
+    async def test_codec_and_container_filters(self, db_setup):
+        await upsert_library_file(
+            "/media/a.mkv", "lib1", "h264", 1080, 100, 1.0, container="mkv"
+        )
+        await upsert_library_file(
+            "/media/b.mp4", "lib1", "hevc", 1080, 200, 1.0, container="mp4"
+        )
+        rows, total = await get_library_files_page("lib1", codec="hevc")
+        assert total == 1
+        assert rows[0]["file_path"] == "/media/b.mp4"
+        rows, total = await get_library_files_page("lib1", container="mkv")
+        assert total == 1
+        assert rows[0]["file_path"] == "/media/a.mkv"
+
+    async def test_resolution_ranges(self, db_setup):
+        await upsert_library_file("/media/uhd.mkv", "lib1", "hevc", 2160, 100, 1.0)
+        await upsert_library_file("/media/fhd.mkv", "lib1", "hevc", 1080, 100, 1.0)
+        await upsert_library_file("/media/low.mkv", "lib1", "hevc", 480, 100, 1.0)
+        rows, _ = await get_library_files_page("lib1", resolution="4k")
+        assert [r["file_path"] for r in rows] == ["/media/uhd.mkv"]
+        rows, _ = await get_library_files_page("lib1", resolution="sd")
+        assert [r["file_path"] for r in rows] == ["/media/low.mkv"]
+        _, total = await get_library_files_page("lib1", resolution="8k")
+        assert total == 3
+
+    async def test_search_matches_path(self, db_setup):
+        await upsert_library_file(
+            "/media/Video Title.mkv", "lib1", "h264", 1080, 100, 1.0
+        )
+        await upsert_library_file("/media/Other.mkv", "lib1", "h264", 1080, 100, 1.0)
+        rows, total = await get_library_files_page("lib1", search="Title")
+        assert total == 1
+        assert rows[0]["file_path"] == "/media/Video Title.mkv"
+
+    async def test_status_filter_and_processed_flag(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 200, 1.0)
+        await upsert_library_file("/media/b.mkv", "lib1", "h264", 1080, 100, 1.0)
+        await mark_processed("/media/a.mkv", "lib1", 1.0)
+        rows, _ = await get_library_files_page("lib1")
+        assert [(r["file_path"], r["processed"]) for r in rows] == [
+            ("/media/a.mkv", 1),
+            ("/media/b.mkv", 0),
+        ]
+        rows, total = await get_library_files_page("lib1", status="processed")
+        assert total == 1
+        assert rows[0]["file_path"] == "/media/a.mkv"
+        rows, total = await get_library_files_page("lib1", status="unprocessed")
+        assert total == 1
+        assert rows[0]["file_path"] == "/media/b.mkv"

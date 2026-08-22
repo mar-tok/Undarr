@@ -188,6 +188,24 @@ class StorageTreeOut(BaseModel):
     entries: list[StorageEntry]
 
 
+class LibraryFileOut(BaseModel):
+    file_path: str
+    file_size: int
+    video_codec: str
+    resolution_h: int
+    bitrate_kbps: int = 0
+    container: str = ""
+    audio_codec: str = ""
+    audio_channels: int = 0
+    duration: float = 0
+    processed: int = 0
+
+
+class LibraryFilesPageOut(BaseModel):
+    files: list[LibraryFileOut]
+    total: int
+
+
 class StatsOut(BaseModel):
     totals: StatsTotals
     daily: list[StatsDaily]

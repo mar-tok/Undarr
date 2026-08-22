@@ -1,17 +1,37 @@
-import { api, formatBytes, formatBytesLarge, esc, escAttr, codecLabel, codecColor } from "./helpers.js";
+import { api, formatBytes, formatBytesLarge, esc, escAttr, codecLabel, codecColor, formatBitrate, formatFileDuration, formatChannels } from "./helpers.js";
 
 let currentLibrary = null;
 let currentPath = null;
+let activeTab = "tree";
 let libraries = [];
 
+// Tree tab state
 let treeSortBy = "total_size";
 let treeSortDir = "desc";
 let treeSearch = "";
 let treeSearchTimer = null;
 let treeData = null;
 
+// Files tab state
+const FILES_PAGE_SIZES = [25, 50, 100, 200];
+let filesPage = 0;
+let filesPageSize = 50;
+let filesSortBy = "file_size";
+let filesSortDir = "desc";
+let filesTotal = 0;
+let filesGeneration = 0;
+
 function isVisible() {
     return document.getElementById("view-storage").classList.contains("active");
+}
+
+function renderHeader() {
+    const el = document.getElementById("storage-header");
+    el.innerHTML = `
+        <div class="settings-tabs">
+            <button class="settings-tab${activeTab === "tree" ? " active" : ""}" data-stab="tree">Directory</button>
+            <button class="settings-tab${activeTab === "files" ? " active" : ""}" data-stab="files">Files</button>
+        </div>`;
 }
 
 function renderLibraryOptions() {
@@ -202,7 +222,147 @@ function treeSortArrow(col) {
     return `<span class="sort-arrow">${treeSortDir === "asc" ? "\u25B2" : "\u25BC"}</span>`;
 }
 
+function sortArrow(col) {
+    if (col !== filesSortBy) return "";
+    return `<span class="sort-arrow">${filesSortDir === "asc" ? "\u25B2" : "\u25BC"}</span>`;
+}
+
+function renderFilters() {
+    return `<div class="storage-filters" id="files-filter-bar">
+        <select id="storage-lib-select">${renderLibraryOptions()}</select>
+    </div>`;
+}
+
+function formatAudio(codec, channels) {
+    if (!codec) return "-";
+    const label = codec.toUpperCase();
+    const ch = formatChannels(channels);
+    return ch ? label + " " + ch : label;
+}
+
+function ensureFilesLayout() {
+    const content = document.getElementById("storage-content");
+    if (content.querySelector("#files-filter-bar")) return;
+    content.innerHTML = renderFilters() + '<div id="files-results"></div>';
+}
+
+function updateFilterSelects() {
+    const sel = document.getElementById("storage-lib-select");
+    if (sel) sel.innerHTML = renderLibraryOptions();
+}
+
+async function loadFiles() {
+    const content = document.getElementById("storage-content");
+    if (!currentLibrary) {
+        content.innerHTML = "";
+        return;
+    }
+
+    ensureFilesLayout();
+    updateFilterSelects();
+    const results = document.getElementById("files-results");
+    const gen = ++filesGeneration;
+
+    const params = new URLSearchParams();
+    params.set("library", currentLibrary);
+    params.set("limit", filesPageSize);
+    params.set("offset", filesPage * filesPageSize);
+    params.set("sort_by", filesSortBy);
+    params.set("sort_dir", filesSortDir);
+
+    let data;
+    try {
+        data = await api("GET", `/api/storage/files?${params}`);
+    } catch (e) {
+        if (gen === filesGeneration) results.innerHTML = `<p class="section-empty">${esc(e.message)}</p>`;
+        return;
+    }
+    if (gen !== filesGeneration) return;
+
+    filesTotal = data.total;
+
+    // The empty state renders without pagination, so a page past the end would have no way back
+    if (!data.files.length && filesTotal > 0 && filesPage > 0) {
+        filesPage = Math.ceil(filesTotal / filesPageSize) - 1;
+        loadFiles();
+        return;
+    }
+
+    if (!data.files.length) {
+        results.innerHTML = '<p class="section-empty">No files found.</p>';
+        return;
+    }
+
+    let html = `<table class="overview-table storage-table files-table" id="files-table"><thead><tr>
+        <th class="sortable" style="width:35%" data-sort="file_path">File${sortArrow("file_path")}</th>
+        <th class="sortable" style="width:7%" data-sort="file_size">Size${sortArrow("file_size")}</th>
+        <th class="sortable" style="width:7%" data-sort="duration">Duration${sortArrow("duration")}</th>
+        <th class="sortable" style="width:8%" data-sort="bitrate_kbps">Bitrate${sortArrow("bitrate_kbps")}</th>
+        <th class="sortable" style="width:7%" data-sort="video_codec">Codec${sortArrow("video_codec")}</th>
+        <th class="sortable" style="width:7%" data-sort="resolution_h">Res${sortArrow("resolution_h")}</th>
+        <th class="sortable" style="width:10%" data-sort="audio_codec">Audio${sortArrow("audio_codec")}</th>
+        <th class="sortable" style="width:7%" data-sort="container">Container${sortArrow("container")}</th>
+        <th style="width:9%">Status</th>
+    </tr></thead><tbody>`;
+
+    data.files.forEach((f, i) => {
+        const codec = f.video_codec ? codecLabel(f.video_codec) : "-";
+        const res = f.resolution_h ? f.resolution_h + "p" : "-";
+        const status = f.processed ? '<span class="status-processed">Processed</span>' : "";
+        html += `<tr class="storage-row${i % 2 ? " stripe" : ""}" data-tooltip="${escAttr(f.file_path)}">
+            <td>${esc(f.file_path.split("/").pop())}</td>
+            <td>${formatSize(f.file_size)}</td>
+            <td>${formatFileDuration(f.duration)}</td>
+            <td>${formatBitrate(f.bitrate_kbps)}</td>
+            <td>${esc(codec)}</td>
+            <td>${esc(res)}</td>
+            <td>${esc(formatAudio(f.audio_codec, f.audio_channels))}</td>
+            <td>${esc(f.container ? f.container.toUpperCase() : "-")}</td>
+            <td>${status}</td>
+        </tr>`;
+    });
+    html += "</tbody></table>";
+
+    // Pagination
+    const totalPages = Math.max(1, Math.ceil(filesTotal / filesPageSize));
+    const hasPrev = filesPage > 0;
+    const hasNext = filesPage < totalPages - 1;
+    const sizeOptions = FILES_PAGE_SIZES.map(n =>
+        `<option value="${n}"${n === filesPageSize ? " selected" : ""}>${n}</option>`
+    ).join("");
+    html += `<div class="pagination">
+        <span class="number-wrap">
+            <button class="number-btn" type="button" id="files-prev" ${hasPrev ? "" : "disabled"}><img src="arrow-left.svg" alt="Previous"></button>
+            <input type="number" id="files-page" class="page-input" value="${filesPage + 1}" min="1" max="${totalPages}">
+            <button class="number-btn" type="button" id="files-next" ${hasNext ? "" : "disabled"}><img src="arrow-right.svg" alt="Next"></button>
+        </span>
+        <select id="files-page-size">${sizeOptions}</select>
+    </div>`;
+
+    results.innerHTML = html;
+}
+
+function resetFilesState() {
+    filesPage = 0;
+}
+
+function loadTab() {
+    if (activeTab === "tree") loadTree();
+    else if (activeTab === "files") loadFiles();
+}
+
 export function initStorage() {
+    document.getElementById("storage-header").addEventListener("click", e => {
+        const tab = e.target.closest("[data-stab]");
+        if (tab) {
+            activeTab = tab.dataset.stab;
+            currentPath = singleRootPath();
+            treeSearch = "";
+            document.querySelectorAll("#storage-header .settings-tab").forEach(b => b.classList.toggle("active", b === tab));
+            loadTab();
+        }
+    });
+
     const content = document.getElementById("storage-content");
 
     content.addEventListener("change", e => {
@@ -211,8 +371,13 @@ export function initStorage() {
             currentPath = singleRootPath();
             treeSearch = "";
             treeData = null;
+            resetFilesState();
             content.innerHTML = "";
-            loadTree();
+            loadTab();
+        } else if (e.target.id === "files-page-size") {
+            filesPageSize = parseInt(e.target.value);
+            filesPage = 0;
+            loadFiles();
         }
     });
 
@@ -234,7 +399,7 @@ export function initStorage() {
         }
 
         const th = e.target.closest("th.sortable");
-        if (th && th.dataset.treesort) {
+        if (th && activeTab === "tree" && th.dataset.treesort) {
             const col = th.dataset.treesort;
             if (treeSortBy === col) {
                 if (treeSortDir === "asc") {
@@ -250,6 +415,36 @@ export function initStorage() {
                 treeSortDir = col === "total_size" ? "desc" : "asc";
             }
             loadTree(false);
+            return;
+        }
+        if (th && activeTab === "files" && th.dataset.sort) {
+            const col = th.dataset.sort;
+            if (filesSortBy === col) {
+                if (filesSortDir === "asc") {
+                    filesSortDir = "desc";
+                } else if (col === "file_size") {
+                    filesSortDir = "asc";
+                } else {
+                    filesSortBy = "file_size";
+                    filesSortDir = "desc";
+                }
+            } else {
+                filesSortBy = col;
+                filesSortDir = col === "file_size" ? "desc" : "asc";
+            }
+            filesPage = 0;
+            loadFiles();
+            return;
+        }
+
+        if (e.target.closest("#files-prev")) {
+            filesPage--;
+            loadFiles();
+            return;
+        }
+        if (e.target.closest("#files-next")) {
+            filesPage++;
+            loadFiles();
         }
     });
 
@@ -262,6 +457,28 @@ export function initStorage() {
             }, 300);
         }
     });
+
+    content.addEventListener("keydown", e => {
+        if (e.target.id === "files-page" && e.key === "Enter") {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val) && val >= 1) {
+                filesPage = val - 1;
+                loadFiles();
+            }
+        }
+    });
+
+    content.addEventListener("blur", e => {
+        if (e.target.id === "files-page") {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val) && val >= 1 && val - 1 !== filesPage) {
+                filesPage = val - 1;
+                loadFiles();
+            } else {
+                e.target.value = filesPage + 1;
+            }
+        }
+    }, true);
 }
 
 export async function loadStorageView() {
@@ -272,9 +489,10 @@ export async function loadStorageView() {
     }
     if (!currentLibrary && libraries.length) currentLibrary = libraries[0].name;
     if (!currentPath) currentPath = singleRootPath();
-    loadTree();
+    renderHeader();
+    loadTab();
 }
 
 export function onStorageSSE() {
-    if (isVisible()) loadTree();
+    if (isVisible()) loadTab();
 }

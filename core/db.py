@@ -695,3 +695,84 @@ async def get_storage_savings(
     for r in rows:
         result[r[0]] = result.get(r[0], 0) + r[1]
     return result
+
+
+FILES_SORT_COLUMNS = {
+    "file_path",
+    "file_size",
+    "video_codec",
+    "resolution_h",
+    "bitrate_kbps",
+    "container",
+    "audio_codec",
+    "duration",
+}
+
+RESOLUTION_RANGES = {
+    "4k": (2000, 9999),
+    "1080p": (1000, 1999),
+    "720p": (700, 999),
+    "sd": (1, 699),
+}
+
+
+async def get_library_files_page(
+    library_name: str,
+    limit: int = 50,
+    offset: int = 0,
+    sort_by: str = "file_size",
+    sort_dir: str = "desc",
+    codec: str | None = None,
+    resolution: str | None = None,
+    container: str | None = None,
+    search: str | None = None,
+    status: str | None = None,
+) -> tuple[list[dict], int]:
+    db = get_db()
+    conditions = ["lf.library_name = ?"]
+    params: list = [library_name]
+
+    if codec:
+        conditions.append("lf.video_codec = ?")
+        params.append(codec)
+    if container:
+        conditions.append("lf.container = ?")
+        params.append(container)
+    if resolution and resolution.lower() in RESOLUTION_RANGES:
+        lo, hi = RESOLUTION_RANGES[resolution.lower()]
+        conditions.append("lf.resolution_h BETWEEN ? AND ?")
+        params.extend([lo, hi])
+    if search:
+        conditions.append("lf.file_path LIKE ?")
+        params.append(f"%{search}%")
+    if status == "processed":
+        conditions.append("pf.file_path IS NOT NULL")
+    elif status == "unprocessed":
+        conditions.append("pf.file_path IS NULL")
+
+    where = "WHERE " + " AND ".join(conditions)
+    join = """LEFT JOIN processed_files pf
+                ON lf.file_path = pf.file_path AND lf.library_name = pf.library_name"""
+
+    cursor = await db.execute(
+        f"SELECT COUNT(*) FROM library_files lf {join} {where}",
+        params,
+    )
+    total = (await cursor.fetchone())[0]
+
+    col = sort_by if sort_by in FILES_SORT_COLUMNS else "file_size"
+    direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
+
+    cursor = await db.execute(
+        f"""SELECT lf.file_path, lf.file_size, lf.video_codec, lf.resolution_h,
+                   lf.bitrate_kbps, lf.container, lf.audio_codec, lf.audio_channels,
+                   lf.duration,
+                   CASE WHEN pf.file_path IS NOT NULL THEN 1 ELSE 0 END AS processed
+            FROM library_files lf
+            {join}
+            {where}
+            ORDER BY lf.{col} {direction} LIMIT ? OFFSET ?""",
+        (*params, limit, offset),
+    )
+    rows = await cursor.fetchall()
+    return [dict(r) for r in rows], total

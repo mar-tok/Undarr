@@ -4,7 +4,12 @@ from collections import defaultdict
 
 from fastapi import APIRouter, Query
 
-from app.models.responses import StorageTreeOut, StorageEntry
+from app.models.responses import (
+    StorageTreeOut,
+    StorageEntry,
+    LibraryFilesPageOut,
+    LibraryFileOut,
+)
 from core import db
 from core.yaml_store import store
 
@@ -105,7 +110,6 @@ async def get_storage_tree(
         rest = fp[prefix_len:]
         slash = rest.find("/")
         if slash == -1:
-            # direct file
             saved = savings.get(fp, 0)
             codecs_map = {vc: 1} if vc else {}
             file_entries.append(
@@ -167,3 +171,31 @@ async def get_storage_tree(
         total_saved=agg_saved,
         entries=entries,
     )
+
+
+@router.get("/files", response_model=LibraryFilesPageOut)
+async def get_library_files(
+    library: str = Query(...),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    sort_by: str = Query("file_size"),
+    sort_dir: str = Query("desc"),
+    codec: str | None = Query(None),
+    resolution: str | None = Query(None),
+    container: str | None = Query(None),
+    search: str | None = Query(None),
+    status: str | None = Query(None),
+):
+    rows, total = await db.get_library_files_page(
+        library,
+        limit,
+        offset,
+        sort_by,
+        sort_dir,
+        codec,
+        resolution,
+        container,
+        search,
+        status,
+    )
+    return LibraryFilesPageOut(files=[LibraryFileOut(**r) for r in rows], total=total)
