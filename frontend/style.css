@@ -557,7 +557,8 @@ button, button * {
 #search-table td:nth-child(5) { width: 12%; }
 
 #queue-search::placeholder,
-#tree-search::placeholder {
+#tree-search::placeholder,
+#files-search::placeholder {
     color: var(--text);
 }
 
@@ -577,14 +578,16 @@ th.sortable .sort-arrow {
 }
 
 #history-status-th,
-#search-status-th {
+#search-status-th,
+#files-status-th {
     cursor: pointer;
     user-select: none;
     position: relative;
 }
 
 #history-status-th:hover,
-#search-status-th:hover {
+#search-status-th:hover,
+#files-status-th:hover {
     color: var(--accent);
 }
 

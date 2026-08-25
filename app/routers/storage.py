@@ -9,6 +9,7 @@ from app.models.responses import (
     StorageEntry,
     LibraryFilesPageOut,
     LibraryFileOut,
+    LibraryFileFiltersOut,
 )
 from core import db
 from core.yaml_store import store
@@ -199,3 +200,11 @@ async def get_library_files(
         status,
     )
     return LibraryFilesPageOut(files=[LibraryFileOut(**r) for r in rows], total=total)
+
+
+@router.get("/files/filters", response_model=LibraryFileFiltersOut)
+async def get_library_file_filters(
+    library: str = Query(...),
+):
+    data = await db.get_library_file_filters(library)
+    return LibraryFileFiltersOut(**data)

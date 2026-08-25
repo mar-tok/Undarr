@@ -34,6 +34,7 @@ from core.db import (
     get_storage_files,
     get_storage_savings,
     get_library_files_page,
+    get_library_file_filters,
 )
 
 import pytest
@@ -517,3 +518,39 @@ class TestLibraryFilesPage:
         rows, total = await get_library_files_page("lib1", status="unprocessed")
         assert total == 1
         assert rows[0]["file_path"] == "/media/b.mkv"
+
+    async def test_hdr_type_stored_and_sortable(self, db_setup):
+        await upsert_library_file(
+            "/media/a.mkv", "lib1", "hevc", 2160, 100, 1.0, hdr_type="hdr10"
+        )
+        await upsert_library_file("/media/b.mkv", "lib1", "h264", 1080, 200, 1.0)
+        rows, _ = await get_library_files_page(
+            "lib1", sort_by="hdr_type", sort_dir="desc"
+        )
+        assert [(r["file_path"], r["hdr_type"]) for r in rows] == [
+            ("/media/a.mkv", "hdr10"),
+            ("/media/b.mkv", ""),
+        ]
+
+
+class TestLibraryFileFilters:
+    async def test_distinct_sorted(self, db_setup):
+        await upsert_library_file(
+            "/media/a.mkv", "lib1", "hevc", 1080, 100, 1.0, container="mkv"
+        )
+        await upsert_library_file(
+            "/media/b.mp4", "lib1", "av1", 1080, 100, 1.0, container="mp4"
+        )
+        await upsert_library_file(
+            "/media/c.mkv", "lib1", "hevc", 1080, 100, 1.0, container="mkv"
+        )
+        filters = await get_library_file_filters("lib1")
+        assert filters == {"codecs": ["av1", "hevc"], "containers": ["mkv", "mp4"]}
+
+    async def test_excludes_empty_and_other_libraries(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "", 0, 100, 1.0)
+        await upsert_library_file(
+            "/other/b.mkv", "lib2", "h264", 1080, 100, 1.0, container="mkv"
+        )
+        filters = await get_library_file_filters("lib1")
+        assert filters == {"codecs": [], "containers": []}

@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS library_files (
     audio_codec    TEXT NOT NULL DEFAULT '',
     audio_channels INTEGER NOT NULL DEFAULT 0,
     duration       REAL NOT NULL DEFAULT 0,
+    hdr_type       TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (file_path, library_name)
 );
 """
@@ -93,6 +94,15 @@ async def init_db() -> None:
         await _db.execute(
             "ALTER TABLE job_history ADD COLUMN device_name TEXT NOT NULL DEFAULT ''"
         )
+        await _db.commit()
+
+    cols = await _column_names(_db, "library_files")
+    if "hdr_type" not in cols:
+        await _db.execute(
+            "ALTER TABLE library_files ADD COLUMN hdr_type TEXT NOT NULL DEFAULT ''"
+        )
+        # Reset mtime so the next scan re-probes every file for its HDR type
+        await _db.execute("UPDATE library_files SET mtime = 0")
         await _db.commit()
 
     log.info("Database initialized at %s", db_path)
@@ -330,13 +340,14 @@ async def upsert_library_file(
     audio_codec: str = "",
     audio_channels: int = 0,
     duration: float = 0,
+    hdr_type: str = "",
 ) -> None:
     db = get_db()
     await db.execute(
         """INSERT OR REPLACE INTO library_files
            (file_path, library_name, video_codec, resolution_h, file_size, mtime,
-            bitrate_kbps, container, audio_codec, audio_channels, duration)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            bitrate_kbps, container, audio_codec, audio_channels, duration, hdr_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             file_path,
             library_name,
@@ -349,6 +360,7 @@ async def upsert_library_file(
             audio_codec,
             audio_channels,
             duration,
+            hdr_type,
         ),
     )
     await db.commit()
@@ -706,6 +718,7 @@ FILES_SORT_COLUMNS = {
     "container",
     "audio_codec",
     "duration",
+    "hdr_type",
 }
 
 RESOLUTION_RANGES = {
@@ -766,7 +779,7 @@ async def get_library_files_page(
     cursor = await db.execute(
         f"""SELECT lf.file_path, lf.file_size, lf.video_codec, lf.resolution_h,
                    lf.bitrate_kbps, lf.container, lf.audio_codec, lf.audio_channels,
-                   lf.duration,
+                   lf.duration, lf.hdr_type,
                    CASE WHEN pf.file_path IS NOT NULL THEN 1 ELSE 0 END AS processed
             FROM library_files lf
             {join}
@@ -776,3 +789,18 @@ async def get_library_files_page(
     )
     rows = await cursor.fetchall()
     return [dict(r) for r in rows], total
+
+
+async def get_library_file_filters(library_name: str) -> dict:
+    db = get_db()
+    cursor = await db.execute(
+        "SELECT DISTINCT video_codec FROM library_files WHERE library_name = ? AND video_codec != '' ORDER BY video_codec",
+        (library_name,),
+    )
+    codecs = [r[0] for r in await cursor.fetchall()]
+    cursor = await db.execute(
+        "SELECT DISTINCT container FROM library_files WHERE library_name = ? AND container != '' ORDER BY container",
+        (library_name,),
+    )
+    containers = [r[0] for r in await cursor.fetchall()]
+    return {"codecs": codecs, "containers": containers}

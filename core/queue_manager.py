@@ -982,6 +982,7 @@ class QueueManager:
                                     audio_codec=post_info.get("audio_codec", ""),
                                     audio_channels=post_info.get("audio_channels", 0),
                                     duration=post_info.get("duration_seconds", 0),
+                                    hdr_type=post_info.get("hdr_type", ""),
                                 )
                                 if final_path != input_path:
                                     await db.remove_library_file(

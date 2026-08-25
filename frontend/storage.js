@@ -18,6 +18,13 @@ let filesPage = 0;
 let filesPageSize = 50;
 let filesSortBy = "file_size";
 let filesSortDir = "desc";
+let filesCodecFilter = null;
+let filesResolutionFilter = null;
+let filesContainerFilter = null;
+let filesStatusFilter = null;
+let filesSearch = "";
+let filesSearchTimer = null;
+let filesFilters = { codecs: [], containers: [] };
 let filesTotal = 0;
 let filesGeneration = 0;
 
@@ -227,9 +234,31 @@ function sortArrow(col) {
     return `<span class="sort-arrow">${filesSortDir === "asc" ? "\u25B2" : "\u25BC"}</span>`;
 }
 
+function filterOption(value, label, selected) {
+    return `<option value="${escAttr(value)}"${value === selected ? " selected" : ""}>${esc(label)}</option>`;
+}
+
 function renderFilters() {
+    const codecOpts = [filterOption("", "All codecs", filesCodecFilter || "")]
+        .concat(filesFilters.codecs.map(c => filterOption(c, codecLabel(c), filesCodecFilter || "")))
+        .join("");
+    const containerOpts = [filterOption("", "All containers", filesContainerFilter || "")]
+        .concat(filesFilters.containers.map(c => filterOption(c, c.toUpperCase(), filesContainerFilter || "")))
+        .join("");
+    const resOpts = [
+        filterOption("", "All resolutions", filesResolutionFilter || ""),
+        filterOption("4k", "4K", filesResolutionFilter || ""),
+        filterOption("1080p", "1080p", filesResolutionFilter || ""),
+        filterOption("720p", "720p", filesResolutionFilter || ""),
+        filterOption("sd", "SD", filesResolutionFilter || ""),
+    ].join("");
+
     return `<div class="storage-filters" id="files-filter-bar">
         <select id="storage-lib-select">${renderLibraryOptions()}</select>
+        <input type="text" id="files-search" placeholder="Search..." value="${escAttr(filesSearch)}" style="max-width:220px;margin:0">
+        <select id="files-codec-filter">${codecOpts}</select>
+        <select id="files-resolution-filter">${resOpts}</select>
+        <select id="files-container-filter">${containerOpts}</select>
     </div>`;
 }
 
@@ -240,6 +269,9 @@ function formatAudio(codec, channels) {
     return ch ? label + " " + ch : label;
 }
 
+const HDR_LABELS = { hdr10: "HDR10", "hdr10+": "HDR10+", dolby_vision: "Dolby Vision", hlg: "HLG" };
+function hdrLabel(type) { return HDR_LABELS[type] || ""; }
+
 function ensureFilesLayout() {
     const content = document.getElementById("storage-content");
     if (content.querySelector("#files-filter-bar")) return;
@@ -249,6 +281,12 @@ function ensureFilesLayout() {
 function updateFilterSelects() {
     const sel = document.getElementById("storage-lib-select");
     if (sel) sel.innerHTML = renderLibraryOptions();
+    const codecSel = document.getElementById("files-codec-filter");
+    const resSel = document.getElementById("files-resolution-filter");
+    const containerSel = document.getElementById("files-container-filter");
+    if (codecSel) codecSel.value = filesCodecFilter || "";
+    if (resSel) resSel.value = filesResolutionFilter || "";
+    if (containerSel) containerSel.value = filesContainerFilter || "";
 }
 
 async function loadFiles() {
@@ -269,6 +307,11 @@ async function loadFiles() {
     params.set("offset", filesPage * filesPageSize);
     params.set("sort_by", filesSortBy);
     params.set("sort_dir", filesSortDir);
+    if (filesCodecFilter) params.set("codec", filesCodecFilter);
+    if (filesResolutionFilter) params.set("resolution", filesResolutionFilter);
+    if (filesContainerFilter) params.set("container", filesContainerFilter);
+    if (filesSearch) params.set("search", filesSearch);
+    if (filesStatusFilter) params.set("status", filesStatusFilter);
 
     let data;
     try {
@@ -288,7 +331,9 @@ async function loadFiles() {
         return;
     }
 
-    if (!data.files.length) {
+    // The status filter can only be cleared from the header
+    const filtersActive = !!(filesCodecFilter || filesResolutionFilter || filesContainerFilter || filesSearch || filesStatusFilter);
+    if (!data.files.length && !filtersActive) {
         results.innerHTML = '<p class="section-empty">No files found.</p>';
         return;
     }
@@ -302,7 +347,8 @@ async function loadFiles() {
         <th class="sortable" style="width:7%" data-sort="resolution_h">Res${sortArrow("resolution_h")}</th>
         <th class="sortable" style="width:10%" data-sort="audio_codec">Audio${sortArrow("audio_codec")}</th>
         <th class="sortable" style="width:7%" data-sort="container">Container${sortArrow("container")}</th>
-        <th style="width:9%">Status</th>
+        <th class="sortable" style="width:6%" data-sort="hdr_type">HDR${sortArrow("hdr_type")}</th>
+        <th id="files-status-th" style="width:9%">${filesStatusFilter ? filesStatusFilter.charAt(0).toUpperCase() + filesStatusFilter.slice(1) : "Status"}</th>
     </tr></thead><tbody>`;
 
     data.files.forEach((f, i) => {
@@ -318,10 +364,17 @@ async function loadFiles() {
             <td>${esc(res)}</td>
             <td>${esc(formatAudio(f.audio_codec, f.audio_channels))}</td>
             <td>${esc(f.container ? f.container.toUpperCase() : "-")}</td>
+            <td>${esc(hdrLabel(f.hdr_type)) || "-"}</td>
             <td>${status}</td>
         </tr>`;
     });
     html += "</tbody></table>";
+
+    if (!data.files.length) {
+        html += '<p class="section-empty">No results.</p>';
+        results.innerHTML = html;
+        return;
+    }
 
     // Pagination
     const totalPages = Math.max(1, Math.ceil(filesTotal / filesPageSize));
@@ -342,8 +395,25 @@ async function loadFiles() {
     results.innerHTML = html;
 }
 
+async function loadFileFilters() {
+    if (!currentLibrary) {
+        filesFilters = { codecs: [], containers: [] };
+        return;
+    }
+    try {
+        filesFilters = await api("GET", `/api/storage/files/filters?library=${encodeURIComponent(currentLibrary)}`);
+    } catch {
+        filesFilters = { codecs: [], containers: [] };
+    }
+}
+
 function resetFilesState() {
     filesPage = 0;
+    filesCodecFilter = null;
+    filesResolutionFilter = null;
+    filesContainerFilter = null;
+    filesStatusFilter = null;
+    filesSearch = "";
 }
 
 function loadTab() {
@@ -373,7 +443,19 @@ export function initStorage() {
             treeData = null;
             resetFilesState();
             content.innerHTML = "";
-            loadTab();
+            loadFileFilters().then(() => loadTab());
+        } else if (e.target.id === "files-codec-filter") {
+            filesCodecFilter = e.target.value || null;
+            filesPage = 0;
+            loadFiles();
+        } else if (e.target.id === "files-resolution-filter") {
+            filesResolutionFilter = e.target.value || null;
+            filesPage = 0;
+            loadFiles();
+        } else if (e.target.id === "files-container-filter") {
+            filesContainerFilter = e.target.value || null;
+            filesPage = 0;
+            loadFiles();
         } else if (e.target.id === "files-page-size") {
             filesPageSize = parseInt(e.target.value);
             filesPage = 0;
@@ -395,6 +477,39 @@ export function initStorage() {
             currentPath = dirLink.dataset.dir;
             treeSearch = "";
             loadTree();
+            return;
+        }
+
+        // Status filter dropdown
+        const statusTh = e.target.closest("#files-status-th");
+        if (statusTh && !e.target.closest(".status-dropdown")) {
+            const existing = statusTh.querySelector(".status-dropdown");
+            if (existing) { existing.remove(); return; }
+            const dd = document.createElement("div");
+            dd.className = "status-dropdown";
+            const options = [null, "processed", "unprocessed"];
+            const labels = ["All", "Processed", "Unprocessed"];
+            options.forEach((val, i) => {
+                const btn = document.createElement("button");
+                btn.textContent = labels[i];
+                if (filesStatusFilter === val) btn.classList.add("active");
+                btn.addEventListener("click", ev => {
+                    ev.stopPropagation();
+                    filesStatusFilter = val;
+                    filesPage = 0;
+                    dd.remove();
+                    loadFiles();
+                });
+                dd.appendChild(btn);
+            });
+            statusTh.appendChild(dd);
+            const close = ev => {
+                if (!dd.contains(ev.target) && ev.target !== statusTh) {
+                    dd.remove();
+                    document.removeEventListener("click", close);
+                }
+            };
+            setTimeout(() => document.addEventListener("click", close), 0);
             return;
         }
 
@@ -456,6 +571,14 @@ export function initStorage() {
                 loadTree(false);
             }, 300);
         }
+        if (e.target.id === "files-search") {
+            clearTimeout(filesSearchTimer);
+            filesSearchTimer = setTimeout(() => {
+                filesSearch = e.target.value.trim();
+                filesPage = 0;
+                loadFiles();
+            }, 300);
+        }
     });
 
     content.addEventListener("keydown", e => {
@@ -490,6 +613,7 @@ export async function loadStorageView() {
     if (!currentLibrary && libraries.length) currentLibrary = libraries[0].name;
     if (!currentPath) currentPath = singleRootPath();
     renderHeader();
+    await loadFileFilters();
     loadTab();
 }
 

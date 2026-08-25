@@ -45,6 +45,7 @@ async def _probe_and_upsert(file_path: str, library_name: str, st) -> dict | Non
             audio_codec=info.get("audio_codec", ""),
             audio_channels=info.get("audio_channels", 0),
             duration=info.get("duration_seconds", 0),
+            hdr_type=info.get("hdr_type", ""),
         )
     else:
         await db.upsert_library_file(
@@ -225,6 +226,7 @@ async def scan_single_file(
                 audio_codec=media_info.get("audio_codec", ""),
                 audio_channels=media_info.get("audio_channels", 0),
                 duration=media_info.get("duration_seconds", 0),
+                hdr_type=media_info.get("hdr_type", ""),
             )
         except OSError:
             pass

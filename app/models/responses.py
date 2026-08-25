@@ -198,12 +198,18 @@ class LibraryFileOut(BaseModel):
     audio_codec: str = ""
     audio_channels: int = 0
     duration: float = 0
+    hdr_type: str = ""
     processed: int = 0
 
 
 class LibraryFilesPageOut(BaseModel):
     files: list[LibraryFileOut]
     total: int
+
+
+class LibraryFileFiltersOut(BaseModel):
+    codecs: list[str]
+    containers: list[str]
 
 
 class StatsOut(BaseModel):

@@ -62,6 +62,22 @@ async def probe_file(file_path: str) -> dict | None:
         return None
 
 
+def classify_hdr(stream: dict) -> str:
+    transfer = stream.get("color_transfer", "")
+    side_data = stream.get("side_data_list") or []
+    side_types = {sd.get("side_data_type", "") for sd in side_data}
+
+    if transfer == "smpte2084":
+        if "DOVI configuration record" in side_types:
+            return "dolby_vision"
+        if "HDR Dynamic Metadata SMPTE2094-40 (HDR10+)" in side_types:
+            return "hdr10+"
+        return "hdr10"
+    if transfer == "arib-std-b67":
+        return "hlg"
+    return ""
+
+
 def extract_media_info(probe_data: dict) -> dict:
     info: dict = {}
 
@@ -75,6 +91,7 @@ def extract_media_info(probe_data: dict) -> dict:
             info["video_codec"] = stream.get("codec_name", "")
             info["resolution_width"] = int(stream.get("width", 0))
             info["resolution_height"] = int(stream.get("height", 0))
+            info["hdr_type"] = classify_hdr(stream)
             bit_rate = stream.get("bit_rate")
             if bit_rate:
                 info["bitrate_kbps"] = int(bit_rate) // 1000
