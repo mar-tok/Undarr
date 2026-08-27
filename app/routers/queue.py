@@ -13,6 +13,7 @@ from core import db
 from app.models.requests import (
     CancelBatchRequest,
     DismissRequest,
+    EnqueuePathsRequest,
     PauseRequest,
     RequeueRequest,
     RetryRequest,
@@ -141,13 +142,47 @@ async def requeue_jobs(body: RequeueRequest):
         if not library:
             skipped += 1
             continue
-        await db.remove_processed(file_path, library_name)
         job = await queue_manager.enqueue(file_path, library_name)
         if job is None:
             skipped += 1
             continue
+        await db.remove_processed(file_path, library_name)
         requeued += 1
     return {"requeued": requeued, "skipped": skipped}
+
+
+@router.post("/api/queue/resolve-paths")
+async def resolve_paths(body: EnqueuePathsRequest):
+    library = await store.get_library(body.library)
+    if not library:
+        raise HTTPException(404, "Library not found")
+    return await db.resolve_library_file_paths(body.library, body.paths)
+
+
+@router.post("/api/queue/enqueue-paths")
+async def enqueue_paths(body: EnqueuePathsRequest):
+    library = await store.get_library(body.library)
+    if not library:
+        raise HTTPException(404, "Library not found")
+    file_paths = await db.resolve_library_file_paths(body.library, body.paths)
+    total = len(file_paths)
+    queued = 0
+    skipped = 0
+    for done, fp in enumerate(file_paths, 1):
+        if not Path(fp).exists():
+            skipped += 1
+        else:
+            job = await queue_manager.enqueue(fp, body.library)
+            if job is None:
+                skipped += 1
+            else:
+                await db.remove_processed(fp, body.library)
+                queued += 1
+        await queue_manager._broadcast(
+            "enqueue_progress",
+            {"library": body.library, "done": done, "total": total, "queued": queued},
+        )
+    return {"queued": queued, "skipped": skipped}
 
 
 @router.post("/api/history/dismiss")

@@ -157,3 +157,8 @@ class SkipRequest(BaseModel):
 
 class CancelBatchRequest(BaseModel):
     ids: list[str]
+
+
+class EnqueuePathsRequest(BaseModel):
+    library: str
+    paths: list[str]

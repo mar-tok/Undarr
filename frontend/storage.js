@@ -5,6 +5,10 @@ let currentPath = null;
 let activeTab = "tree";
 let libraries = [];
 
+// Selection state to persist across navigation/pagination
+const treeSelected = new Set();
+const filesSelected = new Set();
+
 // Tree tab state
 let treeSortBy = "total_size";
 let treeSortDir = "desc";
@@ -126,6 +130,7 @@ function renderTreeControls() {
         <select id="storage-lib-select">${renderLibraryOptions()}</select>
         <input type="text" id="tree-search" placeholder="Search..." value="${escAttr(treeSearch)}" style="max-width:220px;margin:0">
         <span class="storage-stats">${stats}</span>
+        <button class="btn btn-primary" id="btn-queue-tree"${treeSelected.size ? "" : " disabled"}>${treeSelected.size ? `Queue Selected (${treeSelected.size})` : "Queue Selected"}</button>
     </div>`;
 }
 
@@ -194,6 +199,7 @@ async function loadTree(refetch = true) {
     const maxSize = Math.max(...entries.map(e => e.total_size));
 
     let html = `<table class="overview-table storage-table" id="tree-table"><thead><tr>
+            <th class="storage-check-col"><input type="checkbox" id="tree-select-all" data-tooltip="Select all"></th>
             <th class="sortable" style="width:38%" data-treesort="name">Name${treeSortArrow("name")}</th>
             <th class="sortable" style="width:18%" data-treesort="total_size">Size${treeSortArrow("total_size")}</th>
             <th class="sortable" style="width:8%" data-treesort="file_count">Files${treeSortArrow("file_count")}</th>
@@ -213,6 +219,7 @@ async function loadTree(refetch = true) {
             : esc(entry.name);
 
         html += `<tr class="storage-row${i % 2 ? " stripe" : ""}">
+            <td><input type="checkbox" class="tree-check" data-path="${escAttr(entry.path)}"${treeSelected.has(entry.path) ? " checked" : ""}></td>
             <td${nameTooltip}><img class="storage-icon" src="${icon}" alt="">${nameHtml}</td>
             <td class="storage-size-cell"><div class="progress-cell"><span>${formatSize(entry.total_size)}</span><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${barW}%"></div></div></div></td>
             <td>${entry.file_count}</td>
@@ -259,6 +266,7 @@ function renderFilters() {
         <select id="files-codec-filter">${codecOpts}</select>
         <select id="files-resolution-filter">${resOpts}</select>
         <select id="files-container-filter">${containerOpts}</select>
+        <button class="btn btn-primary" id="btn-queue-files"${filesSelected.size ? "" : " disabled"}>${filesSelected.size ? `Queue Selected (${filesSelected.size})` : "Queue Selected"}</button>
     </div>`;
 }
 
@@ -339,6 +347,7 @@ async function loadFiles() {
     }
 
     let html = `<table class="overview-table storage-table files-table" id="files-table"><thead><tr>
+        <th class="storage-check-col"><input type="checkbox" id="files-select-all" data-tooltip="Select all"></th>
         <th class="sortable" style="width:35%" data-sort="file_path">File${sortArrow("file_path")}</th>
         <th class="sortable" style="width:7%" data-sort="file_size">Size${sortArrow("file_size")}</th>
         <th class="sortable" style="width:7%" data-sort="duration">Duration${sortArrow("duration")}</th>
@@ -356,6 +365,7 @@ async function loadFiles() {
         const res = f.resolution_h ? f.resolution_h + "p" : "-";
         const status = f.processed ? '<span class="status-processed">Processed</span>' : "";
         html += `<tr class="storage-row${i % 2 ? " stripe" : ""}" data-tooltip="${escAttr(f.file_path)}">
+            <td><input type="checkbox" class="files-check" data-path="${escAttr(f.file_path)}"${filesSelected.has(f.file_path) ? " checked" : ""}></td>
             <td>${esc(f.file_path.split("/").pop())}</td>
             <td>${formatSize(f.file_size)}</td>
             <td>${formatFileDuration(f.duration)}</td>
@@ -393,6 +403,7 @@ async function loadFiles() {
     </div>`;
 
     results.innerHTML = html;
+    updateQueueBtn("files-check", "btn-queue-files", "files-select-all");
 }
 
 async function loadFileFilters() {
@@ -414,6 +425,172 @@ function resetFilesState() {
     filesContainerFilter = null;
     filesStatusFilter = null;
     filesSearch = "";
+}
+
+function setForCheck(checkClass) {
+    return checkClass === "tree-check" ? treeSelected : filesSelected;
+}
+
+function selectionTooltip(selected) {
+    if (!selected.size) return "";
+    const paths = Array.from(selected);
+    const MAX = 20;
+    const names = paths.slice(0, MAX).map(p => esc(p.split("/").pop()));
+    let tip = names.join("<br>");
+    if (paths.length > MAX) tip += `<br>and ${paths.length - MAX} more`;
+    return tip;
+}
+
+function updateQueueBtn(checkClass, btnId, selectAllId) {
+    const selected = setForCheck(checkClass);
+    const btn = document.getElementById(btnId);
+    if (btn) {
+        btn.disabled = selected.size === 0;
+        btn.textContent = selected.size > 0 ? `Queue Selected (${selected.size})` : "Queue Selected";
+        if (selected.size) btn.setAttribute("data-tooltip", selectionTooltip(selected));
+        else btn.removeAttribute("data-tooltip");
+    }
+    const checks = document.querySelectorAll(`.${checkClass}`);
+    const all = document.getElementById(selectAllId);
+    if (all) all.checked = checks.length > 0 && Array.from(checks).every(c => c.checked);
+}
+
+async function showQueueConfirm(checkClass, btnId, selectAllId) {
+    const selected = setForCheck(checkClass);
+    const paths = Array.from(selected);
+    if (!paths.length || !currentLibrary) return;
+
+    let filePaths;
+    try {
+        filePaths = await api("POST", "/api/queue/resolve-paths", { library: currentLibrary, paths });
+    } catch (err) {
+        alert(err.message);
+        return;
+    }
+    if (!filePaths.length) return;
+
+    const groups = new Map();
+    for (const fp of filePaths) {
+        const slash = fp.lastIndexOf("/");
+        const dir = slash > 0 ? fp.substring(0, slash) : "";
+        if (!groups.has(dir)) groups.set(dir, []);
+        groups.get(dir).push(fp);
+    }
+
+    const dirs = Array.from(groups.keys());
+    let prefix = dirs[0];
+    for (let i = 1; i < dirs.length; i++) {
+        while (prefix && dirs[i] !== prefix && !dirs[i].startsWith(prefix + "/")) {
+            prefix = prefix.substring(0, prefix.lastIndexOf("/"));
+        }
+    }
+
+    const sortedDirs = dirs.sort();
+    let rowIdx = 0;
+    let bodyHtml = "";
+    for (const dir of sortedDirs) {
+        const files = groups.get(dir).sort();
+        const label = (dir === prefix ? dir.split("/").pop() : dir.substring(prefix.length + 1)) + "/";
+        bodyHtml += `<tr class="queue-confirm-dir"><td><img class="storage-icon" src="folder.svg" alt="">${esc(label)}</td></tr>`;
+        for (const fp of files) {
+            const name = fp.substring(fp.lastIndexOf("/") + 1);
+            bodyHtml += `<tr${rowIdx++ % 2 ? ' class="stripe"' : ''}><td class="queue-confirm-file" data-tooltip="${escAttr(fp)}"><img class="storage-icon" src="file-earmark.svg" alt="">${esc(name)}</td></tr>`;
+        }
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "preview-overlay";
+    overlay.innerHTML = `
+        <div class="preview-modal queue-confirm-modal">
+            <div class="preview-header">
+                <span class="preview-title">Queue ${filePaths.length} file${filePaths.length > 1 ? "s" : ""} from ${esc(currentLibrary)}</span>
+                <button class="btn-icon queue-confirm-close" data-tooltip="Close"><img src="close.svg" alt="Close"></button>
+            </div>
+            <div class="preview-body">
+                <table class="overview-table"><tbody>${bodyHtml}</tbody></table>
+            </div>
+            <div class="preview-footer">
+                <button class="btn queue-confirm-close" style="margin-right:8px">Cancel</button>
+                <button class="btn btn-primary" id="queue-confirm-send">Send to queue</button>
+            </div>
+        </div>`;
+
+    document.body.appendChild(overlay);
+    const modal = overlay.querySelector(".preview-modal");
+
+    function close() {
+        overlay.remove();
+        document.removeEventListener("keydown", onKey);
+    }
+
+    function onKey(e) {
+        if (e.key === "Escape") close();
+    }
+    document.addEventListener("keydown", onKey);
+
+    overlay.addEventListener("click", e => {
+        if (e.target === overlay) {
+            modal.classList.add("flash");
+            setTimeout(() => modal.classList.remove("flash"), 150);
+        }
+    });
+    overlay.querySelectorAll(".queue-confirm-close").forEach(b => b.addEventListener("click", close));
+
+    overlay.querySelector("#queue-confirm-send").addEventListener("click", async () => {
+        const sendBtn = overlay.querySelector("#queue-confirm-send");
+        sendBtn.disabled = true;
+        sendBtn.textContent = "Queuing...";
+        try {
+            const result = await api("POST", "/api/queue/enqueue-paths", { library: currentLibrary, paths });
+            selected.clear();
+            document.querySelectorAll(`.${checkClass}`).forEach(c => { c.checked = false; });
+            const all = document.getElementById(selectAllId);
+            if (all) all.checked = false;
+            updateQueueBtn(checkClass, btnId, selectAllId);
+            close();
+            const btn = document.getElementById(btnId);
+            if (result.queued > 0 && result.skipped > 0) {
+                btn.textContent = `Queued ${result.queued}, ${result.skipped} skipped`;
+            } else if (result.queued > 0) {
+                btn.textContent = `Queued ${result.queued}`;
+            } else {
+                btn.textContent = `${result.skipped} skipped`;
+            }
+            setTimeout(() => { btn.textContent = "Queue Selected"; btn.disabled = true; }, 4000);
+        } catch (err) {
+            alert(err.message);
+            sendBtn.disabled = false;
+            sendBtn.textContent = "Send to queue";
+        }
+    });
+}
+
+async function queueSelected(checkClass, btnId, selectAllId) {
+    const selected = setForCheck(checkClass);
+    const paths = Array.from(selected);
+    if (!paths.length || !currentLibrary) return;
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    btn.textContent = "Queuing...";
+    try {
+        const result = await api("POST", "/api/queue/enqueue-paths", { library: currentLibrary, paths });
+        selected.clear();
+        document.querySelectorAll(`.${checkClass}`).forEach(c => { c.checked = false; });
+        const all = document.getElementById(selectAllId);
+        if (all) all.checked = false;
+        if (result.queued > 0 && result.skipped > 0) {
+            btn.textContent = `Queued ${result.queued}, ${result.skipped} skipped`;
+        } else if (result.queued > 0) {
+            btn.textContent = `Queued ${result.queued}`;
+        } else {
+            btn.textContent = `${result.skipped} skipped`;
+        }
+        setTimeout(() => { btn.textContent = "Queue Selected"; btn.disabled = true; }, 4000);
+    } catch (err) {
+        alert(err.message);
+        btn.textContent = "Queue Selected";
+        updateQueueBtn(checkClass, btnId, selectAllId);
+    }
 }
 
 function loadTab() {
@@ -442,6 +619,8 @@ export function initStorage() {
             treeSearch = "";
             treeData = null;
             resetFilesState();
+            treeSelected.clear();
+            filesSelected.clear();
             content.innerHTML = "";
             loadFileFilters().then(() => loadTab());
         } else if (e.target.id === "files-codec-filter") {
@@ -464,6 +643,46 @@ export function initStorage() {
     });
 
     content.addEventListener("click", e => {
+        // Queue buttons
+        if (e.target.id === "btn-queue-tree" || e.target.closest("#btn-queue-tree")) {
+            showQueueConfirm("tree-check", "btn-queue-tree", "tree-select-all");
+            return;
+        }
+        if (e.target.id === "btn-queue-files" || e.target.closest("#btn-queue-files")) {
+            queueSelected("files-check", "btn-queue-files", "files-select-all");
+            return;
+        }
+
+        // Checkboxes
+        const checkCell = e.target.closest("td, th");
+        const checkInput = e.target.type === "checkbox" ? e.target
+            : checkCell?.querySelector("input[type=checkbox]");
+        if (checkInput) {
+            if (e.target.type !== "checkbox") checkInput.checked = !checkInput.checked;
+            if (checkInput.id === "tree-select-all") {
+                if (!checkInput.checked) treeSelected.clear();
+                document.querySelectorAll(".tree-check").forEach(c => {
+                    c.checked = checkInput.checked;
+                    if (c.checked) treeSelected.add(c.dataset.path);
+                });
+                updateQueueBtn("tree-check", "btn-queue-tree", "tree-select-all");
+            } else if (checkInput.classList.contains("tree-check")) {
+                if (checkInput.checked) treeSelected.add(checkInput.dataset.path); else treeSelected.delete(checkInput.dataset.path);
+                updateQueueBtn("tree-check", "btn-queue-tree", "tree-select-all");
+            } else if (checkInput.id === "files-select-all") {
+                if (!checkInput.checked) filesSelected.clear();
+                document.querySelectorAll(".files-check").forEach(c => {
+                    c.checked = checkInput.checked;
+                    if (c.checked) filesSelected.add(c.dataset.path);
+                });
+                updateQueueBtn("files-check", "btn-queue-files", "files-select-all");
+            } else if (checkInput.classList.contains("files-check")) {
+                if (checkInput.checked) filesSelected.add(checkInput.dataset.path); else filesSelected.delete(checkInput.dataset.path);
+                updateQueueBtn("files-check", "btn-queue-files", "files-select-all");
+            }
+            return;
+        }
+
         const crumb = e.target.closest(".storage-crumb");
         if (crumb) {
             const path = crumb.dataset.path;

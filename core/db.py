@@ -661,6 +661,26 @@ async def get_stats_processed_counts() -> dict[str, int]:
     return {r[0]: r[1] for r in rows}
 
 
+async def resolve_library_file_paths(library_name: str, paths: list[str]) -> list[str]:
+    db = get_db()
+    result: set[str] = set()
+    for path in paths:
+        cursor = await db.execute(
+            "SELECT file_path FROM library_files WHERE library_name = ? AND file_path = ?",
+            (library_name, path),
+        )
+        rows = await cursor.fetchall()
+        if rows:
+            result.add(rows[0][0])
+        else:
+            cursor = await db.execute(
+                "SELECT file_path FROM library_files WHERE library_name = ? AND file_path LIKE ? || '/%'",
+                (library_name, path),
+            )
+            result.update(r[0] for r in await cursor.fetchall())
+    return sorted(result)
+
+
 # Storage queries
 
 

@@ -507,6 +507,24 @@ export function connectSSE() {
         }
     });
 
+    es.addEventListener("enqueue_progress", (e) => {
+        const data = JSON.parse(e.data);
+        const el = document.getElementById("scan-status");
+        if (!el) return;
+        el.style.display = "block";
+        if (data.done < data.total) {
+            el.innerHTML = `<span class="scan-progress-text">Queuing files in '${esc(data.library)}': ${data.done}/${data.total}</span>`;
+        } else {
+            el.innerHTML = `<span class="scan-progress-text">Queued ${data.queued} of ${data.total} files in '${esc(data.library)}'.</span>`;
+            setTimeout(() => {
+                if (el.textContent.includes(data.library)) {
+                    el.style.display = "none";
+                    el.innerHTML = "";
+                }
+            }, 10000);
+        }
+    });
+
     es.addEventListener("preview_progress", (e) => {
         const data = JSON.parse(e.data);
         updatePreviewProgress(data);

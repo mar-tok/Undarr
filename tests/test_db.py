@@ -35,6 +35,7 @@ from core.db import (
     get_storage_savings,
     get_library_files_page,
     get_library_file_filters,
+    resolve_library_file_paths,
 )
 
 import pytest
@@ -554,3 +555,34 @@ class TestLibraryFileFilters:
         )
         filters = await get_library_file_filters("lib1")
         assert filters == {"codecs": [], "containers": []}
+
+
+class TestResolveLibraryFilePaths:
+    async def test_exact_file_match(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 100, 1.0)
+        result = await resolve_library_file_paths("lib1", ["/media/a.mkv"])
+        assert result == ["/media/a.mkv"]
+
+    async def test_directory_expands_to_files(self, db_setup):
+        await upsert_library_file("/media/show/e1.mkv", "lib1", "h264", 1080, 100, 1.0)
+        await upsert_library_file("/media/show/e2.mkv", "lib1", "h264", 1080, 100, 1.0)
+        await upsert_library_file("/media/other.mkv", "lib1", "h264", 1080, 100, 1.0)
+        result = await resolve_library_file_paths("lib1", ["/media/show"])
+        assert result == ["/media/show/e1.mkv", "/media/show/e2.mkv"]
+
+    async def test_file_inside_selected_directory_dedupes(self, db_setup):
+        await upsert_library_file("/media/show/e1.mkv", "lib1", "h264", 1080, 100, 1.0)
+        result = await resolve_library_file_paths(
+            "lib1", ["/media/show", "/media/show/e1.mkv"]
+        )
+        assert result == ["/media/show/e1.mkv"]
+
+    async def test_scoped_to_library(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib2", "h264", 1080, 100, 1.0)
+        result = await resolve_library_file_paths("lib1", ["/media/a.mkv"])
+        assert result == []
+
+    async def test_directory_prefix_needs_separator(self, db_setup):
+        await upsert_library_file("/media/showdown.mkv", "lib1", "h264", 1080, 100, 1.0)
+        result = await resolve_library_file_paths("lib1", ["/media/show"])
+        assert result == []
