@@ -236,6 +236,7 @@ async def delete_library(name: str):
         raise HTTPException(404, "Library not found")
     log.info("Library deleted: '%s'", name)
     await db.remove_library_files(name)
+    await db.remove_file_hashes(name)
     removed = await queue_manager.remove_library_jobs(name)
     if removed:
         log.info("Removed %d queued jobs for deleted library '%s'", removed, name)

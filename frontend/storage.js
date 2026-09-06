@@ -5,6 +5,12 @@ let currentPath = null;
 let activeTab = "tree";
 let libraries = [];
 
+// Duplicates tab state
+let dupGroups = null;
+let dupScanning = false;
+let dupTotalSize = 0;
+let dupNotHashed = 0;
+
 // Selection state to persist across navigation/pagination
 const treeSelected = new Set();
 const filesSelected = new Set();
@@ -42,15 +48,17 @@ function renderHeader() {
         <div class="settings-tabs">
             <button class="settings-tab${activeTab === "tree" ? " active" : ""}" data-stab="tree">Directory</button>
             <button class="settings-tab${activeTab === "files" ? " active" : ""}" data-stab="files">Files</button>
+            <button class="settings-tab${activeTab === "dupes" ? " active" : ""}" data-stab="dupes">Duplicates</button>
         </div>`;
 }
 
-function renderLibraryOptions() {
+function renderLibraryOptions(withAll = false) {
+    const allOpt = withAll ? `<option value=""${!currentLibrary ? " selected" : ""}>All Libraries</option>` : "";
     let opts = libraries.map(l =>
         `<option value="${escAttr(l.name)}"${l.name === currentLibrary ? " selected" : ""}>${esc(l.name)}</option>`
     ).join("");
-    if (!libraries.length) opts = '<option value="">No libraries</option>';
-    return opts;
+    if (!libraries.length && !allOpt) opts = '<option value="">No libraries</option>';
+    return allOpt + opts;
 }
 
 function libraryPaths() {
@@ -596,6 +604,111 @@ async function queueSelected(checkClass, btnId, selectAllId) {
 function loadTab() {
     if (activeTab === "tree") loadTree();
     else if (activeTab === "files") loadFiles();
+    else if (activeTab === "dupes") loadDuplicates();
+}
+
+// Duplicates tab
+
+function renderDupControls() {
+    return `<div class="storage-filters" id="dup-controls">
+        <select id="storage-lib-select">${renderLibraryOptions(true)}</select>
+        <button class="btn btn-primary" id="btn-dup-scan"${dupScanning ? " disabled" : ""}>Scan for Duplicates</button>
+    </div>`;
+}
+
+function ensureDupLayout() {
+    const content = document.getElementById("storage-content");
+    if (content.querySelector("#dup-controls")) return;
+    content.innerHTML = `${renderDupControls()}<div id="dup-results"></div>`;
+}
+
+function loadDuplicates() {
+    ensureDupLayout();
+    const sel = document.getElementById("storage-lib-select");
+    sel.innerHTML = renderLibraryOptions(true);
+    document.getElementById("btn-dup-scan").disabled = dupScanning;
+    const results = document.getElementById("dup-results");
+    if (dupScanning) {
+        results.innerHTML = `<div class="dup-scan-status">
+            <p>Scanning for duplicates...</p>
+            <div class="dup-progress"><div class="dup-progress-bar" id="dup-progress-bar"></div></div>
+            <p class="dup-progress-text" id="dup-progress-text"></p>
+            <button class="btn" id="btn-dup-cancel">Stop Scanning</button>
+        </div>`;
+        return;
+    }
+    if (dupGroups === null) {
+        results.innerHTML = "";
+        return;
+    }
+    results.innerHTML = renderDuplicateResults();
+}
+
+function renderDuplicateResults() {
+    const notHashed = dupNotHashed > 0 ? `<span>${dupNotHashed} files not hashed</span>` : "";
+    if (!dupGroups.length) {
+        return `<div class="dup-summary"><span>No duplicates found.</span>${notHashed}</div>`;
+    }
+    let html = `<div class="dup-summary">
+        <span>${dupGroups.length} duplicate group${dupGroups.length === 1 ? "" : "s"}</span>
+        <span>${formatSize(dupTotalSize)} in extra copies</span>
+        ${notHashed}
+    </div>`;
+
+    dupGroups.forEach(group => {
+        const f0 = group.files[0];
+        const codec = f0.video_codec ? codecLabel(f0.video_codec) : "";
+        const res = f0.resolution_h ? f0.resolution_h + "p" : "";
+        const container = f0.container ? f0.container.toUpperCase() : "";
+        const meta = [formatSize(group.file_size), codec, res, container].filter(Boolean).join(", ");
+        html += `<div class="dup-group">
+            <div class="dup-group-header">
+                <span>${group.files.length} copies</span>
+                <span class="dup-group-meta">${esc(meta)}</span>
+            </div>
+            <table class="overview-table dup-table"><thead><tr>
+                <th>Path</th>
+                <th>Library</th>
+            </tr></thead><tbody>`;
+        group.files.forEach((f, fi) => {
+            html += `<tr class="${fi % 2 ? "stripe" : ""}" data-tooltip="${escAttr(f.file_path)}">
+                <td>${esc(f.file_path)}</td>
+                <td>${esc(f.library_name)}</td>
+            </tr>`;
+        });
+        html += "</tbody></table></div>";
+    });
+
+    return html;
+}
+
+async function startDupScan() {
+    dupScanning = true;
+    dupGroups = null;
+    loadDuplicates();
+    const lib = currentLibrary || "";
+    const url = lib ? `/api/storage/duplicates/scan?library=${encodeURIComponent(lib)}` : "/api/storage/duplicates/scan";
+    try {
+        const result = await api("POST", url);
+        dupGroups = result.groups;
+        dupTotalSize = result.total_duplicate_size;
+        dupNotHashed = result.not_hashed;
+    } catch (e) {
+        dupGroups = null;
+        alert(e.message);
+    } finally {
+        dupScanning = false;
+        if (activeTab === "dupes") loadDuplicates();
+    }
+}
+
+export function onDupScanProgress(data) {
+    const bar = document.getElementById("dup-progress-bar");
+    const text = document.getElementById("dup-progress-text");
+    if (!bar || !text) return;
+    const pct = data.total > 0 ? Math.round((data.hashed / data.total) * 100) : 0;
+    bar.style.width = pct + "%";
+    text.textContent = `Hashed ${data.hashed} of ${data.total} files`;
 }
 
 export function initStorage() {
@@ -603,6 +716,10 @@ export function initStorage() {
         const tab = e.target.closest("[data-stab]");
         if (tab) {
             activeTab = tab.dataset.stab;
+            if (activeTab !== "dupes" && !currentLibrary && libraries.length) {
+                currentLibrary = libraries[0].name;
+                dupGroups = null;
+            }
             currentPath = singleRootPath();
             treeSearch = "";
             document.querySelectorAll("#storage-header .settings-tab").forEach(b => b.classList.toggle("active", b === tab));
@@ -621,6 +738,7 @@ export function initStorage() {
             resetFilesState();
             treeSelected.clear();
             filesSelected.clear();
+            dupGroups = null;
             content.innerHTML = "";
             loadFileFilters().then(() => loadTab());
         } else if (e.target.id === "files-codec-filter") {
@@ -643,6 +761,16 @@ export function initStorage() {
     });
 
     content.addEventListener("click", e => {
+        // Duplicates tab buttons
+        if (e.target.id === "btn-dup-scan" || e.target.closest("#btn-dup-scan")) {
+            startDupScan();
+            return;
+        }
+        if (e.target.id === "btn-dup-cancel" || e.target.closest("#btn-dup-cancel")) {
+            api("POST", "/api/storage/duplicates/cancel").catch(() => {});
+            return;
+        }
+
         // Queue buttons
         if (e.target.id === "btn-queue-tree" || e.target.closest("#btn-queue-tree")) {
             showQueueConfirm("tree-check", "btn-queue-tree", "tree-select-all");
@@ -837,5 +965,5 @@ export async function loadStorageView() {
 }
 
 export function onStorageSSE() {
-    if (isVisible()) loadTab();
+    if (isVisible() && activeTab !== "dupes") loadTab();
 }

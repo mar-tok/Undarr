@@ -212,6 +212,29 @@ class LibraryFileFiltersOut(BaseModel):
     containers: list[str]
 
 
+class DuplicateFileOut(BaseModel):
+    file_path: str
+    library_name: str
+    video_codec: str
+    resolution_h: int
+    audio_codec: str
+    container: str
+    duration: float
+
+
+class DuplicateGroupOut(BaseModel):
+    file_size: int
+    full_hash: str
+    files: list[DuplicateFileOut]
+
+
+class DuplicateScanOut(BaseModel):
+    groups: list[DuplicateGroupOut]
+    total_duplicate_size: int
+    total_groups: int
+    not_hashed: int = 0
+
+
 class StatsOut(BaseModel):
     totals: StatsTotals
     daily: list[StatsDaily]

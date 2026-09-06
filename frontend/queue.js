@@ -4,7 +4,7 @@ import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
 import { updatePreviewProgress, onLibraryUnavailable, onLibraryMissingPaths } from "./libraries.js";
 import { onOverviewSSE } from "./overview.js";
-import { onStorageSSE } from "./storage.js";
+import { onStorageSSE, onDupScanProgress } from "./storage.js";
 
 let queuePaused = false;
 let scheduleActive = true;
@@ -528,6 +528,10 @@ export function connectSSE() {
     es.addEventListener("preview_progress", (e) => {
         const data = JSON.parse(e.data);
         updatePreviewProgress(data);
+    });
+
+    es.addEventListener("dup_scan_progress", (e) => {
+        onDupScanProgress(JSON.parse(e.data));
     });
 
     es.addEventListener("job_cancelled", (e) => {

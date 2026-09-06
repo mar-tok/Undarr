@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.models.responses import (
     StorageTreeOut,
@@ -10,11 +11,19 @@ from app.models.responses import (
     LibraryFilesPageOut,
     LibraryFileOut,
     LibraryFileFiltersOut,
+    DuplicateScanOut,
+    DuplicateGroupOut,
+    DuplicateFileOut,
 )
 from core import db
+from core.duplicates import scan_duplicates
+from core.queue_manager import queue_manager
 from core.yaml_store import store
 
 router = APIRouter(prefix="/api/storage", tags=["storage"])
+
+_dup_abort: asyncio.Event | None = None
+_dup_lock = asyncio.Lock()
 
 
 def _parent_path(path: str) -> str | None:
@@ -208,3 +217,80 @@ async def get_library_file_filters(
 ):
     data = await db.get_library_file_filters(library)
     return LibraryFileFiltersOut(**data)
+
+
+# Duplicate detection
+
+
+@router.post("/duplicates/scan", response_model=DuplicateScanOut)
+async def scan_for_duplicates(library: str | None = Query(None)):
+    global _dup_abort
+    async with _dup_lock:
+        if _dup_abort is not None:
+            raise HTTPException(409, "A duplicate scan is already running")
+        _dup_abort = asyncio.Event()
+
+    abort_event = _dup_abort
+
+    try:
+        libs = await store.get_libraries()
+        if library and library not in libs:
+            raise HTTPException(404, "Library not found")
+
+        library_names = [library] if library else None
+
+        last_reported = 0
+        step = 1
+
+        async def progress_fn(hashed: int, total: int) -> None:
+            nonlocal last_reported, step
+            if step == 1 and total > 0:
+                step = max(1, total // 100)
+            if hashed - last_reported < step and hashed < total:
+                return
+            last_reported = hashed
+            await queue_manager._broadcast(
+                "dup_scan_progress",
+                {
+                    "hashed": hashed,
+                    "total": total,
+                },
+            )
+
+        result = await scan_duplicates(
+            library_names, progress_fn=progress_fn, abort_event=abort_event
+        )
+    finally:
+        _dup_abort = None
+
+    groups = [
+        DuplicateGroupOut(
+            file_size=g["file_size"],
+            full_hash=g["full_hash"],
+            files=[
+                DuplicateFileOut(
+                    file_path=f["file_path"],
+                    library_name=f["library_name"],
+                    video_codec=f.get("video_codec", ""),
+                    resolution_h=f.get("resolution_h", 0),
+                    audio_codec=f.get("audio_codec", ""),
+                    container=f.get("container", ""),
+                    duration=f.get("duration", 0),
+                )
+                for f in g["files"]
+            ],
+        )
+        for g in result["groups"]
+    ]
+    return DuplicateScanOut(
+        groups=groups,
+        total_duplicate_size=result["total_duplicate_size"],
+        total_groups=result["total_groups"],
+        not_hashed=result["not_hashed"],
+    )
+
+
+@router.post("/duplicates/cancel", status_code=204)
+async def cancel_duplicate_scan():
+    if _dup_abort:
+        _dup_abort.set()

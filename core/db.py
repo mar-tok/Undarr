@@ -57,6 +57,17 @@ CREATE TABLE IF NOT EXISTS library_files (
 );
 """
 
+FILE_HASHES_SCHEMA = """\
+CREATE TABLE IF NOT EXISTS file_hashes (
+    file_path    TEXT NOT NULL,
+    library_name TEXT NOT NULL,
+    mtime        REAL NOT NULL,
+    partial_hash TEXT NOT NULL DEFAULT '',
+    full_hash    TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (file_path, library_name)
+);
+"""
+
 
 async def _column_names(conn: aiosqlite.Connection, table: str) -> set[str]:
     cursor = await conn.execute(f"PRAGMA table_info({table})")
@@ -73,8 +84,12 @@ async def init_db() -> None:
     await _db.executescript(SCHEMA)
     await _db.executescript(PROCESSED_SCHEMA)
     await _db.executescript(LIBRARY_FILES_SCHEMA)
+    await _db.executescript(FILE_HASHES_SCHEMA)
     await _db.execute(
         "CREATE INDEX IF NOT EXISTS idx_libfiles_lib_path ON library_files (library_name, file_path)"
+    )
+    await _db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_filehashes_lib ON file_hashes (library_name)"
     )
     await _db.execute(
         "CREATE INDEX IF NOT EXISTS idx_jobhistory_status_finished ON job_history (status, finished_at)"
@@ -394,7 +409,7 @@ async def rename_file(
 ) -> bool:
     db = get_db()
     updated = False
-    for table in ("library_files", "processed_files"):
+    for table in ("library_files", "processed_files", "file_hashes"):
         # scan_library upserts the new path before rename detection runs
         await db.execute(
             f"DELETE FROM {table} WHERE file_path = ? AND library_name = ?",
@@ -421,7 +436,7 @@ async def rename_file(
 
 async def rename_library(old_name: str, new_name: str) -> None:
     db = get_db()
-    for table in ("library_files", "processed_files", "job_history"):
+    for table in ("library_files", "processed_files", "file_hashes", "job_history"):
         await db.execute(
             f"UPDATE {table} SET library_name = ? WHERE library_name = ?",
             (new_name, old_name),
@@ -433,6 +448,15 @@ async def remove_library_files(library_name: str) -> None:
     db = get_db()
     await db.execute(
         "DELETE FROM library_files WHERE library_name = ?",
+        (library_name,),
+    )
+    await db.commit()
+
+
+async def remove_file_hashes(library_name: str) -> None:
+    db = get_db()
+    await db.execute(
+        "DELETE FROM file_hashes WHERE library_name = ?",
         (library_name,),
     )
     await db.commit()
@@ -824,3 +848,80 @@ async def get_library_file_filters(library_name: str) -> dict:
     )
     containers = [r[0] for r in await cursor.fetchall()]
     return {"codecs": codecs, "containers": containers}
+
+
+# Duplicate detection
+
+
+async def get_size_groups(library_names: list[str] | None) -> list[tuple[int, int]]:
+    db = get_db()
+    if library_names:
+        placeholders = ",".join("?" for _ in library_names)
+        cursor = await db.execute(
+            f"SELECT file_size, COUNT(*) AS cnt FROM library_files WHERE library_name IN ({placeholders}) GROUP BY file_size HAVING cnt > 1",
+            library_names,
+        )
+    else:
+        cursor = await db.execute(
+            "SELECT file_size, COUNT(*) AS cnt FROM library_files GROUP BY file_size HAVING cnt > 1",
+        )
+    return [(r[0], r[1]) for r in await cursor.fetchall()]
+
+
+async def get_files_by_sizes(
+    sizes: list[int], library_names: list[str] | None
+) -> list[dict]:
+    if not sizes:
+        return []
+    db = get_db()
+    size_ph = ",".join("?" for _ in sizes)
+    params: list = list(sizes)
+    if library_names:
+        lib_ph = ",".join("?" for _ in library_names)
+        sql = f"""SELECT file_path, library_name, file_size, mtime, video_codec, resolution_h,
+                         audio_codec, container, duration
+                  FROM library_files WHERE file_size IN ({size_ph}) AND library_name IN ({lib_ph})"""
+        params.extend(library_names)
+    else:
+        sql = f"""SELECT file_path, library_name, file_size, mtime, video_codec, resolution_h,
+                         audio_codec, container, duration
+                  FROM library_files WHERE file_size IN ({size_ph})"""
+    cursor = await db.execute(sql, params)
+    return [dict(r) for r in await cursor.fetchall()]
+
+
+async def get_cached_hashes(
+    pairs: list[tuple[str, str]],
+) -> dict[tuple[str, str], dict]:
+    if not pairs:
+        return {}
+    db = get_db()
+    result: dict[tuple[str, str], dict] = {}
+    # Chunked so one query never carries thousands of bound parameters
+    for i in range(0, len(pairs), 500):
+        chunk = pairs[i : i + 500]
+        conditions = " OR ".join(["(file_path = ? AND library_name = ?)"] * len(chunk))
+        params = [v for pair in chunk for v in pair]
+        cursor = await db.execute(
+            f"SELECT file_path, library_name, mtime, partial_hash, full_hash FROM file_hashes WHERE {conditions}",
+            params,
+        )
+        for r in await cursor.fetchall():
+            result[(r[0], r[1])] = {
+                "mtime": r[2],
+                "partial_hash": r[3],
+                "full_hash": r[4],
+            }
+    return result
+
+
+async def upsert_file_hash(
+    file_path: str, library_name: str, mtime: float, partial_hash: str, full_hash: str
+) -> None:
+    db = get_db()
+    await db.execute(
+        """INSERT OR REPLACE INTO file_hashes (file_path, library_name, mtime, partial_hash, full_hash)
+           VALUES (?, ?, ?, ?, ?)""",
+        (file_path, library_name, mtime, partial_hash, full_hash),
+    )
+    await db.commit()

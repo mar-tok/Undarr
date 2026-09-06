@@ -8,6 +8,7 @@ from core.db import (
     SCHEMA,
     PROCESSED_SCHEMA,
     LIBRARY_FILES_SCHEMA,
+    FILE_HASHES_SCHEMA,
     mark_processed,
     is_processed,
 )
@@ -24,6 +25,7 @@ async def db_setup():
     await conn.executescript(SCHEMA)
     await conn.executescript(PROCESSED_SCHEMA)
     await conn.executescript(LIBRARY_FILES_SCHEMA)
+    await conn.executescript(FILE_HASHES_SCHEMA)
     await conn.commit()
     old_db = db_mod._db
     db_mod._db = conn

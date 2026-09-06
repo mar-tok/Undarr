@@ -5,6 +5,7 @@ from core.db import (
     SCHEMA,
     PROCESSED_SCHEMA,
     LIBRARY_FILES_SCHEMA,
+    FILE_HASHES_SCHEMA,
     insert_job_history,
     get_history,
     get_job_log,
@@ -36,6 +37,11 @@ from core.db import (
     get_library_files_page,
     get_library_file_filters,
     resolve_library_file_paths,
+    remove_file_hashes,
+    get_size_groups,
+    get_files_by_sizes,
+    get_cached_hashes,
+    upsert_file_hash,
 )
 
 import pytest
@@ -48,6 +54,7 @@ async def db_setup():
     await conn.executescript(SCHEMA)
     await conn.executescript(PROCESSED_SCHEMA)
     await conn.executescript(LIBRARY_FILES_SCHEMA)
+    await conn.executescript(FILE_HASHES_SCHEMA)
     await conn.commit()
     old_db = db_mod._db
     db_mod._db = conn
@@ -586,3 +593,69 @@ class TestResolveLibraryFilePaths:
         await upsert_library_file("/media/showdown.mkv", "lib1", "h264", 1080, 100, 1.0)
         result = await resolve_library_file_paths("lib1", ["/media/show"])
         assert result == []
+
+
+class TestFileHashes:
+    async def test_upsert_and_cached_lookup(self, db_setup):
+        await upsert_file_hash("/media/a.mkv", "lib1", 1.0, "p1", "")
+        await upsert_file_hash("/media/a.mkv", "lib1", 2.0, "p1", "f1")
+        cached = await get_cached_hashes(
+            [("/media/a.mkv", "lib1"), ("/media/b.mkv", "lib1")]
+        )
+        assert cached == {
+            ("/media/a.mkv", "lib1"): {
+                "mtime": 2.0,
+                "partial_hash": "p1",
+                "full_hash": "f1",
+            }
+        }
+
+    async def test_cached_lookup_empty(self, db_setup):
+        assert await get_cached_hashes([]) == {}
+
+    async def test_cached_lookup_crosses_chunks(self, db_setup):
+        pairs = [(f"/media/{i}.mkv", "lib1") for i in range(1203)]
+        for fp, lib in pairs:
+            await upsert_file_hash(fp, lib, 1.0, "p", "")
+        assert len(await get_cached_hashes(pairs)) == 1203
+
+    async def test_size_groups_need_two_files(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/media/b.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/media/c.mkv", "lib1", "h264", 1080, 2000, 1.0)
+        assert await get_size_groups(["lib1"]) == [(1000, 2)]
+
+    async def test_size_groups_span_libraries_when_unscoped(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/other/a.mkv", "lib2", "h264", 1080, 1000, 1.0)
+        assert await get_size_groups(["lib1"]) == []
+        assert await get_size_groups(None) == [(1000, 2)]
+
+    async def test_files_by_sizes(self, db_setup):
+        await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/media/b.mkv", "lib1", "h264", 1080, 2000, 1.0)
+        await upsert_library_file("/other/c.mkv", "lib2", "h264", 1080, 1000, 1.0)
+        rows = await get_files_by_sizes([1000], ["lib1"])
+        assert [r["file_path"] for r in rows] == ["/media/a.mkv"]
+        rows = await get_files_by_sizes([1000], None)
+        assert sorted(r["file_path"] for r in rows) == ["/media/a.mkv", "/other/c.mkv"]
+        assert await get_files_by_sizes([], None) == []
+
+    async def test_rename_file_moves_hash(self, db_setup):
+        await upsert_library_file("/old.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_file_hash("/old.mkv", "lib1", 1.0, "p", "f")
+        assert await rename_file("/old.mkv", "/new.mkv", "lib1", 7.0) is True
+        cached = await get_cached_hashes([("/new.mkv", "lib1")])
+        assert cached[("/new.mkv", "lib1")]["full_hash"] == "f"
+
+    async def test_rename_library_moves_hashes(self, db_setup):
+        await upsert_file_hash("/a.mkv", "lib1", 1.0, "p", "f")
+        await rename_library("lib1", "lib9")
+        assert ("/a.mkv", "lib9") in await get_cached_hashes([("/a.mkv", "lib9")])
+
+    async def test_remove_file_hashes_scoped(self, db_setup):
+        await upsert_file_hash("/a.mkv", "lib1", 1.0, "p", "f")
+        await upsert_file_hash("/b.mkv", "lib2", 1.0, "p", "f")
+        await remove_file_hashes("lib1")
+        cached = await get_cached_hashes([("/a.mkv", "lib1"), ("/b.mkv", "lib2")])
+        assert list(cached) == [("/b.mkv", "lib2")]
