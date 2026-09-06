@@ -1105,6 +1105,15 @@ tr.clickable:hover {
     min-width: 0;
 }
 
+.lib-path-cell:not(.path-missing)::before,
+.lib-path-cell:not(.path-missing)::after,
+.path-text-rtl::before,
+.path-text-rtl::after,
+.path-chip .browse-chip::before,
+.path-chip .browse-chip::after {
+    content: "\200e";
+}
+
 .path-warning-icon {
     width: 14px;
     height: 14px;
@@ -1337,10 +1346,10 @@ input[type="checkbox"][role="switch"]:focus-visible {
     font-size: 12px;
     font-family: "Cascadia Code", "Consolas", monospace;
     color: var(--text);
+    direction: rtl;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 300px;
     cursor: pointer;
     background: none;
     border: none;
@@ -1440,10 +1449,8 @@ input[type="checkbox"][role="switch"]:focus-visible {
 .dir-browser-path {
     font-family: "Cascadia Code", "Consolas", monospace;
     font-size: 13px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     min-width: 0;
+    word-break: break-all;
 }
 
 .dir-browser-entries {
@@ -1455,15 +1462,10 @@ input[type="checkbox"][role="switch"]:focus-visible {
 .dir-browser-entry {
     display: flex;
     align-items: center;
-    width: 100%;
     padding: 8px 12px;
-    background: none;
-    border: none;
     border-left: 3px solid transparent;
     color: var(--text);
     font-size: 13px;
-    font-family: inherit;
-    text-align: left;
     cursor: pointer;
 }
 
@@ -1474,6 +1476,18 @@ input[type="checkbox"][role="switch"]:focus-visible {
 .dir-browser-entry.selected {
     border-left-color: var(--accent);
     background: var(--bg-tertiary);
+}
+
+.dir-browser-entry.already-added {
+    color: var(--text-muted);
+}
+
+.dir-browser-entry .entry-check {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-right: 10px;
+    cursor: pointer;
 }
 
 .dir-browser-entry-name {

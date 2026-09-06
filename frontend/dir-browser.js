@@ -1,6 +1,10 @@
 import { api, esc, escAttr } from "./helpers.js";
 
-export function openDirBrowser(startPath, onSelect) {
+export function openDirBrowser(startPath, onSelect, opts = {}) {
+    const multi = opts.multi || false;
+    const existingPaths = new Set(opts.currentPaths || []);
+    const selectedPaths = new Set();
+
     const overlay = document.createElement("div");
     overlay.className = "dir-browser-overlay";
     overlay.innerHTML = `
@@ -11,8 +15,8 @@ export function openDirBrowser(startPath, onSelect) {
             </div>
             <div class="dir-browser-entries"></div>
             <div class="dir-browser-footer">
-                <button class="btn db-cancel">Cancel</button>
-                <button class="btn btn-primary db-select" disabled>Select</button>
+                <button class="btn db-cancel">${multi ? "Close" : "Cancel"}</button>
+                <button class="btn btn-primary db-select" disabled>${multi ? "Add" : "Select"}</button>
             </div>
         </div>`;
     document.body.appendChild(overlay);
@@ -28,20 +32,36 @@ export function openDirBrowser(startPath, onSelect) {
 
     function close() { overlay.remove(); document.removeEventListener("keydown", onKey); }
 
+    function updateSelectBtn() {
+        if (multi) {
+            selectBtn.disabled = selectedPaths.size === 0;
+            selectBtn.textContent = selectedPaths.size ? `Add (${selectedPaths.size})` : "Add";
+        }
+    }
+
     function entryHtml(name, path, detail) {
         const detailSpan = detail ? ` <span style="color:var(--text-muted);font-size:11px">${esc(detail)}</span>` : "";
-        return `<button class="dir-browser-entry" data-path="${escAttr(path)}">
-            <span class="dir-browser-entry-name">${esc(name)}${detailSpan}</span>
+        let cls = "dir-browser-entry";
+        let check = "";
+        if (multi) {
+            if (existingPaths.has(path)) {
+                cls += " already-added";
+                check = '<input type="checkbox" class="entry-check" checked disabled>';
+            } else {
+                check = `<input type="checkbox" class="entry-check"${selectedPaths.has(path) ? " checked" : ""}>`;
+            }
+        }
+        return `<div class="${cls}" data-path="${escAttr(path)}">
+            ${check}<span class="dir-browser-entry-name">${esc(name)}${detailSpan}</span>
             <span class="entry-nav"><img src="arrow-right.svg" alt="Open"></span>
-        </button>`;
+        </div>`;
     }
 
     async function showRoots() {
         isRoots = true;
         currentPath = null;
         rootEntryPath = null;
-        selectedPath = null;
-        selectBtn.disabled = true;
+        if (!multi) { selectedPath = null; selectBtn.disabled = true; }
         pathDisplay.textContent = "Volumes";
         backBtn.style.display = "none";
         try {
@@ -59,16 +79,15 @@ export function openDirBrowser(startPath, onSelect) {
     async function browse(path) {
         isRoots = false;
         currentPath = path;
-        selectedPath = null;
-        selectBtn.disabled = true;
+        if (!multi) { selectedPath = null; selectBtn.disabled = true; }
         pathDisplay.textContent = path;
         backBtn.style.display = "";
         try {
             const data = await api("GET", `/api/filesystem/browse?path=${encodeURIComponent(path)}`);
             if (!data.entries.length) {
                 entriesContainer.innerHTML = '<div class="dir-browser-empty">No subdirectories</div>';
-                selectedPath = path;
-                selectBtn.disabled = false;
+                if (!multi) { selectedPath = path; selectBtn.disabled = false; }
+                else if (!existingPaths.has(path)) { selectedPaths.add(path); updateSelectBtn(); }
                 return;
             }
             entriesContainer.innerHTML = data.entries.map(e => entryHtml(e.name, e.path)).join("");
@@ -93,14 +112,21 @@ export function openDirBrowser(startPath, onSelect) {
         if (!entry) return;
         const path = entry.dataset.path;
 
-        if (entry.classList.contains("selected")) {
-            navigateInto(path);
-            return;
+        if (multi) {
+            if (e.target.type !== "checkbox") { navigateInto(path); return; }
+            if (e.target.disabled) return;
+            if (e.target.checked) selectedPaths.add(path); else selectedPaths.delete(path);
+            updateSelectBtn();
+        } else {
+            if (entry.classList.contains("selected")) {
+                navigateInto(path);
+                return;
+            }
+            entriesContainer.querySelectorAll(".dir-browser-entry").forEach(el => el.classList.remove("selected"));
+            entry.classList.add("selected");
+            selectedPath = path;
+            selectBtn.disabled = false;
         }
-        entriesContainer.querySelectorAll(".dir-browser-entry").forEach(el => el.classList.remove("selected"));
-        entry.classList.add("selected");
-        selectedPath = path;
-        selectBtn.disabled = false;
     });
 
     backBtn.addEventListener("click", () => {
@@ -114,7 +140,12 @@ export function openDirBrowser(startPath, onSelect) {
     });
 
     selectBtn.addEventListener("click", () => {
-        if (selectedPath) { onSelect(selectedPath); close(); }
+        if (multi) {
+            selectedPaths.forEach(p => onSelect(p));
+            close();
+        } else {
+            if (selectedPath) { onSelect(selectedPath); close(); }
+        }
     });
 
     overlay.querySelector(".db-cancel").addEventListener("click", close);

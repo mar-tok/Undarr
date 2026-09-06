@@ -450,12 +450,7 @@ function attachLibFormCardListeners(card, originalName) {
         const browseBtn = e.target.closest(".browse-chip");
         if (browseBtn) {
             const chip = browseBtn.closest(".path-chip");
-            const oldPath = chip.dataset.path;
-            openDirBrowser(oldPath, (newPath) => {
-                chip.dataset.path = newPath;
-                checkChanged();
-                browseBtn.textContent = newPath;
-            });
+            openDirBrowser(chip.dataset.path, addPathChip, { multi: true, currentPaths: getPathsFromChips() });
         }
     });
 
@@ -507,7 +502,7 @@ function attachLibFormCardListeners(card, originalName) {
     addPathBtn.addEventListener("click", validateAndAddPath);
 
     card.querySelector(".lc-browse-path").addEventListener("click", () => {
-        openDirBrowser(null, addPathChip);
+        openDirBrowser(null, addPathChip, { multi: true, currentPaths: getPathsFromChips() });
     });
 
     card.querySelector(".lc-save").addEventListener("click", async () => {
