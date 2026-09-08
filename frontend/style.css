@@ -2447,6 +2447,11 @@ input[type="checkbox"][role="switch"]:focus-visible {
     white-space: nowrap;
 }
 
+.dup-table .dup-delete {
+    float: right;
+    margin: -4px 0;
+}
+
 #dup-controls .btn {
     margin-left: 0;
 }

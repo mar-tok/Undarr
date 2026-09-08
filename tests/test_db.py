@@ -38,6 +38,7 @@ from core.db import (
     get_library_file_filters,
     resolve_library_file_paths,
     remove_file_hashes,
+    delete_file_and_hashes,
     get_size_groups,
     get_files_by_sizes,
     get_cached_hashes,
@@ -659,3 +660,14 @@ class TestFileHashes:
         await remove_file_hashes("lib1")
         cached = await get_cached_hashes([("/a.mkv", "lib1"), ("/b.mkv", "lib2")])
         assert list(cached) == [("/b.mkv", "lib2")]
+
+    async def test_delete_file_and_hashes(self, db_setup):
+        await upsert_library_file("/a.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/a.mkv", "lib2", "h264", 1080, 1000, 1.0)
+        await upsert_file_hash("/a.mkv", "lib1", 1.0, "p", "f")
+        await upsert_file_hash("/a.mkv", "lib2", 1.0, "p", "f")
+        await delete_file_and_hashes("/a.mkv", "lib1")
+        assert await get_library_files_mtimes("lib1") == {}
+        assert await get_library_files_mtimes("lib2") == {"/a.mkv": 1.0}
+        cached = await get_cached_hashes([("/a.mkv", "lib1"), ("/a.mkv", "lib2")])
+        assert list(cached) == [("/a.mkv", "lib2")]

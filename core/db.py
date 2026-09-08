@@ -925,3 +925,16 @@ async def upsert_file_hash(
         (file_path, library_name, mtime, partial_hash, full_hash),
     )
     await db.commit()
+
+
+async def delete_file_and_hashes(file_path: str, library_name: str) -> None:
+    db = get_db()
+    await db.execute(
+        "DELETE FROM library_files WHERE file_path = ? AND library_name = ?",
+        (file_path, library_name),
+    )
+    await db.execute(
+        "DELETE FROM file_hashes WHERE file_path = ? AND library_name = ?",
+        (file_path, library_name),
+    )
+    await db.commit()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -17,6 +18,7 @@ from app.models.responses import (
 )
 from core import db
 from core.duplicates import scan_duplicates
+from core.logger import log
 from core.queue_manager import queue_manager
 from core.yaml_store import store
 
@@ -294,3 +296,38 @@ async def scan_for_duplicates(library: str | None = Query(None)):
 async def cancel_duplicate_scan():
     if _dup_abort:
         _dup_abort.set()
+
+
+@router.delete("/duplicates/file")
+async def delete_duplicate_file(
+    file_path: str = Query(...),
+    library_name: str = Query(...),
+):
+    settings = await store.get_settings()
+    if not settings.allow_duplicate_deletion:
+        raise HTTPException(
+            403, "Duplicate deletion is disabled. Enable it in Settings > General."
+        )
+
+    libs = await store.get_libraries()
+    lib = libs.get(library_name)
+    if not lib:
+        raise HTTPException(404, "Library not found")
+
+    roots = {rp.rstrip("/") for rp in lib.paths}
+    if not any(file_path.startswith(rp + "/") or file_path == rp for rp in roots):
+        raise HTTPException(403, "File is not within the library's configured paths")
+
+    try:
+        await asyncio.to_thread(Path(file_path).unlink)
+    except FileNotFoundError:
+        raise HTTPException(404, "File not found on disk")
+    except OSError as e:
+        raise HTTPException(500, f"Could not delete file: {e.strerror or e}")
+    await db.delete_file_and_hashes(file_path, library_name)
+
+    await queue_manager._broadcast(
+        "library_files_changed", {"library_name": library_name}
+    )
+    log.info("Deleted duplicate: %s [%s]", file_path, library_name)
+    return {"deleted": file_path}

@@ -69,6 +69,7 @@ class Settings:
     process_priority: str = "normal"
     max_size_ratio: float = 1.0
     queue_order: str = "fifo"
+    allow_duplicate_deletion: bool = False
 
 
 @dataclass
@@ -170,6 +171,9 @@ def _config_from_dict(data: dict) -> Config:
         process_priority=priority,
         max_size_ratio=float(max_size_ratio),
         queue_order=queue_order,
+        allow_duplicate_deletion=bool(
+            raw_settings.get("allow_duplicate_deletion", False)
+        ),
     )
 
     presets: dict[str, Preset] = {}
@@ -298,6 +302,11 @@ def _config_to_dict(cfg: Config) -> dict:
             "process_priority": cfg.settings.process_priority,
             "max_size_ratio": cfg.settings.max_size_ratio,
             "queue_order": cfg.settings.queue_order,
+            **(
+                {"allow_duplicate_deletion": True}
+                if cfg.settings.allow_duplicate_deletion
+                else {}
+            ),
         },
         "presets": {
             name: {

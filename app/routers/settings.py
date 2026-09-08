@@ -78,6 +78,7 @@ def _settings_response(s) -> SettingsOut:
         queue_order=s.queue_order,
         server_timezone=tz_name,
         server_utc_offset=tz_offset,
+        allow_duplicate_deletion=s.allow_duplicate_deletion,
     )
 
 

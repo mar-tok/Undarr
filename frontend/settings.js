@@ -13,11 +13,13 @@ function checkSettingsChanged() {
     const priority = document.getElementById("set-process-priority").value;
     const ratio = document.getElementById("set-max-size-ratio").value;
     const queueOrder = document.getElementById("set-queue-order").value;
+    const allowDupDel = document.getElementById("set-allow-dup-deletion").checked;
     settingsSaveBtn.disabled =
         cacheDir === settingsOriginal.cache_dir &&
         priority === settingsOriginal.process_priority &&
         ratio === settingsOriginal.max_size_ratio &&
-        queueOrder === settingsOriginal.queue_order;
+        queueOrder === settingsOriginal.queue_order &&
+        allowDupDel === settingsOriginal.allow_duplicate_deletion;
 }
 
 export async function loadSettings() {
@@ -27,7 +29,8 @@ export async function loadSettings() {
     const ratioPercent = String(Math.round(s.max_size_ratio * 100));
     document.getElementById("set-max-size-ratio").value = ratioPercent;
     document.getElementById("set-queue-order").value = s.queue_order;
-    settingsOriginal = { cache_dir: s.cache_dir, process_priority: s.process_priority, max_size_ratio: ratioPercent, queue_order: s.queue_order };
+    document.getElementById("set-allow-dup-deletion").checked = !!s.allow_duplicate_deletion;
+    settingsOriginal = { cache_dir: s.cache_dir, process_priority: s.process_priority, max_size_ratio: ratioPercent, queue_order: s.queue_order, allow_duplicate_deletion: !!s.allow_duplicate_deletion };
     settingsSaveBtn.disabled = true;
     loadSchedule(s);
 }
@@ -135,13 +138,19 @@ export function initSettings() {
         const ratio = parseInt(ratioEl.value);
         if (isNaN(ratio) || ratio < 1 || ratio > 100) { setError(ratioEl, "Max size ratio must be between 1 and 100%"); return; }
         const queueOrder = document.getElementById("set-queue-order").value;
+        const allowDupDel = document.getElementById("set-allow-dup-deletion").checked;
+        if (allowDupDel && !settingsOriginal.allow_duplicate_deletion) {
+            if (!confirm('You enabled "Allow duplicate deletion." While deleting from Undarr is possible, your media service may not detect the change automatically.\n\nFor reliable library updates, remove duplicates through your media service instead.\n\nEnable deletion anyway?')) return;
+        }
         try {
-            await api("PATCH", "/api/settings", { cache_dir: cacheDir, process_priority: priority, max_size_ratio: ratio / 100, queue_order: queueOrder });
+            await api("PATCH", "/api/settings", { cache_dir: cacheDir, process_priority: priority, max_size_ratio: ratio / 100, queue_order: queueOrder, allow_duplicate_deletion: allowDupDel });
             loadSettings();
         } catch (e) {
             setError(cacheEl, e.message);
         }
     });
+
+    document.getElementById("set-allow-dup-deletion").addEventListener("change", checkSettingsChanged);
 
     initSchedule();
 

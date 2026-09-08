@@ -69,6 +69,7 @@ class SettingsOut(BaseModel):
     queue_order: str
     server_timezone: str
     server_utc_offset: int
+    allow_duplicate_deletion: bool
 
 
 class HistoryOut(BaseModel):

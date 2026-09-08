@@ -8,6 +8,7 @@ let libraries = [];
 // Duplicates tab state
 let dupGroups = null;
 let dupScanning = false;
+let dupAllowDeletion = false;
 let dupTotalSize = 0;
 let dupNotHashed = 0;
 
@@ -622,7 +623,14 @@ function ensureDupLayout() {
     content.innerHTML = `${renderDupControls()}<div id="dup-results"></div>`;
 }
 
-function loadDuplicates() {
+async function loadDuplicates() {
+    if (!dupScanning) {
+        try {
+            const s = await api("GET", "/api/settings");
+            dupAllowDeletion = !!s.allow_duplicate_deletion;
+        } catch {}
+        if (activeTab !== "dupes") return;
+    }
     ensureDupLayout();
     const sel = document.getElementById("storage-lib-select");
     sel.innerHTML = renderLibraryOptions(true);
@@ -655,7 +663,7 @@ function renderDuplicateResults() {
         ${notHashed}
     </div>`;
 
-    dupGroups.forEach(group => {
+    dupGroups.forEach((group, gi) => {
         const f0 = group.files[0];
         const codec = f0.video_codec ? codecLabel(f0.video_codec) : "";
         const res = f0.resolution_h ? f0.resolution_h + "p" : "";
@@ -671,9 +679,12 @@ function renderDuplicateResults() {
                 <th>Library</th>
             </tr></thead><tbody>`;
         group.files.forEach((f, fi) => {
+            const delIcon = dupAllowDeletion
+                ? `<button class="btn-icon dup-delete" data-fp="${escAttr(f.file_path)}" data-lib="${escAttr(f.library_name)}" data-gi="${gi}" data-tooltip="Delete file"><img src="trash.svg" alt="Delete"></button>`
+                : "";
             html += `<tr class="${fi % 2 ? "stripe" : ""}" data-tooltip="${escAttr(f.file_path)}">
                 <td>${esc(f.file_path)}</td>
-                <td>${esc(f.library_name)}</td>
+                <td>${esc(f.library_name)}${delIcon}</td>
             </tr>`;
         });
         html += "</tbody></table></div>";
@@ -760,7 +771,7 @@ export function initStorage() {
         }
     });
 
-    content.addEventListener("click", e => {
+    content.addEventListener("click", async e => {
         // Duplicates tab buttons
         if (e.target.id === "btn-dup-scan" || e.target.closest("#btn-dup-scan")) {
             startDupScan();
@@ -768,6 +779,25 @@ export function initStorage() {
         }
         if (e.target.id === "btn-dup-cancel" || e.target.closest("#btn-dup-cancel")) {
             api("POST", "/api/storage/duplicates/cancel").catch(() => {});
+            return;
+        }
+        const delBtn = e.target.closest(".dup-delete");
+        if (delBtn) {
+            const fp = delBtn.dataset.fp;
+            const lib = delBtn.dataset.lib;
+            const gi = parseInt(delBtn.dataset.gi);
+            if (!confirm(`Permanently delete this file?\n\n${fp}`)) return;
+            try {
+                await api("DELETE", `/api/storage/duplicates/file?file_path=${encodeURIComponent(fp)}&library_name=${encodeURIComponent(lib)}`);
+                if (dupGroups && dupGroups[gi]) {
+                    dupGroups[gi].files = dupGroups[gi].files.filter(f => !(f.file_path === fp && f.library_name === lib));
+                    dupTotalSize -= dupGroups[gi].file_size;
+                    if (dupGroups[gi].files.length < 2) dupGroups.splice(gi, 1);
+                    loadDuplicates();
+                }
+            } catch (err) {
+                alert(err.message);
+            }
             return;
         }
 

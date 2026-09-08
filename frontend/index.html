@@ -198,6 +198,12 @@
                         </div>
                     </div>
                     <div class="inline-form">
+                        <label data-tooltip="Shows a delete button on each file in the Storage > Duplicates tab.<br>Deleting removes the file from disk permanently. Undarr does not tell your media service about it, so the service may keep listing the file until its next library scan, depending on its configuration and filesystem.<br>For reliable library updates, remove duplicates through your preferred media service instead.">
+                            <input type="checkbox" role="switch" id="set-allow-dup-deletion">
+                            Allow duplicate deletion
+                        </label>
+                    </div>
+                    <div class="inline-form">
                         <div class="form-actions" style="justify-content:flex-start">
                             <button class="btn btn-danger" id="btn-purge-history">Purge History</button>
                         </div>

@@ -213,6 +213,7 @@ class TestSettings:
         assert s.max_size_ratio == 1.0
         assert s.queue_order == "fifo"
         assert s.schedule_enabled is False
+        assert s.allow_duplicate_deletion is False
 
     async def test_update(self, store):
         s = await store.update_settings(
@@ -224,6 +225,17 @@ class TestSettings:
     async def test_update_ignores_unknown_fields(self, store):
         s = await store.update_settings(nonexistent_field="value")
         assert not hasattr(s, "nonexistent_field")
+
+    async def test_allow_duplicate_deletion_round_trip(self, store):
+        await store.update_settings(allow_duplicate_deletion=True)
+        data = _config_to_dict(store.config)
+        assert data["settings"]["allow_duplicate_deletion"] is True
+        cfg = _config_from_dict(data)
+        assert cfg.settings.allow_duplicate_deletion is True
+
+    async def test_allow_duplicate_deletion_default_not_persisted(self, store):
+        data = _config_to_dict(store.config)
+        assert "allow_duplicate_deletion" not in data["settings"]
 
 
 # Validation and migration

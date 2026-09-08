@@ -129,6 +129,7 @@ class SettingsUpdate(BaseModel):
     process_priority: str | None = None
     max_size_ratio: float | None = None
     queue_order: str | None = None
+    allow_duplicate_deletion: bool | None = None
 
 
 class DeviceUpdate(BaseModel):
