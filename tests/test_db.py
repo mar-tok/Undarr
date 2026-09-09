@@ -400,6 +400,12 @@ class TestStorageQueries:
         )
         assert await get_storage_files("lib1", "/media/sub") == []
 
+    async def test_files_prefix_underscore_is_literal(self, db_setup):
+        await upsert_library_file("/media/a_b/x.mkv", "lib1", "h264", 1080, 1000, 1.0)
+        await upsert_library_file("/media/axb/y.mkv", "lib1", "h264", 1080, 2000, 1.0)
+        files = await get_storage_files("lib1", "/media/a_b")
+        assert files == [("/media/a_b/x.mkv", 1000, "h264")]
+
     async def test_savings_sums_per_path(self, db_setup):
         await _insert_sample("j1", library_name="lib1", file_path="/media/a.mkv")
         await _insert_sample(
@@ -430,6 +436,13 @@ class TestStorageQueries:
         await _insert_sample("j2", library_name="lib1", file_path="/media/b.mkv")
         assert await get_storage_savings("lib1", "/media/sub") == {
             "/media/sub/a.mkv": 500000
+        }
+
+    async def test_savings_prefix_percent_is_literal(self, db_setup):
+        await _insert_sample("j1", library_name="lib1", file_path="/media/100%/a.mkv")
+        await _insert_sample("j2", library_name="lib1", file_path="/media/100/b.mkv")
+        assert await get_storage_savings("lib1", "/media/100%") == {
+            "/media/100%/a.mkv": 500000
         }
 
 
@@ -511,6 +524,13 @@ class TestLibraryFilesPage:
         rows, total = await get_library_files_page("lib1", search="Title")
         assert total == 1
         assert rows[0]["file_path"] == "/media/Video Title.mkv"
+
+    async def test_search_underscore_is_literal(self, db_setup):
+        await upsert_library_file("/media/a_b.mkv", "lib1", "h264", 1080, 100, 1.0)
+        await upsert_library_file("/media/axb.mkv", "lib1", "h264", 1080, 100, 1.0)
+        rows, total = await get_library_files_page("lib1", search="a_b")
+        assert total == 1
+        assert rows[0]["file_path"] == "/media/a_b.mkv"
 
     async def test_status_filter_and_processed_flag(self, db_setup):
         await upsert_library_file("/media/a.mkv", "lib1", "h264", 1080, 200, 1.0)
@@ -594,6 +614,12 @@ class TestResolveLibraryFilePaths:
         await upsert_library_file("/media/showdown.mkv", "lib1", "h264", 1080, 100, 1.0)
         result = await resolve_library_file_paths("lib1", ["/media/show"])
         assert result == []
+
+    async def test_directory_underscore_is_literal(self, db_setup):
+        await upsert_library_file("/media/a_b/x.mkv", "lib1", "h264", 1080, 100, 1.0)
+        await upsert_library_file("/media/axb/y.mkv", "lib1", "h264", 1080, 100, 1.0)
+        result = await resolve_library_file_paths("lib1", ["/media/a_b"])
+        assert result == ["/media/a_b/x.mkv"]
 
 
 class TestFileHashes:

@@ -2336,6 +2336,11 @@ input[type="checkbox"][role="switch"]:focus-visible {
     text-align: center;
 }
 
+.storage-table td:first-child {
+    overflow: visible;
+    white-space: normal;
+}
+
 .dir-link {
     cursor: pointer;
     color: var(--text);
@@ -2348,6 +2353,7 @@ input[type="checkbox"][role="switch"]:focus-visible {
 
 .files-table {
     table-layout: fixed;
+    min-width: 1020px;
 }
 
 .files-table td:nth-child(2) {
@@ -2369,6 +2375,7 @@ input[type="checkbox"][role="switch"]:focus-visible {
 
 .storage-filters {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     margin-bottom: 12px;
@@ -2380,6 +2387,7 @@ input[type="checkbox"][role="switch"]:focus-visible {
 
 .storage-filters .btn {
     margin-left: auto;
+    white-space: nowrap;
 }
 
 #storage-lib-select {

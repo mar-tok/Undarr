@@ -357,16 +357,16 @@ async function loadFiles() {
 
     let html = `<table class="overview-table storage-table files-table" id="files-table"><thead><tr>
         <th class="storage-check-col"><input type="checkbox" id="files-select-all" data-tooltip="Select all"></th>
-        <th class="sortable" style="width:35%" data-sort="file_path">File${sortArrow("file_path")}</th>
-        <th class="sortable" style="width:7%" data-sort="file_size">Size${sortArrow("file_size")}</th>
-        <th class="sortable" style="width:7%" data-sort="duration">Duration${sortArrow("duration")}</th>
-        <th class="sortable" style="width:8%" data-sort="bitrate_kbps">Bitrate${sortArrow("bitrate_kbps")}</th>
-        <th class="sortable" style="width:7%" data-sort="video_codec">Codec${sortArrow("video_codec")}</th>
-        <th class="sortable" style="width:7%" data-sort="resolution_h">Res${sortArrow("resolution_h")}</th>
-        <th class="sortable" style="width:10%" data-sort="audio_codec">Audio${sortArrow("audio_codec")}</th>
-        <th class="sortable" style="width:7%" data-sort="container">Container${sortArrow("container")}</th>
-        <th class="sortable" style="width:6%" data-sort="hdr_type">HDR${sortArrow("hdr_type")}</th>
-        <th id="files-status-th" style="width:9%">${filesStatusFilter ? filesStatusFilter.charAt(0).toUpperCase() + filesStatusFilter.slice(1) : "Status"}</th>
+        <th class="sortable" data-sort="file_path">File${sortArrow("file_path")}</th>
+        <th class="sortable" style="width:76px" data-sort="file_size">Size${sortArrow("file_size")}</th>
+        <th class="sortable" style="width:96px" data-sort="duration">Duration${sortArrow("duration")}</th>
+        <th class="sortable" style="width:92px" data-sort="bitrate_kbps">Bitrate${sortArrow("bitrate_kbps")}</th>
+        <th class="sortable" style="width:68px" data-sort="video_codec">Codec${sortArrow("video_codec")}</th>
+        <th class="sortable" style="width:64px" data-sort="resolution_h">Res${sortArrow("resolution_h")}</th>
+        <th class="sortable" style="width:92px" data-sort="audio_codec">Audio${sortArrow("audio_codec")}</th>
+        <th class="sortable" style="width:100px" data-sort="container">Container${sortArrow("container")}</th>
+        <th class="sortable" style="width:100px" data-sort="hdr_type">HDR${sortArrow("hdr_type")}</th>
+        <th id="files-status-th" style="width:116px">${filesStatusFilter ? filesStatusFilter.charAt(0).toUpperCase() + filesStatusFilter.slice(1) : "Status"}</th>
     </tr></thead><tbody>`;
 
     data.files.forEach((f, i) => {

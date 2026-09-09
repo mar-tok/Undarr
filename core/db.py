@@ -10,6 +10,11 @@ from core.logger import log
 
 _db: aiosqlite.Connection | None = None
 
+
+def _like_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 SCHEMA = """\
 CREATE TABLE IF NOT EXISTS job_history (
     id               TEXT PRIMARY KEY,
@@ -207,8 +212,8 @@ async def get_history(
         conditions.append("status = ?")
         params.append(status)
     if search:
-        conditions.append("file_path LIKE ?")
-        params.append(f"%{search}%")
+        conditions.append("file_path LIKE ? ESCAPE '\\'")
+        params.append(f"%{_like_escape(search)}%")
 
     where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     col = sort_by if sort_by in HISTORY_SORT_COLUMNS else "finished_at"
@@ -258,8 +263,8 @@ async def search_files(
     status: str | None = None,
 ) -> tuple[list[dict], int]:
     db = get_db()
-    pattern = f"%{query}%"
-    conditions = ["file_path LIKE ?"]
+    pattern = f"%{_like_escape(query)}%"
+    conditions = ["file_path LIKE ? ESCAPE '\\'"]
     params: list = [pattern]
     if status:
         conditions.append("status = ?")
@@ -698,8 +703,8 @@ async def resolve_library_file_paths(library_name: str, paths: list[str]) -> lis
             result.add(rows[0][0])
         else:
             cursor = await db.execute(
-                "SELECT file_path FROM library_files WHERE library_name = ? AND file_path LIKE ? || '/%'",
-                (library_name, path),
+                "SELECT file_path FROM library_files WHERE library_name = ? AND file_path LIKE ? ESCAPE '\\'",
+                (library_name, _like_escape(path) + "/%"),
             )
             result.update(r[0] for r in await cursor.fetchall())
     return sorted(result)
@@ -714,8 +719,8 @@ async def get_storage_files(
     db = get_db()
     if path_prefix:
         cursor = await db.execute(
-            "SELECT file_path, file_size, video_codec FROM library_files WHERE library_name = ? AND file_path LIKE ? || '/%'",
-            (library_name, path_prefix),
+            "SELECT file_path, file_size, video_codec FROM library_files WHERE library_name = ? AND file_path LIKE ? ESCAPE '\\'",
+            (library_name, _like_escape(path_prefix) + "/%"),
         )
     else:
         cursor = await db.execute(
@@ -735,8 +740,8 @@ async def get_storage_savings(
                FROM job_history
                WHERE library_name = ? AND status = 'completed'
                  AND new_size_bytes IS NOT NULL AND dismissed = 0
-                 AND file_path LIKE ? || '/%'""",
-            (library_name, path_prefix),
+                 AND file_path LIKE ? ESCAPE '\\'""",
+            (library_name, _like_escape(path_prefix) + "/%"),
         )
     else:
         cursor = await db.execute(
@@ -800,8 +805,8 @@ async def get_library_files_page(
         conditions.append("lf.resolution_h BETWEEN ? AND ?")
         params.extend([lo, hi])
     if search:
-        conditions.append("lf.file_path LIKE ?")
-        params.append(f"%{search}%")
+        conditions.append("lf.file_path LIKE ? ESCAPE '\\'")
+        params.append(f"%{_like_escape(search)}%")
     if status == "processed":
         conditions.append("pf.file_path IS NOT NULL")
     elif status == "unprocessed":
