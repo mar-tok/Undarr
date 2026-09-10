@@ -55,7 +55,7 @@ DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 VALID_PRIORITIES = ("normal", "low", "lowest")
 VALID_QUEUE_ORDERS = ("fifo", "largest_first", "highest_bitrate")
 VALID_WEBHOOK_EVENTS = ("job_failed",)
-VALID_WEBHOOK_TEMPLATES = ("discord",)
+VALID_WEBHOOK_TEMPLATES = ("discord", "ntfy", "gotify", "generic")
 
 
 def _default_schedule() -> dict[str, list[bool]]:

@@ -292,6 +292,14 @@ class TestWebhooks:
             )
         ]
 
+    async def test_template_round_trip(self, store):
+        await store.set_webhooks(
+            [WebhookConfig(url="https://ntfy.sh/undarr", template="ntfy")]
+        )
+        data = _config_to_dict(store.config)
+        assert data["settings"]["webhooks"][0]["template"] == "ntfy"
+        assert _config_from_dict(data).settings.webhooks[0].template == "ntfy"
+
     async def test_get_returns_a_copy(self, store):
         await store.set_webhooks([WebhookConfig(url="https://a/hook")])
         (await store.get_webhooks()).clear()

@@ -6,7 +6,17 @@ const EVENTS = [
 
 const TEMPLATES = [
     { id: "discord", label: "Discord" },
+    { id: "ntfy", label: "ntfy" },
+    { id: "gotify", label: "Gotify" },
+    { id: "generic", label: "JSON" },
 ];
+
+const URL_PLACEHOLDERS = {
+    discord: "https://discord.com/api/webhooks/...",
+    ntfy: "https://ntfy.sh/your-topic",
+    gotify: "https://gotify.example.com/message?token=...",
+    generic: "https://example.com/webhook",
+};
 
 let webhooks = [];
 let initialSnapshot = "";
@@ -26,7 +36,9 @@ function renderWebhooks() {
     let html = "";
     for (let i = 0; i < webhooks.length; i++) {
         const wh = webhooks[i];
-        const templateLabel = TEMPLATES.find(t => t.id === wh.template)?.label || wh.template;
+        const templateOptions = TEMPLATES.map(t =>
+            `<option value="${t.id}"${t.id === wh.template ? " selected" : ""}>${esc(t.label)}</option>`
+        ).join("");
         const eventChecks = EVENTS.map(ev => {
             const checked = wh.events.includes(ev.id) ? "checked" : "";
             return `<label class="webhook-event" data-tooltip="${ev.tip}">
@@ -37,7 +49,7 @@ function renderWebhooks() {
         html += `<div class="inline-form">
             <div class="webhook-header">
                 <div class="webhook-meta">
-                    <span class="webhook-template">${esc(templateLabel)}</span>
+                    <select class="webhook-template-select" data-idx="${i}">${templateOptions}</select>
                     <label class="webhook-enabled" data-tooltip="A disabled webhook stays configured and sends nothing.">
                         <input type="checkbox" role="switch" data-idx="${i}" data-field="enabled" ${wh.enabled ? "checked" : ""}> Enabled
                     </label>
@@ -47,7 +59,7 @@ function renderWebhooks() {
             <div class="form-group">
                 <label>Webhook URL</label>
                 <div class="webhook-url-row">
-                    <input type="text" class="webhook-url" data-idx="${i}" value="${escAttr(wh.url)}" placeholder="https://discord.com/api/webhooks/...">
+                    <input type="text" class="webhook-url" data-idx="${i}" value="${escAttr(wh.url)}" placeholder="${URL_PLACEHOLDERS[wh.template] || ""}">
                     <button class="btn btn-sm webhook-test" data-idx="${i}" data-tooltip="Sends a test message to this URL. Does not need to be saved first.">Test</button>
                 </div>
             </div>
@@ -60,6 +72,15 @@ function renderWebhooks() {
 
     container.innerHTML = html;
 
+    container.querySelectorAll(".webhook-template-select").forEach(sel => {
+        sel.addEventListener("change", () => {
+            const idx = +sel.dataset.idx;
+            webhooks[idx].template = sel.value;
+            const urlInput = container.querySelector(`.webhook-url[data-idx="${idx}"]`);
+            if (urlInput) urlInput.placeholder = URL_PLACEHOLDERS[sel.value] || "";
+            checkChanged();
+        });
+    });
     container.querySelectorAll(".webhook-url").forEach(input => {
         input.addEventListener("input", () => {
             webhooks[+input.dataset.idx].url = input.value;

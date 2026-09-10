@@ -2509,9 +2509,8 @@ input[type="checkbox"][role="switch"]:focus-visible {
     gap: 16px;
 }
 
-.webhook-template {
-    font-weight: 600;
-    font-size: 14px;
+.webhook-template-select {
+    width: auto;
 }
 
 .webhook-url-row {
