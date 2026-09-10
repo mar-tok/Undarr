@@ -34,7 +34,8 @@ from core.ffmpeg import (
 from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store, DAYS
 from core.watcher import suppress_path, unsuppress_path
-from core.webhooks import fire_event
+from core.sizes import format_size
+from core.webhooks import fire_event, check_top_reduction
 
 
 class JobStatus(str, Enum):
@@ -101,16 +102,6 @@ def job_to_dict(job: Job) -> dict:
     return d
 
 
-def _format_size(size_bytes: int) -> str:
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    if size_bytes < 1048576:
-        return f"{size_bytes / 1024:.1f} KB"
-    if size_bytes < 1073741824:
-        return f"{size_bytes / 1048576:.1f} MB"
-    return f"{size_bytes / 1073741824:.1f} GB"
-
-
 class QueueManager:
     def __init__(self) -> None:
         self._pending: list[Job] = []
@@ -125,6 +116,8 @@ class QueueManager:
         self._active_procs: dict[str, asyncio.subprocess.Process] = {}
         self._dispatcher_task: asyncio.Task | None = None
         self._dispatch_event = asyncio.Event()
+        self._stall_notified = False
+        self._unsuppress_tasks: set[asyncio.Task] = set()
         self._device_limits: dict[str, int] = {}
         self._device_active: dict[str, int] = {}
         self._paused_libraries: set[str] = set()
@@ -676,6 +669,7 @@ class QueueManager:
 
             async with self._lock:
                 still_pending: list[Job] = []
+                dispatched_any = False
                 for job in self._pending:
                     if job.status == JobStatus.CANCELLED:
                         self._known_paths.discard(job.file_path)
@@ -694,7 +688,32 @@ class QueueManager:
                     self._active[job.id] = job
                     self._device_active[job.device] = active + 1
                     asyncio.create_task(self._run_job(job))
+                    dispatched_any = True
                 self._pending = still_pending
+
+                if still_pending and not dispatched_any and not self._active:
+                    if not self._stall_notified:
+                        self._stall_notified = True
+                        await fire_event(
+                            "queue_stalled",
+                            {
+                                "pending_count": len(still_pending),
+                                "reasons": self._stall_reasons(still_pending),
+                            },
+                        )
+                else:
+                    self._stall_notified = False
+
+    def _stall_reasons(self, jobs: list[Job]) -> list[str]:
+        reasons = set()
+        for job in jobs:
+            if job.library_name in self._paused_libraries:
+                reasons.add(f"Library '{job.library_name}' is paused")
+            elif job.library_name in self._unavailable_libraries:
+                reasons.add(f"Library '{job.library_name}' is unavailable")
+            elif self._device_limits.get(job.device, 1) == 0:
+                reasons.add(f"Device '{device_display_name(job.device)}' is disabled")
+        return sorted(reasons)
 
     async def _run_job(self, job: Job) -> None:
         job.status = JobStatus.ACTIVE
@@ -767,8 +786,8 @@ class QueueManager:
                                 job.status = JobStatus.SKIPPED
                                 ratio_pct = round(settings.max_size_ratio * 100)
                                 job.error_message = (
-                                    f"Aborted early: estimated output ({_format_size(int(estimated_final))}) "
-                                    f"exceeds size limit ({_format_size(int(size_limit))}, "
+                                    f"Aborted early: estimated output ({format_size(int(estimated_final))}) "
+                                    f"exceeds size limit ({format_size(int(size_limit))}, "
                                     f"{ratio_pct}% of original) at {prog.percent:.0f}%"
                                 )
                                 log.info("Job %s: %s", job.id, job.error_message)
@@ -869,13 +888,13 @@ class QueueManager:
                     ratio_pct = round(settings.max_size_ratio * 100)
                     if ratio_pct >= 100:
                         job.error_message = (
-                            f"Output ({_format_size(new_size)}) is not smaller than "
-                            f"original ({_format_size(job.old_size_bytes)}), original kept"
+                            f"Output ({format_size(new_size)}) is not smaller than "
+                            f"original ({format_size(job.old_size_bytes)}), original kept"
                         )
                     else:
                         job.error_message = (
-                            f"Output ({_format_size(new_size)}) exceeds {ratio_pct}% of "
-                            f"original ({_format_size(job.old_size_bytes)}), original kept"
+                            f"Output ({format_size(new_size)}) exceeds {ratio_pct}% of "
+                            f"original ({format_size(job.old_size_bytes)}), original kept"
                         )
                     log.info("Job %s skipped: %s", job.id, job.error_message)
                 else:
@@ -1002,7 +1021,7 @@ class QueueManager:
                             "Completed: %s [%s] saved %s",
                             job.file_path,
                             job.id,
-                            _format_size(saved),
+                            format_size(saved),
                         )
             else:
                 temp_output.unlink(missing_ok=True)
@@ -1052,6 +1071,8 @@ class QueueManager:
             await self._broadcast("job_finished", job_to_dict(job))
             if job.status == JobStatus.FAILED:
                 await fire_event("job_failed", job_to_dict(job))
+            if job.status == JobStatus.COMPLETED and job.new_size_bytes is not None:
+                await check_top_reduction(job)
             self._dispatch_event.set()
 
             async def _delayed_unsuppress():
@@ -1060,7 +1081,9 @@ class QueueManager:
                 if pre_rename_path:
                     unsuppress_path(pre_rename_path)
 
-            asyncio.create_task(_delayed_unsuppress())
+            task = asyncio.create_task(_delayed_unsuppress())
+            self._unsuppress_tasks.add(task)
+            task.add_done_callback(self._unsuppress_tasks.discard)
 
 
 queue_manager = QueueManager()

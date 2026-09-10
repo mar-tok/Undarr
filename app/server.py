@@ -11,6 +11,7 @@ from core.yaml_store import store
 from core.watcher import watcher
 from core.scanner import scan_library, mark_library_processed, periodic_scanner
 from core.devices import detect_devices
+from core.webhooks import start_digest_scheduler, stop_digest_scheduler
 from app.routers import queue, presets, libraries, settings, filesystem, stats, storage
 
 
@@ -80,12 +81,14 @@ async def lifespan(app: FastAPI):
     await periodic_scanner.start(
         queue_manager.enqueue, on_unavailable=queue_manager.on_unavailable
     )
+    await start_digest_scheduler()
     scan_task = asyncio.create_task(_startup_scan())
     yield
     scan_task.cancel()
     await asyncio.gather(scan_task, return_exceptions=True)
     await periodic_scanner.stop()
     await watcher.stop()
+    await stop_digest_scheduler()
     await queue_manager.stop()
     await db.close_db()
     log.info("Undarr stopped")

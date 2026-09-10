@@ -170,6 +170,7 @@ class WebhookIn(BaseModel):
     template: str = "discord"
     events: list[str] = []
     enabled: bool = True
+    digest_hour: int = 0
 
 
 class WebhookTestIn(BaseModel):

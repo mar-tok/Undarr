@@ -2536,6 +2536,11 @@ input[type="checkbox"][role="switch"]:focus-visible {
     flex-wrap: wrap;
 }
 
+.webhook-digest-hour select {
+    width: auto;
+    align-self: flex-start;
+}
+
 .webhook-enabled,
 .form-group label.webhook-event {
     display: flex;

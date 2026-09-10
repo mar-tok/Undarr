@@ -2,6 +2,9 @@ import { api, esc, escAttr, getFormSnapshot, clearValidation, setError } from ".
 
 const EVENTS = [
     { id: "job_failed", label: "Job failed", tip: "Sends a message when a transcode job fails.<br>Includes file name, error output, preset, and device." },
+    { id: "queue_stalled", label: "Queue stalled", tip: "Sends a message when jobs are waiting and none can start.<br>Names what blocks them, such as a paused library or a disabled device.<br>Sends once per stall." },
+    { id: "daily_digest", label: "Daily digest", tip: "Sends a summary of the previous day at the chosen hour, in the server's local time.<br>Includes completed/failed counts and space saved.<br>Sends nothing for a day without jobs." },
+    { id: "top_reduction", label: "New top reduction", tip: "Sends a message when a completed job has the best size reduction in the job history.<br>Includes the file name and the old and new sizes." },
 ];
 
 const TEMPLATES = [
@@ -46,6 +49,12 @@ function renderWebhooks() {
             </label>`;
         }).join("");
 
+        const hasDigest = wh.events.includes("daily_digest");
+        const hourOptions = Array.from({ length: 24 }, (_, h) => {
+            const label = String(h).padStart(2, "0") + ":00";
+            return `<option value="${h}"${wh.digest_hour === h ? " selected" : ""}>${label}</option>`;
+        }).join("");
+
         html += `<div class="inline-form">
             <div class="webhook-header">
                 <div class="webhook-meta">
@@ -63,9 +72,15 @@ function renderWebhooks() {
                     <button class="btn btn-sm webhook-test" data-idx="${i}" data-tooltip="Sends a test message to this URL. Does not need to be saved first.">Test</button>
                 </div>
             </div>
-            <div class="form-group">
-                <label>Events</label>
-                <div class="webhook-events">${eventChecks}</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Events</label>
+                    <div class="webhook-events">${eventChecks}</div>
+                </div>
+                <div class="form-group webhook-digest-hour" data-idx="${i}" style="${hasDigest ? "" : "display:none"}">
+                    <label>Digest time</label>
+                    <select class="digest-hour-select" data-idx="${i}">${hourOptions}</select>
+                </div>
             </div>
         </div>`;
     }
@@ -99,6 +114,15 @@ function renderWebhooks() {
             const ev = cb.dataset.event;
             if (cb.checked && !wh.events.includes(ev)) wh.events.push(ev);
             else wh.events = wh.events.filter(e => e !== ev);
+            if (ev === "daily_digest") {
+                container.querySelector(`.webhook-digest-hour[data-idx="${cb.dataset.idx}"]`).style.display = cb.checked ? "" : "none";
+            }
+            checkChanged();
+        });
+    });
+    container.querySelectorAll(".digest-hour-select").forEach(sel => {
+        sel.addEventListener("change", () => {
+            webhooks[+sel.dataset.idx].digest_hour = +sel.value;
             checkChanged();
         });
     });
@@ -143,7 +167,7 @@ export async function loadNotifications() {
 
 export function initNotifications() {
     document.getElementById("btn-add-webhook").addEventListener("click", () => {
-        webhooks.push({ url: "", template: "discord", events: ["job_failed"], enabled: true });
+        webhooks.push({ url: "", template: "discord", events: ["job_failed"], enabled: true, digest_hour: 0 });
         renderWebhooks();
         checkChanged();
         const inputs = document.querySelectorAll(".webhook-url");

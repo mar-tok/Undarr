@@ -54,7 +54,7 @@ class DeviceConfig:
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 VALID_PRIORITIES = ("normal", "low", "lowest")
 VALID_QUEUE_ORDERS = ("fifo", "largest_first", "highest_bitrate")
-VALID_WEBHOOK_EVENTS = ("job_failed",)
+VALID_WEBHOOK_EVENTS = ("job_failed", "queue_stalled", "daily_digest", "top_reduction")
 VALID_WEBHOOK_TEMPLATES = ("discord", "ntfy", "gotify", "generic")
 
 
@@ -68,6 +68,7 @@ class WebhookConfig:
     template: str = "discord"
     events: list[str] = field(default_factory=list)
     enabled: bool = True
+    digest_hour: int = 0
 
 
 @dataclass
@@ -182,12 +183,16 @@ def _config_from_dict(data: dict) -> Config:
         if template not in VALID_WEBHOOK_TEMPLATES:
             template = "discord"
         events = [e for e in (raw_wh.get("events") or []) if e in VALID_WEBHOOK_EVENTS]
+        digest_hour = raw_wh.get("digest_hour", 0)
+        if not isinstance(digest_hour, int) or not 0 <= digest_hour <= 23:
+            digest_hour = 0
         webhooks.append(
             WebhookConfig(
                 url=raw_wh["url"],
                 template=template,
                 events=events,
                 enabled=bool(raw_wh.get("enabled", True)),
+                digest_hour=digest_hour,
             )
         )
 
@@ -344,6 +349,11 @@ def _config_to_dict(cfg: Config) -> dict:
                             "template": wh.template,
                             "events": wh.events,
                             **({"enabled": False} if not wh.enabled else {}),
+                            **(
+                                {"digest_hour": wh.digest_hour}
+                                if wh.digest_hour
+                                else {}
+                            ),
                         }
                         for wh in cfg.settings.webhooks
                     ]

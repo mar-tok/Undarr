@@ -189,6 +189,7 @@ def _webhook_out(wh: WebhookConfig) -> dict:
         "template": wh.template,
         "events": wh.events,
         "enabled": wh.enabled,
+        "digest_hour": wh.digest_hour,
     }
 
 
@@ -210,12 +211,15 @@ async def set_webhooks(body: list[WebhookIn]):
         bad_events = [e for e in wh.events if e not in VALID_WEBHOOK_EVENTS]
         if bad_events:
             raise HTTPException(400, f"Invalid events: {', '.join(bad_events)}")
+        if not 0 <= wh.digest_hour <= 23:
+            raise HTTPException(400, "digest_hour must be between 0 and 23")
         configs.append(
             WebhookConfig(
                 url=wh.url.strip(),
                 template=wh.template,
                 events=wh.events,
                 enabled=wh.enabled,
+                digest_hour=wh.digest_hour,
             )
         )
     result = await store.set_webhooks(configs)

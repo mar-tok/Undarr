@@ -300,6 +300,28 @@ class TestWebhooks:
         assert data["settings"]["webhooks"][0]["template"] == "ntfy"
         assert _config_from_dict(data).settings.webhooks[0].template == "ntfy"
 
+    async def test_digest_hour_round_trip_and_omitted_when_zero(self, store):
+        await store.set_webhooks(
+            [
+                WebhookConfig(
+                    url="https://a/hook", events=["daily_digest"], digest_hour=8
+                ),
+                WebhookConfig(url="https://b/hook", events=["daily_digest"]),
+            ]
+        )
+        data = _config_to_dict(store.config)
+        assert data["settings"]["webhooks"][0]["digest_hour"] == 8
+        assert "digest_hour" not in data["settings"]["webhooks"][1]
+        hours = [wh.digest_hour for wh in _config_from_dict(data).settings.webhooks]
+        assert hours == [8, 0]
+
+    @pytest.mark.parametrize("raw", [24, -1, "8", None])
+    def test_bad_digest_hour_falls_back_to_zero(self, raw):
+        cfg = _config_from_dict(
+            {"settings": {"webhooks": [{"url": "https://a/hook", "digest_hour": raw}]}}
+        )
+        assert cfg.settings.webhooks[0].digest_hour == 0
+
     async def test_get_returns_a_copy(self, store):
         await store.set_webhooks([WebhookConfig(url="https://a/hook")])
         (await store.get_webhooks()).clear()

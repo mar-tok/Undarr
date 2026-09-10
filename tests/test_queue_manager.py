@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
-from core.queue_manager import _format_size, job_to_dict, Job, JobStatus, QueueManager
+from core.queue_manager import job_to_dict, Job, JobStatus, QueueManager
 from core.ffmpeg import TranscodeProgress
 from core.yaml_store import Library, Preset
 
@@ -108,6 +108,96 @@ class TestPauseResume:
             task.cancel()
 
 
+# Stall notification
+
+
+class TestStall:
+    @pytest.fixture
+    def fired(self):
+        with patch("core.queue_manager.fire_event", AsyncMock()) as fire:
+            yield fire
+
+    async def _wake(self, qm):
+        qm._dispatch_event.set()
+        await asyncio.sleep(0.01)
+
+    async def test_fires_once_while_blocked(self, qm, fired):
+        qm._run_job = AsyncMock()
+        qm._device_limits = {"cpu": 0}
+        task = asyncio.create_task(qm._dispatcher())
+        qm._pending.append(_make_job(device="cpu"))
+        try:
+            await self._wake(qm)
+            await self._wake(qm)
+            assert fired.call_count == 1
+            event, data = fired.call_args.args
+            assert event == "queue_stalled"
+            assert data == {
+                "pending_count": 1,
+                "reasons": ["Device 'cpu' is disabled"],
+            }
+        finally:
+            task.cancel()
+
+    async def test_reasons_cover_paused_and_unavailable(self, qm, fired):
+        qm._run_job = AsyncMock()
+        qm._paused_libraries.add("movies")
+        qm._unavailable_libraries["shows"] = "/media/shows"
+        task = asyncio.create_task(qm._dispatcher())
+        qm._pending.append(_make_job(id="a", library_name="movies", device="cpu"))
+        qm._pending.append(_make_job(id="b", library_name="shows", device="cpu"))
+        try:
+            await self._wake(qm)
+            assert fired.call_args.args[1]["reasons"] == [
+                "Library 'movies' is paused",
+                "Library 'shows' is unavailable",
+            ]
+        finally:
+            task.cancel()
+
+    async def test_silent_while_a_job_is_active(self, qm, fired):
+        qm._run_job = AsyncMock()
+        qm._active["other"] = _make_job(id="other")
+        qm._paused_libraries.add("movies")
+        task = asyncio.create_task(qm._dispatcher())
+        qm._pending.append(_make_job(device="cpu"))
+        try:
+            await self._wake(qm)
+            assert not fired.called
+        finally:
+            task.cancel()
+
+    async def test_fires_again_after_a_dispatch(self, qm, fired):
+        qm._run_job = AsyncMock()
+        qm._paused_libraries.add("movies")
+        task = asyncio.create_task(qm._dispatcher())
+        qm._pending.append(_make_job(id="blocked", device="cpu"))
+        try:
+            await self._wake(qm)
+            qm._pending.append(_make_job(id="free", library_name="shows", device="cpu"))
+            await self._wake(qm)
+            qm._active.clear()
+            await self._wake(qm)
+            assert fired.call_count == 2
+        finally:
+            task.cancel()
+
+    async def test_fires_again_after_the_queue_empties(self, qm, fired):
+        qm._run_job = AsyncMock()
+        qm._paused_libraries.add("movies")
+        task = asyncio.create_task(qm._dispatcher())
+        qm._pending.append(_make_job(device="cpu"))
+        try:
+            await self._wake(qm)
+            qm._pending[0].status = JobStatus.CANCELLED
+            await self._wake(qm)
+            qm._pending.append(_make_job(id="again", device="cpu"))
+            await self._wake(qm)
+            assert fired.call_count == 2
+        finally:
+            task.cancel()
+
+
 # Library availability
 
 
@@ -199,35 +289,6 @@ class TestSorting:
             mock_store.config.settings.queue_order = "fifo"
             qm._sort_pending()
         assert qm._pending[0].id == "j1"
-
-
-# Size formatting
-
-
-class TestFormatSize:
-    def test_bytes(self):
-        assert _format_size(500) == "500 B"
-
-    def test_zero(self):
-        assert _format_size(0) == "0 B"
-
-    def test_exact_kb_boundary(self):
-        assert _format_size(1024) == "1.0 KB"
-
-    def test_kb(self):
-        assert _format_size(2048) == "2.0 KB"
-
-    def test_exact_mb_boundary(self):
-        assert _format_size(1048576) == "1.0 MB"
-
-    def test_mb(self):
-        assert _format_size(5 * 1048576) == "5.0 MB"
-
-    def test_exact_gb_boundary(self):
-        assert _format_size(1073741824) == "1.0 GB"
-
-    def test_gb(self):
-        assert _format_size(3 * 1073741824) == "3.0 GB"
 
 
 # Job serialization
