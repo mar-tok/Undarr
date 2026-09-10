@@ -163,3 +163,15 @@ class CancelBatchRequest(BaseModel):
 class EnqueuePathsRequest(BaseModel):
     library: str
     paths: list[str]
+
+
+class WebhookIn(BaseModel):
+    url: str
+    template: str = "discord"
+    events: list[str] = []
+    enabled: bool = True
+
+
+class WebhookTestIn(BaseModel):
+    url: str
+    template: str = "discord"

@@ -9,13 +9,22 @@ from urllib.request import urlopen, Request
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.requests import SettingsUpdate, DeviceUpdate
+from app.models.requests import SettingsUpdate, DeviceUpdate, WebhookIn, WebhookTestIn
 from app.models.responses import SettingsOut
 from core.logger import log
-from core.yaml_store import store, DAYS, VALID_PRIORITIES, VALID_QUEUE_ORDERS
+from core.yaml_store import (
+    store,
+    DAYS,
+    VALID_PRIORITIES,
+    VALID_QUEUE_ORDERS,
+    VALID_WEBHOOK_EVENTS,
+    VALID_WEBHOOK_TEMPLATES,
+    WebhookConfig,
+)
 from core.queue_manager import queue_manager
 from core.devices import detect_devices
 from core.ffmpeg import detect_encoders
+from core.webhooks import send_test
 
 router = APIRouter(prefix="/api", tags=["settings"])
 
@@ -172,3 +181,51 @@ async def update_device(device_id: str, body: DeviceUpdate):
     cfg = await store.update_device_config(device_id, body.max_jobs)
     await queue_manager.update_device_limit(device_id, body.max_jobs)
     return {"id": device_id, "max_jobs": cfg.max_jobs}
+
+
+def _webhook_out(wh: WebhookConfig) -> dict:
+    return {
+        "url": wh.url,
+        "template": wh.template,
+        "events": wh.events,
+        "enabled": wh.enabled,
+    }
+
+
+@router.get("/webhooks")
+async def get_webhooks():
+    return [_webhook_out(wh) for wh in await store.get_webhooks()]
+
+
+@router.put("/webhooks")
+async def set_webhooks(body: list[WebhookIn]):
+    configs = []
+    for wh in body:
+        if not wh.url.strip():
+            raise HTTPException(400, "Webhook URL cannot be empty")
+        if wh.template not in VALID_WEBHOOK_TEMPLATES:
+            raise HTTPException(
+                400, f"template must be one of: {', '.join(VALID_WEBHOOK_TEMPLATES)}"
+            )
+        bad_events = [e for e in wh.events if e not in VALID_WEBHOOK_EVENTS]
+        if bad_events:
+            raise HTTPException(400, f"Invalid events: {', '.join(bad_events)}")
+        configs.append(
+            WebhookConfig(
+                url=wh.url.strip(),
+                template=wh.template,
+                events=wh.events,
+                enabled=wh.enabled,
+            )
+        )
+    result = await store.set_webhooks(configs)
+    log.info("Webhooks updated: %d configured", len(result))
+    return [_webhook_out(wh) for wh in result]
+
+
+@router.post("/webhooks/test")
+async def test_webhook(body: WebhookTestIn):
+    error = await send_test(WebhookConfig(url=body.url, template=body.template))
+    if error:
+        raise HTTPException(502, f"Webhook delivery failed: {error}")
+    return {"status": "ok"}

@@ -34,6 +34,7 @@ from core.ffmpeg import (
 from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store, DAYS
 from core.watcher import suppress_path, unsuppress_path
+from core.webhooks import fire_event
 
 
 class JobStatus(str, Enum):
@@ -1049,6 +1050,8 @@ class QueueManager:
                 device_name=device_display_name(job.device),
             )
             await self._broadcast("job_finished", job_to_dict(job))
+            if job.status == JobStatus.FAILED:
+                await fire_event("job_failed", job_to_dict(job))
             self._dispatch_event.set()
 
             async def _delayed_unsuppress():

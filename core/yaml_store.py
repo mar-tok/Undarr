@@ -54,10 +54,20 @@ class DeviceConfig:
 DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 VALID_PRIORITIES = ("normal", "low", "lowest")
 VALID_QUEUE_ORDERS = ("fifo", "largest_first", "highest_bitrate")
+VALID_WEBHOOK_EVENTS = ("job_failed",)
+VALID_WEBHOOK_TEMPLATES = ("discord",)
 
 
 def _default_schedule() -> dict[str, list[bool]]:
     return {day: [True] * 24 for day in DAYS}
+
+
+@dataclass
+class WebhookConfig:
+    url: str
+    template: str = "discord"
+    events: list[str] = field(default_factory=list)
+    enabled: bool = True
 
 
 @dataclass
@@ -70,6 +80,7 @@ class Settings:
     max_size_ratio: float = 1.0
     queue_order: str = "fifo"
     allow_duplicate_deletion: bool = False
+    webhooks: list[WebhookConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -163,6 +174,23 @@ def _config_from_dict(data: dict) -> Config:
     if queue_order not in VALID_QUEUE_ORDERS:
         queue_order = "fifo"
 
+    webhooks: list[WebhookConfig] = []
+    for raw_wh in raw_settings.get("webhooks") or []:
+        if not isinstance(raw_wh, dict) or not raw_wh.get("url"):
+            continue
+        template = raw_wh.get("template", "discord")
+        if template not in VALID_WEBHOOK_TEMPLATES:
+            template = "discord"
+        events = [e for e in (raw_wh.get("events") or []) if e in VALID_WEBHOOK_EVENTS]
+        webhooks.append(
+            WebhookConfig(
+                url=raw_wh["url"],
+                template=template,
+                events=events,
+                enabled=bool(raw_wh.get("enabled", True)),
+            )
+        )
+
     settings = Settings(
         cache_dir=raw_settings.get("cache_dir", "/tmp/undarr"),
         devices=devices,
@@ -174,6 +202,7 @@ def _config_from_dict(data: dict) -> Config:
         allow_duplicate_deletion=bool(
             raw_settings.get("allow_duplicate_deletion", False)
         ),
+        webhooks=webhooks,
     )
 
     presets: dict[str, Preset] = {}
@@ -305,6 +334,21 @@ def _config_to_dict(cfg: Config) -> dict:
             **(
                 {"allow_duplicate_deletion": True}
                 if cfg.settings.allow_duplicate_deletion
+                else {}
+            ),
+            **(
+                {
+                    "webhooks": [
+                        {
+                            "url": wh.url,
+                            "template": wh.template,
+                            "events": wh.events,
+                            **({"enabled": False} if not wh.enabled else {}),
+                        }
+                        for wh in cfg.settings.webhooks
+                    ]
+                }
+                if cfg.settings.webhooks
                 else {}
             ),
         },
@@ -479,6 +523,15 @@ class YamlStore:
             del self._config.libraries[name]
             await self._save()
         return True
+
+    async def get_webhooks(self) -> list[WebhookConfig]:
+        return list(self._config.settings.webhooks)
+
+    async def set_webhooks(self, webhooks: list[WebhookConfig]) -> list[WebhookConfig]:
+        async with self._lock:
+            self._config.settings.webhooks = webhooks
+            await self._save()
+        return self._config.settings.webhooks
 
 
 store = YamlStore()

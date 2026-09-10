@@ -490,7 +490,8 @@ button, button * {
 }
 
 #stab-general,
-#stab-schedule {
+#stab-schedule,
+#stab-notifications {
     max-width: 960px;
 }
 
@@ -2491,4 +2492,58 @@ input[type="checkbox"][role="switch"]:focus-visible {
     font-size: 12px;
     color: var(--text);
     margin-bottom: 12px;
+}
+
+/* Webhooks */
+
+.webhook-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.webhook-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.webhook-template {
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.webhook-url-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.webhook-url-row input {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+}
+
+.webhook-url-row .field-error {
+    flex-basis: 100%;
+}
+
+.webhook-events {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.webhook-enabled,
+.form-group label.webhook-event {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: pointer;
 }

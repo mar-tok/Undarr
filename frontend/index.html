@@ -160,6 +160,7 @@
                     <button class="settings-tab active" data-stab="general">General</button>
                     <button class="settings-tab" data-stab="devices">Devices</button>
                     <button class="settings-tab" data-stab="schedule">Schedule</button>
+                    <button class="settings-tab" data-stab="notifications">Notifications</button>
                 </div>
                 <div class="settings-pane active" id="stab-general">
                     <button class="btn btn-primary" id="btn-save-settings" style="margin-bottom: 16px">Save</button>
@@ -236,6 +237,13 @@
                             <button class="btn btn-primary" id="btn-save-schedule">Save</button>
                         </div>
                     </div>
+                </div>
+                <div class="settings-pane" id="stab-notifications">
+                    <div style="display:flex;gap:8px;margin-bottom:16px">
+                        <button class="btn btn-primary" id="btn-save-webhooks" disabled>Save</button>
+                        <button class="btn" id="btn-add-webhook">Add Webhook</button>
+                    </div>
+                    <div id="webhooks-list"></div>
                 </div>
             </div>
         </main>

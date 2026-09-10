@@ -6,6 +6,7 @@ from core.yaml_store import (
     Library,
     SkipRule,
     SkipCondition,
+    WebhookConfig,
     BUILTIN_PRESETS,
     _config_from_dict,
     _config_to_dict,
@@ -236,6 +237,65 @@ class TestSettings:
     async def test_allow_duplicate_deletion_default_not_persisted(self, store):
         data = _config_to_dict(store.config)
         assert "allow_duplicate_deletion" not in data["settings"]
+
+
+# Webhooks
+
+
+class TestWebhooks:
+    async def test_empty_by_default_and_not_persisted(self, store):
+        assert await store.get_webhooks() == []
+        assert "webhooks" not in _config_to_dict(store.config)["settings"]
+
+    async def test_set_and_round_trip(self, store):
+        await store.set_webhooks(
+            [
+                WebhookConfig(url="https://a/hook", events=["job_failed"]),
+                WebhookConfig(url="https://b/hook", enabled=False),
+            ]
+        )
+        data = _config_to_dict(store.config)
+        assert data["settings"]["webhooks"] == [
+            {"url": "https://a/hook", "template": "discord", "events": ["job_failed"]},
+            {
+                "url": "https://b/hook",
+                "template": "discord",
+                "events": [],
+                "enabled": False,
+            },
+        ]
+        cfg = _config_from_dict(data)
+        assert cfg.settings.webhooks == [
+            WebhookConfig(url="https://a/hook", events=["job_failed"]),
+            WebhookConfig(url="https://b/hook", enabled=False),
+        ]
+
+    def test_bad_entries_dropped_and_values_coerced(self):
+        cfg = _config_from_dict(
+            {
+                "settings": {
+                    "webhooks": [
+                        "not a dict",
+                        {"template": "discord"},
+                        {
+                            "url": "https://a/hook",
+                            "template": "slack",
+                            "events": ["job_failed", "bogus"],
+                        },
+                    ]
+                }
+            }
+        )
+        assert cfg.settings.webhooks == [
+            WebhookConfig(
+                url="https://a/hook", template="discord", events=["job_failed"]
+            )
+        ]
+
+    async def test_get_returns_a_copy(self, store):
+        await store.set_webhooks([WebhookConfig(url="https://a/hook")])
+        (await store.get_webhooks()).clear()
+        assert len(await store.get_webhooks()) == 1
 
 
 # Validation and migration

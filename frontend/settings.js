@@ -4,6 +4,7 @@ import { openDirBrowser } from "./dir-browser.js";
 import { renderQueue, renderIssues, clearFailedJobs } from "./queue.js";
 import { loadHistory } from "./history.js";
 import { loadSchedule, initSchedule } from "./schedule.js";
+import { initNotifications, loadNotifications } from "./notifications.js";
 
 let settingsOriginal = {};
 let settingsSaveBtn = null;
@@ -102,6 +103,7 @@ export function switchSettingsTab(tabId) {
     document.querySelectorAll("#view-settings .settings-tab").forEach(t => t.classList.toggle("active", t.dataset.stab === tabId));
     document.querySelectorAll("#view-settings .settings-pane").forEach(p => p.classList.toggle("active", p.id === "stab-" + tabId));
     if (tabId === "devices") loadDevices();
+    if (tabId === "notifications") loadNotifications();
     history.replaceState(null, "", "#settings/" + tabId);
 }
 
@@ -153,6 +155,7 @@ export function initSettings() {
     document.getElementById("set-allow-dup-deletion").addEventListener("change", checkSettingsChanged);
 
     initSchedule();
+    initNotifications();
 
     document.getElementById("btn-purge-history").addEventListener("click", async () => {
         if (!confirm("This will permanently delete all job history and processed file records. This cannot be undone.\n\nAll files will be treated as unprocessed, meaning the next scan will re-evaluate every file in every library.\n\nHistory takes up negligible disk space. There is no performance reason to purge it, and you lose the ability to review past jobs and errors.\n\nOnly do this if you have a specific reason to.\n\nContinue?")) return;
