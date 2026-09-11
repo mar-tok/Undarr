@@ -336,6 +336,16 @@ button, button * {
     justify-content: center;
 }
 
+.btn.icon-btn {
+    min-width: 36px;
+    padding: 0;
+}
+
+.btn.icon-btn img {
+    width: 20px;
+    height: 20px;
+}
+
 .btn:hover {
     background: var(--border);
 }
@@ -438,7 +448,6 @@ button, button * {
 .settings-tabs {
     display: flex;
     gap: 0;
-    border-bottom: 1px solid var(--border);
     margin-bottom: 16px;
 }
 
@@ -558,6 +567,7 @@ button, button * {
 #search-table td:nth-child(5) { width: 12%; }
 
 #queue-search::placeholder,
+#log-search::placeholder,
 #tree-search::placeholder,
 #files-search::placeholder {
     color: var(--text);
@@ -2550,4 +2560,52 @@ input[type="checkbox"][role="switch"]:focus-visible {
     text-transform: none;
     letter-spacing: 0;
     cursor: pointer;
+}
+
+/* Log viewer */
+.log-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+#log-level-filter {
+    width: auto;
+}
+
+.log-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+#log-output {
+    margin: 0;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    font-family: "Cascadia Mono", "Consolas", monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-y: auto;
+    max-height: calc(100vh - 180px);
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+}
+
+.log-error {
+    color: var(--error);
+}
+
+.log-warning {
+    color: #f1c232;
+}
+
+#log-file-size {
+    font-size: 12px;
+    margin-left: auto;
 }

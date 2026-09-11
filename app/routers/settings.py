@@ -8,10 +8,11 @@ from importlib.metadata import version
 from urllib.request import urlopen, Request
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from app.models.requests import SettingsUpdate, DeviceUpdate, WebhookIn, WebhookTestIn
 from app.models.responses import SettingsOut
-from core.logger import log
+from core.logger import log, LOG_FILE, LEVEL_RANK, filter_level
 from core.yaml_store import (
     store,
     DAYS,
@@ -233,3 +234,30 @@ async def test_webhook(body: WebhookTestIn):
     if error:
         raise HTTPException(502, f"Webhook delivery failed: {error}")
     return {"status": "ok"}
+
+
+@router.get("/logs")
+async def get_logs(lines: int = 200, level: str | None = None):
+    lines = max(1, min(lines, 2000))
+    if level and level not in LEVEL_RANK:
+        raise HTTPException(400, f"level must be one of: {', '.join(LEVEL_RANK)}")
+
+    if not LOG_FILE.exists():
+        return {"lines": [], "file": LOG_FILE.name, "size": 0}
+
+    size = LOG_FILE.stat().st_size
+    raw = await asyncio.to_thread(
+        LOG_FILE.read_text, encoding="utf-8", errors="replace"
+    )
+    all_lines = raw.splitlines()
+    if level:
+        all_lines = filter_level(all_lines, level)
+
+    return {"lines": all_lines[-lines:], "file": LOG_FILE.name, "size": size}
+
+
+@router.get("/logs/download")
+async def download_log():
+    if not LOG_FILE.exists():
+        raise HTTPException(404, "Log file not found")
+    return FileResponse(LOG_FILE, filename=LOG_FILE.name, media_type="text/plain")

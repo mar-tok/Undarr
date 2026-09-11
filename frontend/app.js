@@ -9,6 +9,7 @@ import { initSettings, loadSettings, switchSettingsTab } from "./settings.js";
 import { initStorage, loadStorageView } from "./storage.js";
 import { isScheduleDirty, discardScheduleChanges, stopScheduleClock } from "./schedule.js";
 import { initSetup, loadSetupView, checkFirstRun } from "./quickstart.js";
+import { stopLogRefresh } from "./logs.js";
 
 const tooltip = document.getElementById("tooltip");
 let tipTarget = null;
@@ -42,6 +43,7 @@ function navigate(viewId) {
         discardScheduleChanges();
     }
     if (currentView === "settings" && viewId !== "settings") stopScheduleClock();
+    if (currentView === "settings" && viewId !== "settings") stopLogRefresh();
     if (currentView === "overview" && viewId !== "overview") stopEtaCountdown();
     currentView = viewId;
     navItems.forEach(n => n.classList.toggle("active", n.dataset.view === viewId));

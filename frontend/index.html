@@ -161,6 +161,7 @@
                     <button class="settings-tab" data-stab="devices">Devices</button>
                     <button class="settings-tab" data-stab="schedule">Schedule</button>
                     <button class="settings-tab" data-stab="notifications">Notifications</button>
+                    <button class="settings-tab" data-stab="logs">Logs</button>
                 </div>
                 <div class="settings-pane active" id="stab-general">
                     <button class="btn btn-primary" id="btn-save-settings" style="margin-bottom: 16px">Save</button>
@@ -244,6 +245,29 @@
                         <button class="btn" id="btn-add-webhook">Add Webhook</button>
                     </div>
                     <div id="webhooks-list"></div>
+                </div>
+                <div class="settings-pane" id="stab-logs">
+                    <div class="log-toolbar">
+                        <input type="text" id="log-search" placeholder="Search..." style="max-width:320px">
+                        <select id="log-level-filter">
+                            <option value="">All levels</option>
+                            <option value="DEBUG">Debug</option>
+                            <option value="INFO">Info</option>
+                            <option value="WARNING">Warning</option>
+                            <option value="ERROR">Error</option>
+                        </select>
+                        <label class="log-toggle">
+                            <input type="checkbox" role="switch" id="log-auto-scroll">
+                            Auto scroll
+                        </label>
+                        <label class="log-toggle">
+                            <input type="checkbox" role="switch" id="log-auto-refresh" checked>
+                            Auto refresh
+                        </label>
+                        <span id="log-file-size"></span>
+                        <button class="btn icon-btn" id="btn-download-log" data-tooltip="Download full log file"><img src="download.svg" alt="Download"></button>
+                    </div>
+                    <pre id="log-output"></pre>
                 </div>
             </div>
         </main>
