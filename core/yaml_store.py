@@ -93,24 +93,29 @@ class Preset:
     subtitle: SubtitleConfig | None = None
     resolution_cap: int | None = None
     rename_file: bool = False
+    ten_bit: bool = False
 
 
 BUILTIN_PRESETS: dict[str, Preset] = {
     "HEVC Transparent": Preset(
         ffmpeg_args="-c:v libx265 -crf 20 -preset slow",
         description="Converts video to H.265 with no discernible quality loss. Safe default for most content. Typically saves 40-50% storage with broad device compatibility.",
+        ten_bit=True,
     ),
     "HEVC Space Saver": Preset(
         ffmpeg_args="-c:v libx265 -crf 26 -preset slow",
         description="Converts video to H.265 with aggressive compression. Saves more space, and quality differences remain difficult to discern for most content. Broad device compatibility.",
+        ten_bit=True,
     ),
     "AV1 Transparent": Preset(
         ffmpeg_args="-c:v libsvtav1 -crf 25 -preset 6",
         description="Converts video to AV1 with no discernible quality loss. Better compression than HEVC, but rarely compatible with older devices and players. Requires AV1-compatible playback devices.",
+        ten_bit=True,
     ),
     "AV1 Space Saver": Preset(
         ffmpeg_args="-c:v libsvtav1 -crf 32 -preset 6",
         description="Converts video to AV1 with aggressive compression. Maximum storage savings. Better compression than HEVC, but rarely compatible with older devices and players. Requires AV1-compatible playback devices.",
+        ten_bit=True,
     ),
 }
 
@@ -259,6 +264,7 @@ def _config_from_dict(data: dict) -> Config:
             subtitle=subtitle,
             resolution_cap=resolution_cap,
             rename_file=bool(p.get("rename_file", False)),
+            ten_bit=bool(p.get("ten_bit", False)),
         )
 
     libraries: dict[str, Library] = {}
@@ -379,6 +385,7 @@ def _config_to_dict(cfg: Config) -> dict:
                     else {}
                 ),
                 **({"rename_file": True} if p.rename_file else {}),
+                **({"ten_bit": True} if p.ten_bit else {}),
             }
             for name, p in cfg.presets.items()
         },

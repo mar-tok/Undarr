@@ -43,6 +43,21 @@ class TestCompatibleContainer:
         assert ffmpeg.compatible_container("libx265", ".MKV") is None
 
 
+class TestTenBitPixFmt:
+    def test_software_encoder(self):
+        assert ffmpeg.ten_bit_pix_fmt("libx265") == "yuv420p10le"
+
+    def test_hardware_encoder(self):
+        assert ffmpeg.ten_bit_pix_fmt("hevc_nvenc") == "p010le"
+
+    def test_h264_has_no_ten_bit_format(self):
+        assert ffmpeg.ten_bit_pix_fmt("libx264") is None
+        assert ffmpeg.ten_bit_pix_fmt("h264_nvenc") is None
+
+    def test_unknown_encoder(self):
+        assert ffmpeg.ten_bit_pix_fmt("some_future_encoder") is None
+
+
 class TestDetectEncoders:
     async def test_groups_by_codec_family(self):
         with patch(

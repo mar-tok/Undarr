@@ -42,6 +42,7 @@ class PresetOut(BaseModel):
     subtitle: SubtitleConfigOut | None = None
     resolution_cap: int | None = None
     rename_file: bool = False
+    ten_bit: bool = False
     is_builtin: bool = False
 
 

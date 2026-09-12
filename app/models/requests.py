@@ -51,6 +51,7 @@ class PresetCreate(BaseModel):
     subtitle: SubtitleConfigIn | None = None
     resolution_cap: int | None = None
     rename_file: bool = False
+    ten_bit: bool = False
 
     @field_validator("name")
     @classmethod
@@ -67,6 +68,7 @@ class PresetUpdate(BaseModel):
     subtitle: SubtitleConfigIn | None = None
     resolution_cap: int | None = None
     rename_file: bool = False
+    ten_bit: bool = False
 
     @field_validator("name")
     @classmethod

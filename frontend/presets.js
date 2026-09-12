@@ -170,7 +170,8 @@ export function parsePresetData(p) {
     if (subtitle && subtitle.mode !== "keep") subtitleMode = subtitle.mode;
     const resolutionCap = p.resolution_cap || null;
     const renameFile = p.rename_file || false;
-    const data = { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: p.output_container || "", extraArgs: [], audio, audioMode, subtitle, subtitleMode, resolutionCap, renameFile };
+    const tenBit = p.ten_bit || false;
+    const data = { encoder: "", quality: "", qualityLabel: "Quality", speed: "", container: p.output_container || "", extraArgs: [], audio, audioMode, subtitle, subtitleMode, resolutionCap, renameFile, tenBit };
     let rest = p.ffmpeg_args;
 
     const encMatch = rest.match(/-c:v\s+(\S+)/);
@@ -347,6 +348,9 @@ function renderPresetViewCard(p, builtin = false) {
     if (data.resolutionCap) {
         videoHtml += `<dt>Resolution Cap</dt><dd>${esc(String(data.resolutionCap))}p</dd>`;
     }
+    if (data.tenBit) {
+        videoHtml += `<dt>Bit Depth</dt><dd>10-bit</dd>`;
+    }
     if (data.renameFile) {
         videoHtml += `<dt>Rename</dt><dd>Update filename</dd>`;
     }
@@ -464,7 +468,9 @@ function renderPresetFormCard(name, data, description) {
     const subCommentaryChecked = sub.remove_commentary ? " checked" : "";
     const subConfigHidden = subtitleMode !== "keep_by_language" ? ' style="display:none"' : "";
     const resCap = data.resolutionCap ? String(data.resolutionCap) : "";
+
     const renameChecked = data.renameFile ? " checked" : "";
+    const tenBitChecked = data.tenBit ? " checked" : "";
 
     const audioMode = data.audioMode || "copy";
     const a = data.audio || {};
@@ -517,9 +523,14 @@ function renderPresetFormCard(name, data, description) {
                     <select class="pc-container">${buildContainerOptionsHTML(data.container)}</select>
                 </div>
             </div>
-            <div class="form-group pc-rescap-group">
-                <label data-tooltip="Maximum output resolution (height).<br>Files above the cap are downscaled while preserving aspect ratio.<br>Files at or below the cap pass through at original resolution.">Resolution Cap</label>
-                <select class="pc-rescap">${buildResolutionCapOptionsHTML(resCap)}</select>
+            <div class="form-row form-row-2">
+                <div class="form-group pc-rescap-group">
+                    <label data-tooltip="Maximum output resolution (height).<br>Files above the cap are downscaled while preserving aspect ratio.<br>Files at or below the cap pass through at original resolution.">Resolution Cap</label>
+                    <select class="pc-rescap">${buildResolutionCapOptionsHTML(resCap)}</select>
+                </div>
+                <div class="form-group" style="align-self:flex-end">
+                    <label class="audio-checkbox" style="align-self:flex-start" data-tooltip="Encodes with 10-bit color instead of 8-bit, which reduces visible banding in dark scenes and gradients.<br>Slower to encode. Some very old HEVC players cannot play 10-bit.<br>Has no effect on H.264 encoders."><input type="checkbox" role="switch" class="pc-ten-bit"${tenBitChecked}> 10-bit encoding</label>
+                </div>
             </div>
             <div>
                 <div class="extra-args-header">
@@ -776,14 +787,15 @@ function attachFormCardListeners(card, originalName) {
         const resCapVal = card.querySelector(".pc-rescap").value;
         const resolution_cap = resCapVal ? parseInt(resCapVal, 10) : null;
         const rename_file = card.querySelector(".pc-rename-file").checked;
+        const ten_bit = card.querySelector(".pc-ten-bit").checked;
 
         try {
             if (isNew) {
-                await api("POST", "/api/presets", { name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap, rename_file });
+                await api("POST", "/api/presets", { name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap, rename_file, ten_bit });
                 creatingNewPreset = false;
             } else {
                 await api("PUT", `/api/presets/${encodeURIComponent(originalName)}`, {
-                    name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap, rename_file
+                    name: newName, ffmpeg_args: args, output_container: container, description, audio, subtitle, resolution_cap, rename_file, ten_bit
                 });
                 editingPresetName = null;
             }
@@ -831,6 +843,7 @@ export function initPresets() {
                     subtitle: source.subtitle || null,
                     resolution_cap: source.resolution_cap || null,
                     rename_file: source.rename_file || false,
+                    ten_bit: source.ten_bit || false,
                 });
                 loadPresets();
             } catch (err) {

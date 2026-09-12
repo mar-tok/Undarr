@@ -30,6 +30,7 @@ from core.ffmpeg import (
     strip_audio_flags,
     build_subtitle_args,
     build_scale_filter,
+    ten_bit_pix_fmt,
 )
 from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store, DAYS
@@ -854,6 +855,13 @@ class QueueManager:
                     scale_filter = build_scale_filter(
                         preset.resolution_cap, source_height
                     )
+
+            if preset and preset.ten_bit:
+                encoder_match = re.search(r"-c:v\s+(\S+)", ffmpeg_args)
+                if encoder_match:
+                    pix_fmt = ten_bit_pix_fmt(encoder_match.group(1))
+                    if pix_fmt:
+                        ffmpeg_args = f"{ffmpeg_args} -pix_fmt {pix_fmt}"
 
             try:
                 result = await transcode(

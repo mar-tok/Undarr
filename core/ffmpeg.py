@@ -11,6 +11,33 @@ from core.logger import log
 from core.codecs import ENCODER_TO_CODEC
 from core.yaml_store import AudioConfig, AudioTrackConfig, SubtitleConfig
 
+_TEN_BIT_PIX_FMT: dict[str, str] = {
+    # Software encoders
+    "libx265": "yuv420p10le",
+    "libsvtav1": "yuv420p10le",
+    "libaom-av1": "yuv420p10le",
+    "libvpx-vp9": "yuv420p10le",
+    # NVENC
+    "hevc_nvenc": "p010le",
+    "av1_nvenc": "p010le",
+    # QSV
+    "hevc_qsv": "p010le",
+    "av1_qsv": "p010le",
+    "vp9_qsv": "p010le",
+    # VAAPI
+    "hevc_vaapi": "p010le",
+    "av1_vaapi": "p010le",
+    "vp9_vaapi": "p010le",
+    # AMF
+    "hevc_amf": "p010le",
+    # No h264 on purpose, hardly any hardware decoder plays 10-bit H.264
+}
+
+
+def ten_bit_pix_fmt(encoder: str) -> str | None:
+    return _TEN_BIT_PIX_FMT.get(encoder)
+
+
 _CODEC_FAMILIES: dict[str, str] = {
     "hevc": "HEVC (H.265)",
     "h264": "H.264 (AVC)",

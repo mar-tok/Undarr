@@ -86,6 +86,22 @@ class TestPresetCRUD:
         data = _config_to_dict(store.config)
         assert "rename_file" not in data["presets"]["Plain"]
 
+    async def test_ten_bit_round_trip(self, store):
+        await store.create_preset("Deep", _preset(ten_bit=True))
+        data = _config_to_dict(store.config)
+        assert data["presets"]["Deep"]["ten_bit"] is True
+        cfg = _config_from_dict(data)
+        assert cfg.presets["Deep"].ten_bit is True
+
+    async def test_ten_bit_default_not_persisted(self, store):
+        await store.create_preset("Plain", _preset())
+        data = _config_to_dict(store.config)
+        assert "ten_bit" not in data["presets"]["Plain"]
+
+    def test_builtins_are_ten_bit(self):
+        for p in BUILTIN_PRESETS.values():
+            assert p.ten_bit is True
+
     async def test_update(self, store):
         await store.create_preset("P1", _preset())
         await store.update_preset("P1", _preset(ffmpeg_args="-c:v libx264"))
