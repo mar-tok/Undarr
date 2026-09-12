@@ -111,6 +111,12 @@ export function codecLabel(codec) {
     return codec.toUpperCase();
 }
 
+const HDR_LABELS = { hdr10: "HDR10", "hdr10+": "HDR10+", dolby_vision: "Dolby Vision", hlg: "HLG" };
+
+export function hdrLabel(type) {
+    return HDR_LABELS[type] || type;
+}
+
 export function renderCodecBar(composition) {
     if (!composition || !Object.keys(composition).length) return { html: "-", tooltip: "" };
     const entries = Object.entries(composition);

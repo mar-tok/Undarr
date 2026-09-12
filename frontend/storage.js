@@ -1,4 +1,4 @@
-import { api, formatBytes, formatBytesLarge, esc, escAttr, codecLabel, codecColor, formatBitrate, formatFileDuration, formatChannels } from "./helpers.js";
+import { api, formatBytes, formatBytesLarge, esc, escAttr, codecLabel, codecColor, formatBitrate, formatFileDuration, formatChannels, hdrLabel } from "./helpers.js";
 
 let currentLibrary = null;
 let currentPath = null;
@@ -285,9 +285,6 @@ function formatAudio(codec, channels) {
     const ch = formatChannels(channels);
     return ch ? label + " " + ch : label;
 }
-
-const HDR_LABELS = { hdr10: "HDR10", "hdr10+": "HDR10+", dolby_vision: "Dolby Vision", hlg: "HLG" };
-function hdrLabel(type) { return HDR_LABELS[type] || ""; }
 
 function ensureFilesLayout() {
     const content = document.getElementById("storage-content");

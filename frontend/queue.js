@@ -1,4 +1,4 @@
-import { api, formatBytes, basename, esc, escAttr, formatDuration } from "./helpers.js";
+import { api, formatBytes, basename, esc, escAttr, formatDuration, hdrLabel } from "./helpers.js";
 import { deviceData, loadDeviceData, isDeviceDisabled } from "./devices.js";
 import { loadHistory, reloadHistory } from "./history.js";
 import { clearSearch } from "./search.js";
@@ -92,6 +92,7 @@ function formatMediaInfo(info) {
     if (info.video_codec) {
         let v = info.video_codec.toUpperCase();
         if (info.resolution_width && info.resolution_height) v += ` ${info.resolution_width}x${info.resolution_height}`;
+        if (info.hdr_type) v += ` ${hdrLabel(info.hdr_type)}`;
         parts.push(v);
     }
     if (info.audio_codec) parts.push(info.audio_codec.toUpperCase());

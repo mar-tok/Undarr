@@ -18,7 +18,7 @@ const SCAN_UNITS = [
     { value: "days", label: "days" },
 ];
 
-const SKIP_FIELDS = ["video_codec", "audio_codec", "resolution_width", "resolution_height", "bitrate_kbps", "file_size_mb", "duration_seconds"];
+const SKIP_FIELDS = ["video_codec", "audio_codec", "resolution_width", "resolution_height", "bitrate_kbps", "file_size_mb", "duration_seconds", "hdr_type"];
 const SKIP_OPS = ["equals", "not_equals", "less_than", "greater_than", "contains"];
 
 async function loadLibraries() {
@@ -221,7 +221,7 @@ function renderLibraryFormCard(lib) {
             <button class="btn lc-add-pattern" type="button" style="margin-top:6px">Add Pattern</button>
         </div>
         <div style="margin-top:12px">
-            <label class="section-label" data-tooltip="Rules that prevent specific files from being queued.<br>Each rule can have multiple conditions, all of which must match (AND).<br>If any rule matches, the file is skipped (OR between rules).<br><br>Example: skip HEVC files below 3000 kbps by adding both conditions to one rule.">Skip Rules</label>
+            <label class="section-label" data-tooltip="Rules that prevent specific files from being queued.<br>Each rule can have multiple conditions, all of which must match (AND).<br>If any rule matches, the file is skipped (OR between rules).<br><br>Example: skip HEVC files below 3000 kbps by adding both conditions to one rule.<br><br><code>hdr_type</code> is empty for SDR files, otherwise <code>hdr10</code>, <code>hdr10+</code>, <code>dolby_vision</code>, or <code>hlg</code>. <code>hdr_type not_equals</code> with an empty value skips every HDR file.">Skip Rules</label>
             <div class="lc-skip-rules">${skipRulesHtml}</div>
             <button class="btn lc-add-rule" type="button" style="margin-top:6px">Add Rule</button>
         </div>
@@ -525,7 +525,8 @@ function attachLibFormCardListeners(card, originalName) {
         if (!paths.length) { setError(chipsContainer, "At least one path is required"); valid = false; }
         card.querySelectorAll(".skip-cond-row").forEach(row => {
             const valInput = row.querySelector(".cond-value");
-            if (!valInput.value.trim()) { setError(valInput, "Value is required"); valid = false; }
+            const op = row.querySelector(".cond-op").value;
+            if (op !== "equals" && op !== "not_equals" && !valInput.value.trim()) { setError(valInput, "Value is required"); valid = false; }
         });
         if (!valid) return;
 
