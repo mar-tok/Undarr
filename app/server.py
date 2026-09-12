@@ -12,7 +12,16 @@ from core.watcher import watcher
 from core.scanner import scan_library, mark_library_processed, periodic_scanner
 from core.devices import detect_devices
 from core.webhooks import start_digest_scheduler, stop_digest_scheduler
-from app.routers import queue, presets, libraries, settings, filesystem, stats, storage
+from app.routers import (
+    queue,
+    presets,
+    libraries,
+    settings,
+    filesystem,
+    metrics,
+    stats,
+    storage,
+)
 
 
 async def _startup_scan() -> None:
@@ -100,6 +109,7 @@ app.include_router(presets.router)
 app.include_router(libraries.router)
 app.include_router(settings.router)
 app.include_router(filesystem.router)
+app.include_router(metrics.router)
 app.include_router(stats.router)
 app.include_router(storage.router)
 

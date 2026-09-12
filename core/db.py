@@ -497,6 +497,15 @@ async def get_library_files_mtimes(library_name: str) -> dict[str, float]:
 # Stats queries
 
 
+async def get_history_status_counts() -> dict[str, int]:
+    db = get_db()
+    cursor = await db.execute(
+        "SELECT status, COUNT(*) FROM job_history GROUP BY status"
+    )
+    rows = await cursor.fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
 async def get_stats_totals() -> dict:
     db = get_db()
     cursor = await db.execute("""

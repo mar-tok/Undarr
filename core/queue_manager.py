@@ -35,6 +35,7 @@ from core.devices import encoder_to_device_id, device_display_name
 from core.yaml_store import store, DAYS
 from core.watcher import suppress_path, unsuppress_path
 from core.sizes import format_size
+from core.metrics import transcode_duration
 from core.webhooks import fire_event, check_top_reduction
 
 
@@ -145,6 +146,10 @@ class QueueManager:
     @property
     def paused_libraries(self) -> set[str]:
         return set(self._paused_libraries)
+
+    @property
+    def device_active_counts(self) -> dict[str, int]:
+        return dict(self._device_active)
 
     @property
     def schedule_active(self) -> bool:
@@ -1068,6 +1073,8 @@ class QueueManager:
                 preset_name=job.preset_name,
                 device_name=device_display_name(job.device),
             )
+            if job.status in (JobStatus.COMPLETED, JobStatus.FAILED):
+                transcode_duration.observe(duration_secs)
             await self._broadcast("job_finished", job_to_dict(job))
             if job.status == JobStatus.FAILED:
                 await fire_event("job_failed", job_to_dict(job))
