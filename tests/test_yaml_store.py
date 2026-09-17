@@ -102,6 +102,10 @@ class TestPresetCRUD:
         for p in BUILTIN_PRESETS.values():
             assert p.ten_bit is True
 
+    def test_builtins_copy_subtitles(self):
+        for name, p in BUILTIN_PRESETS.items():
+            assert "-c:s copy" in p.ffmpeg_args, name
+
     async def test_update(self, store):
         await store.create_preset("P1", _preset())
         await store.update_preset("P1", _preset(ffmpeg_args="-c:v libx264"))

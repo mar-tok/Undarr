@@ -98,22 +98,22 @@ class Preset:
 
 BUILTIN_PRESETS: dict[str, Preset] = {
     "HEVC Transparent": Preset(
-        ffmpeg_args="-c:v libx265 -crf 20 -preset slow",
+        ffmpeg_args="-c:s copy -c:v libx265 -crf 20 -preset slow",
         description="Converts video to H.265 with no discernible quality loss. Safe default for most content. Typically saves 40-50% storage with broad device compatibility.",
         ten_bit=True,
     ),
     "HEVC Space Saver": Preset(
-        ffmpeg_args="-c:v libx265 -crf 26 -preset slow",
+        ffmpeg_args="-c:s copy -c:v libx265 -crf 26 -preset slow",
         description="Converts video to H.265 with aggressive compression. Saves more space, and quality differences remain difficult to discern for most content. Broad device compatibility.",
         ten_bit=True,
     ),
     "AV1 Transparent": Preset(
-        ffmpeg_args="-c:v libsvtav1 -crf 25 -preset 6",
+        ffmpeg_args="-c:s copy -c:v libsvtav1 -crf 25 -preset 6",
         description="Converts video to AV1 with no discernible quality loss. Better compression than HEVC, but rarely compatible with older devices and players. Requires AV1-compatible playback devices.",
         ten_bit=True,
     ),
     "AV1 Space Saver": Preset(
-        ffmpeg_args="-c:v libsvtav1 -crf 32 -preset 6",
+        ffmpeg_args="-c:s copy -c:v libsvtav1 -crf 32 -preset 6",
         description="Converts video to AV1 with aggressive compression. Maximum storage savings. Better compression than HEVC, but rarely compatible with older devices and players. Requires AV1-compatible playback devices.",
         ten_bit=True,
     ),
