@@ -223,6 +223,20 @@ class TestLibraryCRUD:
         assert lib.skip_rules[0].conditions[1].field == "bitrate_kbps"
 
 
+class TestLibraryIntervals:
+    def test_scan_interval_seconds(self):
+        lib = _library(scan_interval=2, scan_unit="hours")
+        assert lib.scan_interval_seconds == 7200
+
+    def test_new_file_delay_seconds(self):
+        lib = _library(new_file_delay=5, new_file_delay_unit="minutes")
+        assert lib.new_file_delay_seconds == 300
+
+    def test_unknown_unit_counts_as_minutes(self):
+        lib = _library(scan_interval=2, scan_unit="fortnights")
+        assert lib.scan_interval_seconds == 120
+
+
 # Settings
 
 

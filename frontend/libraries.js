@@ -526,7 +526,9 @@ function attachLibFormCardListeners(card, originalName) {
         card.querySelectorAll(".skip-cond-row").forEach(row => {
             const valInput = row.querySelector(".cond-value");
             const op = row.querySelector(".cond-op").value;
-            if (op !== "equals" && op !== "not_equals" && !valInput.value.trim()) { setError(valInput, "Value is required"); valid = false; }
+            const val = valInput.value.trim();
+            if (op !== "equals" && op !== "not_equals" && !val) { setError(valInput, "Value is required"); valid = false; }
+            else if ((op === "less_than" || op === "greater_than") && isNaN(Number(val))) { setError(valInput, "Value must be a number"); valid = false; }
         });
         if (!valid) return;
 

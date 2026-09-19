@@ -124,6 +124,9 @@ def is_builtin_preset(name: str) -> bool:
     return name in BUILTIN_PRESETS
 
 
+TIME_UNITS = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
+
+
 @dataclass
 class Library:
     paths: list[str]
@@ -140,9 +143,12 @@ class Library:
     mark_processed_pending: bool = False
 
     @property
+    def scan_interval_seconds(self) -> int:
+        return self.scan_interval * TIME_UNITS.get(self.scan_unit, 60)
+
+    @property
     def new_file_delay_seconds(self) -> int:
-        multipliers = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
-        return self.new_file_delay * multipliers.get(self.new_file_delay_unit, 60)
+        return self.new_file_delay * TIME_UNITS.get(self.new_file_delay_unit, 60)
 
 
 @dataclass

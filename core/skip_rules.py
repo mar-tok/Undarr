@@ -4,6 +4,18 @@ import fnmatch
 
 from core.yaml_store import SkipCondition, SkipRule
 
+SKIP_FIELDS = (
+    "video_codec",
+    "audio_codec",
+    "resolution_width",
+    "resolution_height",
+    "bitrate_kbps",
+    "file_size_mb",
+    "duration_seconds",
+    "hdr_type",
+)
+SKIP_OPERATORS = ("equals", "not_equals", "less_than", "greater_than", "contains")
+
 
 def _compare(actual, operator: str, expected) -> bool:
     match operator:

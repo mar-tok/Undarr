@@ -149,7 +149,9 @@ def extract_subtitle_streams(probe_data: dict) -> list[dict]:
     return streams
 
 
-async def verify_output(output_path: str, source_duration_us: int) -> tuple[bool, str]:
+async def verify_output(
+    output_path: str, source_probe: dict | None
+) -> tuple[bool, str]:
     probe_data = await probe_file(output_path)
     if not probe_data:
         return False, "Output file is not readable by ffprobe"
@@ -160,6 +162,7 @@ async def verify_output(output_path: str, source_duration_us: int) -> tuple[bool
     if not has_video:
         return False, "Output file has no video stream"
 
+    source_duration_us = get_duration_us(source_probe) if source_probe else 0
     if source_duration_us > 0:
         output_duration_us = get_duration_us(probe_data)
         if output_duration_us == 0:
@@ -169,12 +172,34 @@ async def verify_output(output_path: str, source_duration_us: int) -> tuple[bool
         if diff > tolerance_us:
             src_s = source_duration_us / 1_000_000
             out_s = output_duration_us / 1_000_000
-            return (
-                False,
-                f"Output duration ({out_s:.1f}s) differs from source ({src_s:.1f}s)",
+            reason = (
+                f"Output duration ({out_s:.1f}s) differs from source ({src_s:.1f}s)"
             )
+            reason += _duration_diagnosis(
+                source_probe, source_duration_us, output_duration_us, tolerance_us
+            )
+            return False, reason
 
     return True, ""
+
+
+def _duration_diagnosis(
+    source_probe: dict, source_us: int, output_us: int, tolerance_us: int
+) -> str:
+    stream_us = get_video_duration_us(source_probe)
+    if stream_us and abs(output_us - stream_us) <= tolerance_us:
+        return (
+            f". The output matches the source's video stream "
+            f"({stream_us / 1_000_000:.1f}s). The source container's duration is "
+            "wrong, so the output is probably complete. A remux of the source "
+            "can correct the container's duration."
+        )
+    if output_us < source_us and (not stream_us or output_us < stream_us):
+        return (
+            ". The output is shorter than the source, so the encode stopped early "
+            "(an encoder error, a killed process, or a full disk)."
+        )
+    return ""
 
 
 def get_duration_us(probe_data: dict) -> int:
@@ -186,4 +211,25 @@ def get_duration_us(probe_data: dict) -> int:
         duration = stream.get("duration")
         if duration:
             return int(float(duration) * 1_000_000)
+    return 0
+
+
+def get_video_duration_us(probe_data: dict) -> int:
+    for stream in probe_data.get("streams", []):
+        if stream.get("codec_type") != "video":
+            continue
+        if stream.get("disposition", {}).get("attached_pic", 0):
+            continue
+        duration = stream.get("duration")
+        if duration:
+            return int(float(duration) * 1_000_000)
+        # Matroska reports a stream duration in a DURATION tag
+        for key, value in stream.get("tags", {}).items():
+            if key.upper().startswith("DURATION"):
+                try:
+                    h, m, sec = value.split(":")
+                    return int((int(h) * 3600 + int(m) * 60 + float(sec)) * 1_000_000)
+                except ValueError:
+                    return 0
+        return 0
     return 0

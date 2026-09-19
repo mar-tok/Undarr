@@ -397,11 +397,6 @@ async def mark_library_processed(
     return count
 
 
-def _to_seconds(interval: int, unit: str) -> int:
-    multipliers = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
-    return interval * multipliers.get(unit, 60)
-
-
 class PeriodicScanner:
     def __init__(self) -> None:
         self._tasks: list[asyncio.Task] = []
@@ -415,7 +410,7 @@ class PeriodicScanner:
         for name, lib in libraries.items():
             if lib.scan_interval <= 0:
                 continue
-            interval_secs = _to_seconds(lib.scan_interval, lib.scan_unit)
+            interval_secs = lib.scan_interval_seconds
             task = asyncio.create_task(self._run_loop(name, interval_secs, enqueue_fn))
             self._tasks.append(task)
             log.info("Periodic scan for '%s' every %d seconds", name, interval_secs)

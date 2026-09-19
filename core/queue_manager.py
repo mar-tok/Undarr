@@ -912,7 +912,7 @@ class QueueManager:
                     log.info("Job %s skipped: %s", job.id, job.error_message)
                 else:
                     job.new_size_bytes = new_size
-                    ok, reason = await verify_output(str(temp_output), duration_us)
+                    ok, reason = await verify_output(str(temp_output), probe_data)
                     if not ok:
                         temp_output.unlink(missing_ok=True)
                         job.status = JobStatus.FAILED
