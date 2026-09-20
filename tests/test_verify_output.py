@@ -1,8 +1,16 @@
+from pathlib import Path
 from unittest.mock import patch, AsyncMock
 
 import pytest
 
-from core.ffprobe import get_video_duration_us, verify_output
+from core.ffprobe import (
+    get_video_duration_us,
+    verify_output,
+    probe_file,
+    extract_media_info,
+)
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _probe(format_duration, streams):
@@ -111,3 +119,61 @@ class TestVerifyOutput:
             ok, reason = await verify_output("/out.mkv", source)
         assert ok is False
         assert reason == "Output duration (10.0s) differs from source (3.0s)"
+
+
+def _fixture(name):
+    return str(FIXTURES / "edge_cases" / name)
+
+
+class TestVerifyOutputFiles:
+    async def test_valid_file_passes_against_itself(self):
+        probe = await probe_file(_fixture("valid.mkv"))
+        assert await verify_output(_fixture("valid.mkv"), probe) == (True, "")
+
+    async def test_corrupt_file(self):
+        ok, reason = await verify_output(_fixture("corrupt.mkv"), None)
+        assert ok is False
+        assert reason == "Output file is not readable by ffprobe"
+
+    async def test_missing_file(self):
+        ok, reason = await verify_output(str(FIXTURES / "nope.mkv"), None)
+        assert ok is False
+        assert "not readable" in reason
+
+    async def test_audio_only_file(self):
+        ok, reason = await verify_output(_fixture("audio_only.mka"), None)
+        assert ok is False
+        assert reason == "Output file has no video stream"
+
+    async def test_longer_output(self):
+        source = await probe_file(_fixture("valid.mkv"))
+        ok, reason = await verify_output(_fixture("long.mkv"), source)
+        assert ok is False
+        assert reason == "Output duration (10.0s) differs from source (3.0s)"
+
+    async def test_shorter_output_reads_as_truncation(self):
+        source = await probe_file(_fixture("long.mkv"))
+        ok, reason = await verify_output(_fixture("valid.mkv"), source)
+        assert ok is False
+        assert reason.startswith("Output duration (3.0s) differs from source (10.0s)")
+        assert "the encode stopped early" in reason
+
+
+@pytest.mark.parametrize(
+    "path, codec, width, height",
+    [
+        ("video_profiles/1080p_h264_8bit.mkv", "h264", 1920, 1080),
+        ("video_profiles/1080p_h265_10bit.mkv", "hevc", 1920, 1080),
+        ("video_profiles/720p_h264_8bit.mkv", "h264", 1280, 720),
+        ("video_profiles/4k_h264_8bit.mkv", "h264", 3840, 2160),
+        ("edge_cases/1080p_h264_8bit_audio.mkv", "h264", 1920, 1080),
+    ],
+)
+async def test_video_profiles(path, codec, width, height):
+    probe = await probe_file(str(FIXTURES / path))
+    info = extract_media_info(probe)
+    assert info["video_codec"] == codec
+    assert (info["resolution_width"], info["resolution_height"]) == (width, height)
+    assert info["hdr_type"] == ""
+    assert info["duration_seconds"] == pytest.approx(3.0, abs=0.1)
+    assert await verify_output(str(FIXTURES / path), probe) == (True, "")

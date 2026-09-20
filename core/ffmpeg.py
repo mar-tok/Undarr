@@ -49,7 +49,7 @@ _CODEC_FAMILIES: dict[str, str] = {
 # can't hold the target codec produces a broken file (AV1 in .avi).
 _CODEC_CONTAINERS: dict[str, set[str]] = {
     "av1": {".mp4", ".mkv", ".webm"},
-    "vp9": {".mkv", ".webm"},
+    "vp9": {".mp4", ".mkv", ".webm"},
     "hevc": {".mp4", ".mkv", ".mov", ".ts"},
     "h264": {".mp4", ".mkv", ".mov", ".ts", ".avi"},
 }
