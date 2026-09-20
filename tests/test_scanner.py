@@ -12,7 +12,12 @@ from core.db import (
     mark_processed,
     is_processed,
 )
-from core.scanner import preview_library, scan_library
+from core.scanner import (
+    preview_library,
+    scan_library,
+    _relative_to_library,
+    _collect_video_files,
+)
 from core.yaml_store import Library, SkipRule, SkipCondition
 
 import pytest
@@ -192,3 +197,46 @@ class TestScanUnavailable:
         lib = _library(media_dir, paths=[str(media_dir), missing])
         await scan_library("movies", lib, None, on_unavailable=on_unavailable)
         assert calls == [("movies", False, "", [missing])]
+
+
+class TestRelativeToLibrary:
+    def test_path_under_first_dir(self):
+        result = _relative_to_library(
+            "/media/movies/film.mkv", ["/media/movies", "/media/tv"]
+        )
+        assert result == "film.mkv"
+
+    def test_path_under_second_dir(self):
+        result = _relative_to_library(
+            "/media/tv/show/ep.mkv", ["/media/movies", "/media/tv"]
+        )
+        assert result == "show/ep.mkv"
+
+    def test_not_under_any_dir(self):
+        assert _relative_to_library("/other/file.mkv", ["/media/movies"]) is None
+
+    def test_sibling_with_shared_prefix(self):
+        assert _relative_to_library("/media/movies2/a.mkv", ["/media/movies"]) is None
+
+
+class TestCollectVideoFiles:
+    def test_finds_video_files(self, tmp_path):
+        _add_file(tmp_path, "movie.mkv")
+        _add_file(tmp_path, "clip.mp4")
+        _add_file(tmp_path, "readme.txt")
+        _add_file(tmp_path, "poster.jpg")
+        files, missing = _collect_video_files(_library(tmp_path))
+        assert {f.name for f in files} == {"movie.mkv", "clip.mp4"}
+        assert missing == []
+
+    def test_nonexistent_path_skipped(self, tmp_path):
+        bad_path = str(tmp_path / "does_not_exist")
+        files, missing = _collect_video_files(_library(tmp_path, paths=[bad_path]))
+        assert files == []
+        assert missing == [bad_path]
+
+    def test_subdirectories(self, tmp_path):
+        _add_file(tmp_path, "subdir/nested.mkv")
+        _add_file(tmp_path, "top.mp4")
+        files, _ = _collect_video_files(_library(tmp_path))
+        assert {f.name for f in files} == {"nested.mkv", "top.mp4"}

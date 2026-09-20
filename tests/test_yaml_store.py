@@ -7,6 +7,9 @@ from core.yaml_store import (
     SkipRule,
     SkipCondition,
     WebhookConfig,
+    AudioConfig,
+    AudioTrackConfig,
+    SubtitleConfig,
     BUILTIN_PRESETS,
     _config_from_dict,
     _config_to_dict,
@@ -261,6 +264,18 @@ class TestSettings:
         s = await store.update_settings(nonexistent_field="value")
         assert not hasattr(s, "nonexistent_field")
 
+    async def test_device_config(self, store):
+        dc = await store.update_device_config("qsv", 3)
+        assert dc.max_jobs == 3
+        s = await store.get_settings()
+        assert s.devices["qsv"].max_jobs == 3
+
+    async def test_device_config_overwrite(self, store):
+        await store.update_device_config("cpu", 2)
+        await store.update_device_config("cpu", 4)
+        s = await store.get_settings()
+        assert s.devices["cpu"].max_jobs == 4
+
     async def test_allow_duplicate_deletion_round_trip(self, store):
         await store.update_settings(allow_duplicate_deletion=True)
         data = _config_to_dict(store.config)
@@ -365,7 +380,72 @@ class TestWebhooks:
 # Validation and migration
 
 
+# Persistence
+
+
+async def _reload(store):
+    store2 = YamlStore()
+    store2._path = store._path
+    await store2.load()
+    return store2
+
+
+class TestPersistence:
+    async def test_roundtrip(self, store):
+        await store.create_preset("P1", _preset(description="test"))
+        await store.create_library("L1", _library())
+        await store.update_settings(process_priority="low")
+        await store.update_device_config("cpu", 2)
+
+        store2 = await _reload(store)
+        assert (await store2.get_preset("P1")).description == "test"
+        assert (await store2.get_library("L1")).paths == ["/media/movies"]
+        s = await store2.get_settings()
+        assert s.process_priority == "low"
+        assert s.devices["cpu"].max_jobs == 2
+
+    async def test_load_nonexistent_creates_default(self, store):
+        assert store._path.exists()
+        assert await store.get_presets() == dict(BUILTIN_PRESETS)
+        assert await store.get_libraries() == {}
+
+    async def test_audio_config_roundtrip(self, store):
+        audio = AudioConfig(
+            stereo=AudioTrackConfig(codec="aac", bitrate="128k"),
+            surround=AudioTrackConfig(codec="copy"),
+            languages=["eng", "nor"],
+            remove_commentary=True,
+            add_stereo_downmix="if_no_stereo",
+            downmix_bitrate="128k",
+        )
+        await store.create_preset("P1", _preset(audio=audio))
+        store2 = await _reload(store)
+        assert (await store2.get_preset("P1")).audio == audio
+
+    async def test_subtitle_config_roundtrip(self, store):
+        sub = SubtitleConfig(
+            mode="keep_by_language", languages=["eng"], remove_commentary=True
+        )
+        await store.create_preset("P1", _preset(subtitle=sub))
+        store2 = await _reload(store)
+        assert (await store2.get_preset("P1")).subtitle == sub
+
+    async def test_resolution_cap_roundtrip(self, store):
+        await store.create_preset("P1", _preset(resolution_cap=1080))
+        store2 = await _reload(store)
+        assert (await store2.get_preset("P1")).resolution_cap == 1080
+
+
+# Validation
+
+
 class TestConfigFromDict:
+    def test_empty_dict(self):
+        cfg = _config_from_dict({})
+        assert cfg.settings.cache_dir == "/tmp/undarr"
+        assert cfg.presets == {}
+        assert cfg.libraries == {}
+
     def test_schedule_partial_days_keep_defaults(self):
         cfg = _config_from_dict({"settings": {"schedule": {"mon": [True] * 24}}})
         assert cfg.settings.schedule["mon"] == [True] * 24
@@ -394,3 +474,86 @@ class TestConfigFromDict:
     def test_negative_max_size_ratio_resets(self):
         cfg = _config_from_dict({"settings": {"max_size_ratio": -0.5}})
         assert cfg.settings.max_size_ratio == 1.0
+
+    def test_resolution_cap_coerced_to_int(self):
+        data = {
+            "presets": {"P1": {"ffmpeg_args": "-c:v libx265", "resolution_cap": 1080.0}}
+        }
+        cfg = _config_from_dict(data)
+        assert cfg.presets["P1"].resolution_cap == 1080
+        assert isinstance(cfg.presets["P1"].resolution_cap, int)
+
+    def test_library_skip_rules(self):
+        data = {
+            "libraries": {
+                "L1": {
+                    "paths": ["/media"],
+                    "preset": "P1",
+                    "skip_rules": [
+                        {
+                            "conditions": [
+                                {
+                                    "field": "video_codec",
+                                    "operator": "equals",
+                                    "value": "hevc",
+                                },
+                                {
+                                    "field": "bitrate_kbps",
+                                    "operator": "less_than",
+                                    "value": 3000,
+                                },
+                            ]
+                        }
+                    ],
+                }
+            }
+        }
+        cfg = _config_from_dict(data)
+        rules = cfg.libraries["L1"].skip_rules
+        assert len(rules) == 1
+        assert [c.field for c in rules[0].conditions] == ["video_codec", "bitrate_kbps"]
+        assert rules[0].conditions[1].value == 3000
+
+    def test_library_defaults(self):
+        data = {"libraries": {"L1": {"paths": ["/media"], "preset": "P1"}}}
+        lib = _config_from_dict(data).libraries["L1"]
+        assert lib.watch is True
+        assert lib.scan_unit == "hours"
+        assert lib.new_file_delay_unit == "minutes"
+        assert lib.paused is False
+
+
+class TestConfigToDict:
+    def test_roundtrip_preserves_data(self):
+        data = {
+            "settings": {
+                "cache_dir": "/custom/cache",
+                "devices": {"cpu": {"max_jobs": 2}},
+                "schedule_enabled": True,
+                "process_priority": "low",
+                "max_size_ratio": 0.9,
+                "queue_order": "largest_first",
+            },
+            "presets": {
+                "P1": {
+                    "ffmpeg_args": "-c:v libx265 -crf 20",
+                    "output_container": "mkv",
+                    "description": "Test preset",
+                }
+            },
+            "libraries": {
+                "L1": {
+                    "paths": ["/media"],
+                    "preset": "P1",
+                    "watch": False,
+                    "scan_interval": 6,
+                    "scan_unit": "hours",
+                }
+            },
+        }
+        cfg = _config_from_dict(data)
+        cfg2 = _config_from_dict(_config_to_dict(cfg))
+        assert cfg2.settings == cfg.settings
+        assert cfg2.presets == cfg.presets
+        assert cfg2.libraries == cfg.libraries
+        assert cfg2.libraries["L1"].watch is False

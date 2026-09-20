@@ -1,4 +1,5 @@
 import asyncio
+import json
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
@@ -489,3 +490,152 @@ class TestReEvaluateBlocked:
             await qm.re_evaluate_blocked()
         msg = sub.get_nowait()
         assert "job_unblocked" in msg
+
+
+# Enqueue
+
+
+def _data(msg):
+    return json.loads(msg.split("data: ", 1)[1])
+
+
+def _patch_enqueue_deps(store_mock):
+    store_mock.get_library = AsyncMock(
+        return_value=Library(paths=["/media"], preset="HEVC")
+    )
+    store_mock.get_preset = AsyncMock(
+        return_value=Preset(ffmpeg_args="-c:v libx265 -crf 20")
+    )
+
+
+class TestEnqueue:
+    @pytest.fixture
+    def movie(self, tmp_path):
+        f = tmp_path / "movie.mkv"
+        f.write_bytes(b"\x00" * 1000)
+        return str(f)
+
+    async def test_enqueue_adds_to_pending(self, qm, movie):
+        with (
+            patch("core.queue_manager.store") as mock_store,
+            patch("core.queue_manager.probe_file", AsyncMock(return_value=None)),
+        ):
+            _patch_enqueue_deps(mock_store)
+            job = await qm.enqueue(movie, "movies")
+        assert job.status == JobStatus.PENDING
+        assert job.preset_name == "HEVC"
+        assert job.old_size_bytes == 1000
+        assert qm.pending_jobs == [job]
+
+    async def test_enqueue_duplicate_rejected(self, qm, movie):
+        with (
+            patch("core.queue_manager.store") as mock_store,
+            patch("core.queue_manager.probe_file", AsyncMock(return_value=None)),
+        ):
+            _patch_enqueue_deps(mock_store)
+            await qm.enqueue(movie, "movies")
+            assert await qm.enqueue(movie, "movies") is None
+        assert len(qm.pending_jobs) == 1
+
+    async def test_enqueue_missing_file_returns_none(self, qm):
+        with patch("core.queue_manager.store") as mock_store:
+            _patch_enqueue_deps(mock_store)
+            job = await qm.enqueue("/nonexistent/file.mkv", "movies")
+        assert job is None
+        assert qm.pending_jobs == []
+        assert "/nonexistent/file.mkv" not in qm._known_paths
+
+    async def test_enqueue_blocked_when_no_preset(self, qm, movie):
+        with (
+            patch("core.queue_manager.store") as mock_store,
+            patch("core.queue_manager.probe_file", AsyncMock(return_value=None)),
+        ):
+            mock_store.get_library = AsyncMock(
+                return_value=Library(paths=["/media"], preset="Missing")
+            )
+            mock_store.get_preset = AsyncMock(return_value=None)
+            job = await qm.enqueue(movie, "movies")
+        assert job.status == JobStatus.BLOCKED
+        assert job.block_reason == "Preset 'Missing' not found"
+        assert qm.blocked_jobs == [job]
+        assert qm.pending_jobs == []
+
+    async def test_enqueue_blocked_when_no_library(self, qm, movie):
+        with (
+            patch("core.queue_manager.store") as mock_store,
+            patch("core.queue_manager.probe_file", AsyncMock(return_value=None)),
+        ):
+            mock_store.get_library = AsyncMock(return_value=None)
+            job = await qm.enqueue(movie, "movies")
+        assert job.status == JobStatus.BLOCKED
+        assert job.block_reason == "Library not found"
+
+    async def test_enqueue_keeps_probed_media_info(self, qm, movie):
+        probe = {
+            "streams": [{"codec_type": "video", "codec_name": "h264"}],
+            "format": {},
+        }
+        with (
+            patch("core.queue_manager.store") as mock_store,
+            patch("core.queue_manager.probe_file", AsyncMock(return_value=probe)),
+        ):
+            _patch_enqueue_deps(mock_store)
+            job = await qm.enqueue(movie, "movies")
+        assert job.media_info["video_codec"] == "h264"
+
+    async def test_enqueue_broadcasts_position(self, qm, movie, tmp_path):
+        other = tmp_path / "other.mkv"
+        other.write_bytes(b"\x00" * 10)
+        sub = qm.subscribe()
+        with (
+            patch("core.queue_manager.store") as mock_store,
+            patch("core.queue_manager.probe_file", AsyncMock(return_value=None)),
+        ):
+            _patch_enqueue_deps(mock_store)
+            await qm.enqueue(movie, "movies")
+            await qm.enqueue(str(other), "movies")
+        first = sub.get_nowait()
+        second = sub.get_nowait()
+        assert first.startswith("event: job_queued\n")
+        assert _data(first)["position"] == 0
+        assert _data(second)["position"] == 1
+
+
+# Device limits
+
+
+class TestDeviceLimits:
+    async def test_update_device_limit(self, qm):
+        await qm.update_device_limit("cpu", 4)
+        assert qm._device_limits["cpu"] == 4
+
+    async def test_update_new_device(self, qm):
+        await qm.update_device_limit("qsv", 2)
+        assert qm._device_limits["qsv"] == 2
+        assert qm._device_active["qsv"] == 0
+
+
+# Subscribe/Unsubscribe
+
+
+class TestSubscription:
+    def test_subscribe_and_unsubscribe(self, qm):
+        q = qm.subscribe()
+        assert q in qm._subscribers
+        qm.unsubscribe(q)
+        assert q not in qm._subscribers
+
+    async def test_broadcast_to_subscribers(self, qm):
+        q1 = qm.subscribe()
+        q2 = qm.subscribe()
+        await qm._broadcast("test_event", {"key": "value"})
+        msg = q1.get_nowait()
+        assert msg == q2.get_nowait()
+        assert msg == 'event: test_event\ndata: {"key": "value"}\n\n'
+
+    async def test_broadcast_removes_full_queues(self, qm):
+        q = asyncio.Queue(maxsize=1)
+        qm._subscribers.append(q)
+        await q.put("filler")
+        await qm._broadcast("test_event", {})
+        assert q not in qm._subscribers
