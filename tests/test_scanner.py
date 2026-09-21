@@ -199,6 +199,32 @@ class TestScanUnavailable:
         assert calls == [("movies", False, "", [missing])]
 
 
+class TestScanRenameDetection:
+    async def _scan(self, media_dir):
+        queued = []
+
+        async def enqueue(file_path, library_name, media_info=None):
+            queued.append(file_path)
+            return "job"
+
+        await scan_library("movies", _library(media_dir), enqueue)
+        return queued
+
+    async def test_renamed_processed_file_keeps_its_record(self, db_setup, media_dir):
+        new = _add_file(media_dir, "new.mkv")
+        gone = str(media_dir / "gone.mkv")
+        await db_mod.upsert_library_file(gone, "movies", "h264", 1080, 1000, 1.0)
+        await mark_processed(gone, "movies", 1.0)
+        assert await self._scan(media_dir) == []
+        assert await is_processed(str(new), "movies", new.stat().st_mtime)
+
+    async def test_renamed_unprocessed_file_is_queued(self, db_setup, media_dir):
+        new = _add_file(media_dir, "new.mkv")
+        gone = str(media_dir / "gone.mkv")
+        await db_mod.upsert_library_file(gone, "movies", "h264", 1080, 1000, 1.0)
+        assert await self._scan(media_dir) == [str(new)]
+
+
 class TestRelativeToLibrary:
     def test_path_under_first_dir(self):
         result = _relative_to_library(

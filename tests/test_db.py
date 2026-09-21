@@ -280,16 +280,46 @@ class TestLibraryFiles:
 
 class TestRenameDetection:
     async def test_candidate_must_be_gone_from_disk(self, db_setup, tmp_path):
+        await upsert_library_file(
+            "/new.mkv", "lib1", "h264", 1080, 1000, 7.0, duration=90.0
+        )
         still_here = tmp_path / "old.mkv"
         still_here.write_bytes(b"x")
-        await upsert_library_file(str(still_here), "lib1", "h264", 1080, 1000, 1.0)
-        assert await find_rename_candidate("/new.mkv", "lib1", 1000) is None
-        await upsert_library_file("/gone.mkv", "lib1", "h264", 1080, 1000, 1.0)
-        assert await find_rename_candidate("/new.mkv", "lib1", 1000) == "/gone.mkv"
+        await upsert_library_file(
+            str(still_here), "lib1", "h264", 1080, 1000, 1.0, duration=90.0
+        )
+        await mark_processed(str(still_here), "lib1", 1.0)
+        assert await find_rename_candidate("/new.mkv", "lib1") is None
+        await upsert_library_file(
+            "/gone.mkv", "lib1", "h264", 1080, 1000, 1.0, duration=90.0
+        )
+        await mark_processed("/gone.mkv", "lib1", 1.0)
+        assert await find_rename_candidate("/new.mkv", "lib1") == "/gone.mkv"
 
-    async def test_candidate_requires_matching_size(self, db_setup):
-        await upsert_library_file("/gone.mkv", "lib1", "h264", 1080, 1000, 1.0)
-        assert await find_rename_candidate("/new.mkv", "lib1", 999) is None
+    async def test_candidate_must_be_processed(self, db_setup):
+        await upsert_library_file(
+            "/new.mkv", "lib1", "h264", 1080, 1000, 7.0, duration=90.0
+        )
+        await upsert_library_file(
+            "/gone.mkv", "lib1", "h264", 1080, 1000, 1.0, duration=90.0
+        )
+        assert await find_rename_candidate("/new.mkv", "lib1") is None
+
+    @pytest.mark.parametrize(
+        "codec,size,duration",
+        [("hevc", 1000, 90.0), ("h264", 999, 90.0), ("h264", 1000, 91.0)],
+    )
+    async def test_candidate_requires_matching_media(
+        self, db_setup, codec, size, duration
+    ):
+        await upsert_library_file(
+            "/new.mkv", "lib1", "h264", 1080, 1000, 7.0, duration=90.0
+        )
+        await upsert_library_file(
+            "/gone.mkv", "lib1", codec, 1080, size, 1.0, duration=duration
+        )
+        await mark_processed("/gone.mkv", "lib1", 1.0)
+        assert await find_rename_candidate("/new.mkv", "lib1") is None
 
     async def test_rename_file_moves_records(self, db_setup):
         await upsert_library_file("/old.mkv", "lib1", "h264", 1080, 1000, 1.0)

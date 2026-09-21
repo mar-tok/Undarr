@@ -395,13 +395,21 @@ async def remove_library_file(file_path: str, library_name: str) -> None:
     await db.commit()
 
 
-async def find_rename_candidate(
-    new_path: str, library_name: str, file_size: int
-) -> str | None:
+async def find_rename_candidate(new_path: str, library_name: str) -> str | None:
+    # Unprocessed files are not matched since they get queued anyway
     conn = get_db()
     cursor = await conn.execute(
-        "SELECT file_path FROM library_files WHERE library_name = ? AND file_size = ? AND file_path != ?",
-        (library_name, file_size, new_path),
+        """SELECT old.file_path FROM library_files new
+           JOIN library_files old
+             ON old.library_name = new.library_name
+            AND old.file_size = new.file_size
+            AND old.video_codec = new.video_codec
+            AND ABS(old.duration - new.duration) < 0.01
+            AND old.file_path != new.file_path
+           JOIN processed_files pf
+             ON pf.file_path = old.file_path AND pf.library_name = old.library_name
+           WHERE new.file_path = ? AND new.library_name = ?""",
+        (new_path, library_name),
     )
     for row in await cursor.fetchall():
         if not Path(row[0]).exists():

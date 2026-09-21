@@ -28,7 +28,7 @@ def _collect_video_files(library: Library) -> tuple[list[Path], list[str]]:
     return files, missing
 
 
-async def _probe_and_upsert(file_path: str, library_name: str, st) -> dict | None:
+async def probe_and_upsert(file_path: str, library_name: str, st) -> dict | None:
     container = Path(file_path).suffix.lstrip(".").lower()
     probe_data = await probe_file(file_path)
     if probe_data:
@@ -106,14 +106,14 @@ async def scan_library(
         cached_mtime = cached_mtimes.get(file_str)
         probe_data = None
         if cached_mtime is None or abs(cached_mtime - st.st_mtime) >= 0.001:
-            probe_data = await _probe_and_upsert(file_str, library_name, st)
+            probe_data = await probe_and_upsert(file_str, library_name, st)
 
         if await db.is_processed(file_str, library_name, st.st_mtime):
             if progress_fn:
                 await progress_fn(scanned, total, count)
             continue
         # If the file was renamed, its processed record is still under the old path
-        old_path = await db.find_rename_candidate(file_str, library_name, st.st_size)
+        old_path = await db.find_rename_candidate(file_str, library_name)
         if old_path:
             await db.rename_file(old_path, file_str, library_name, st.st_mtime)
             log.debug("Renamed tracked file: %s -> %s", old_path, file_str)
@@ -390,7 +390,7 @@ async def mark_library_processed(
         except OSError:
             continue
         file_str = str(file)
-        await _probe_and_upsert(file_str, library_name, st)
+        await probe_and_upsert(file_str, library_name, st)
         await db.mark_processed(file_str, library_name, st.st_mtime)
         count += 1
     log.info("Marked %d files as processed in '%s'", count, library_name)

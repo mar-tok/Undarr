@@ -15,7 +15,7 @@ from watchdog.events import (
 from core.logger import log
 from core.ffprobe import is_video_file
 from core.yaml_store import store
-from core.scanner import scan_single_file
+from core.scanner import scan_single_file, probe_and_upsert
 from core import db
 
 # Paths suppressed by the queue manager during file replacement.
@@ -89,7 +89,8 @@ class _VideoHandler(FileSystemEventHandler):
             log.debug("Watcher ignoring %s (already processed)", path)
             return
         # Renames sometimes show up as separate create and delete events instead of a moved event
-        old_path = await db.find_rename_candidate(path, self._library_name, st.st_size)
+        probe_data = await probe_and_upsert(path, self._library_name, st)
+        old_path = await db.find_rename_candidate(path, self._library_name)
         if old_path:
             await db.rename_file(old_path, path, self._library_name, st.st_mtime)
             log.debug("Renamed tracked file: %s -> %s", old_path, path)
@@ -98,7 +99,9 @@ class _VideoHandler(FileSystemEventHandler):
                     "library_files_changed", {"library_name": self._library_name}
                 )
             return
-        await scan_single_file(path, self._library_name, library, self._enqueue_fn)
+        await scan_single_file(
+            path, self._library_name, library, self._enqueue_fn, probe_data=probe_data
+        )
 
     def on_created(self, event: FileCreatedEvent) -> None:
         if not event.is_directory:
