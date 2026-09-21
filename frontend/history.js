@@ -254,7 +254,7 @@ export function initHistory() {
         const dd = document.createElement("div");
         dd.className = "status-dropdown";
         const options = [null, "completed", "failed", "cancelled", "skipped", "skipped (rule)"];
-        const labels = ["All", "Completed", "Failed", "Skipped (rule)"];
+        const labels = ["All", "Completed", "Failed", "Cancelled", "Skipped", "Skipped (rule)"];
         options.forEach((val, i) => {
             const btn = document.createElement("button");
             btn.textContent = labels[i];
