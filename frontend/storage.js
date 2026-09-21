@@ -369,7 +369,7 @@ async function loadFiles() {
     data.files.forEach((f, i) => {
         const codec = f.video_codec ? codecLabel(f.video_codec) : "-";
         const res = f.resolution_h ? f.resolution_h + "p" : "-";
-        const status = f.processed ? '<span class="status-processed">Processed</span>' : "";
+        const status = f.processed ? '<span class="status-processed">Processed</span>' : "Unprocessed";
         html += `<tr class="storage-row${i % 2 ? " stripe" : ""}" data-tooltip="${escAttr(f.file_path)}">
             <td><input type="checkbox" class="files-check" data-path="${escAttr(f.file_path)}"${filesSelected.has(f.file_path) ? " checked" : ""}></td>
             <td>${esc(f.file_path.split("/").pop())}</td>
