@@ -35,7 +35,9 @@ RUN chmod -R a+rX /app
 ENV UNDARR_HOST=0.0.0.0 \
     UNDARR_PORT=6545 \
     UNDARR_DATA_DIR=/data \
-    UNDARR_LOG_DIR=/logs
+    UNDARR_LOG_DIR=/logs \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
