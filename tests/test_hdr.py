@@ -56,6 +56,15 @@ def test_classify_hdr_dv_takes_priority_over_hdr10plus():
     assert classify_hdr(stream) == "dolby_vision"
 
 
+@pytest.mark.parametrize("transfer", ["arib-std-b67", "bt709", ""])
+def test_classify_hdr_dv_without_pq_base_layer(transfer):
+    stream = {
+        "color_transfer": transfer,
+        "side_data_list": [{"side_data_type": "DOVI configuration record"}],
+    }
+    assert classify_hdr(stream) == "dolby_vision"
+
+
 def test_classify_hdr_empty_stream():
     assert classify_hdr({}) == ""
 

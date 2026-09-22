@@ -67,9 +67,10 @@ def classify_hdr(stream: dict) -> str:
     side_data = stream.get("side_data_list") or []
     side_types = {sd.get("side_data_type", "") for sd in side_data}
 
+    # Dolby Vision profiles 8.2 and 8.4 have SDR and HLG base layers
+    if "DOVI configuration record" in side_types:
+        return "dolby_vision"
     if transfer == "smpte2084":
-        if "DOVI configuration record" in side_types:
-            return "dolby_vision"
         if "HDR Dynamic Metadata SMPTE2094-40 (HDR10+)" in side_types:
             return "hdr10+"
         return "hdr10"
