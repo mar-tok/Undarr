@@ -1,11 +1,14 @@
 import aiosqlite
 
+import config
 import core.db as db_mod
 from core.db import (
     SCHEMA,
     PROCESSED_SCHEMA,
     LIBRARY_FILES_SCHEMA,
     FILE_HASHES_SCHEMA,
+    init_db,
+    close_db,
     insert_job_history,
     get_history,
     get_job_log,
@@ -727,3 +730,34 @@ class TestFileHashes:
         assert await get_library_files_mtimes("lib2") == {"/a.mkv": 1.0}
         cached = await get_cached_hashes([("/a.mkv", "lib1"), ("/a.mkv", "lib2")])
         assert list(cached) == [("/a.mkv", "lib2")]
+
+
+class TestInitDb:
+    async def test_hdr10_files_reprobed_once(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+        monkeypatch.setattr(db_mod, "_db", None)
+        await init_db()
+        await upsert_library_file(
+            "/hdr.mkv", "lib1", "hevc", 2160, 1000, 5.0, hdr_type="hdr10"
+        )
+        await upsert_library_file("/sdr.mkv", "lib1", "h264", 1080, 1000, 5.0)
+        await db_mod._db.execute("PRAGMA user_version = 0")
+        await db_mod._db.commit()
+        await close_db()
+
+        await init_db()
+        assert await get_library_files_mtimes("lib1") == {
+            "/hdr.mkv": 0,
+            "/sdr.mkv": 5.0,
+        }
+        await upsert_library_file(
+            "/hdr.mkv", "lib1", "hevc", 2160, 1000, 5.0, hdr_type="hdr10"
+        )
+        await close_db()
+
+        await init_db()
+        assert await get_library_files_mtimes("lib1") == {
+            "/hdr.mkv": 5.0,
+            "/sdr.mkv": 5.0,
+        }
+        await close_db()

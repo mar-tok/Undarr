@@ -29,7 +29,7 @@ def is_video_file(path: str) -> bool:
     return Path(path).suffix.lower() in VIDEO_EXTENSIONS
 
 
-async def probe_file(file_path: str) -> dict | None:
+async def _run_ffprobe(file_path: str, *args: str) -> dict | None:
     try:
         proc = await asyncio.create_subprocess_exec(
             config.FFPROBE_BIN,
@@ -37,8 +37,7 @@ async def probe_file(file_path: str) -> dict | None:
             "quiet",
             "-print_format",
             "json",
-            "-show_format",
-            "-show_streams",
+            *args,
             file_path,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -62,10 +61,56 @@ async def probe_file(file_path: str) -> dict | None:
         return None
 
 
+async def probe_file(file_path: str) -> dict | None:
+    probe_data = await _run_ffprobe(file_path, "-show_format", "-show_streams")
+    if probe_data is None:
+        return None
+    stream = _main_video_stream(probe_data)
+    if (
+        stream
+        and stream.get("color_transfer") == "smpte2084"
+        and "DOVI configuration record" not in _side_data_types(stream)
+    ):
+        # HDR10+ metadata is only reported on frames, never on the stream
+        frames = await _run_ffprobe(
+            file_path,
+            "-select_streams",
+            str(stream.get("index", 0)),
+            # Some mp4 files need the explicit 0 start to return a frame
+            "-read_intervals",
+            "0%+#1",
+            "-show_frames",
+            "-show_entries",
+            "frame=side_data_list",
+        )
+        if frames:
+            stream["frame_side_data_list"] = [
+                sd
+                for f in frames.get("frames", [])
+                for sd in f.get("side_data_list", [])
+            ]
+    return probe_data
+
+
+def _main_video_stream(probe_data: dict) -> dict | None:
+    for stream in probe_data.get("streams", []):
+        if stream.get("codec_type") == "video" and not stream.get(
+            "disposition", {}
+        ).get("attached_pic", 0):
+            return stream
+    return None
+
+
+def _side_data_types(stream: dict) -> set[str]:
+    side_data = (stream.get("side_data_list") or []) + (
+        stream.get("frame_side_data_list") or []
+    )
+    return {sd.get("side_data_type", "") for sd in side_data}
+
+
 def classify_hdr(stream: dict) -> str:
     transfer = stream.get("color_transfer", "")
-    side_data = stream.get("side_data_list") or []
-    side_types = {sd.get("side_data_type", "") for sd in side_data}
+    side_types = _side_data_types(stream)
 
     # Dolby Vision profiles 8.2 and 8.4 have SDR and HLG base layers
     if "DOVI configuration record" in side_types:

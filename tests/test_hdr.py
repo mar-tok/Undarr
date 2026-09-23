@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import pytest
 
-from core.ffprobe import classify_hdr, extract_media_info
+from core.ffprobe import classify_hdr, extract_media_info, probe_file
 from core.skip_rules import should_skip
 from core.yaml_store import SkipRule, SkipCondition
 
@@ -145,6 +147,24 @@ def test_extract_media_info_skips_attached_pic():
     info = extract_media_info(probe)
     assert info["hdr_type"] == ""
     assert info["video_codec"] == "hevc"
+
+
+# probe_file on real HDR clips
+
+FIXTURES = Path(__file__).parent / "fixtures" / "video_profiles"
+
+
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("hdr10.mkv", "hdr10"),
+        ("hdr10plus.mkv", "hdr10+"),
+        ("1080p_h265_10bit.mkv", ""),
+    ],
+)
+async def test_probe_file_hdr_type(name, expected):
+    info = extract_media_info(await probe_file(str(FIXTURES / name)))
+    assert info["hdr_type"] == expected
 
 
 # skip rules with hdr_type

@@ -125,6 +125,14 @@ async def init_db() -> None:
         await _db.execute("UPDATE library_files SET mtime = 0")
         await _db.commit()
 
+    cursor = await _db.execute("PRAGMA user_version")
+    (version,) = await cursor.fetchone()
+    if version < 1:
+        # Older versions labeled HDR10+ files as hdr10
+        await _db.execute("UPDATE library_files SET mtime = 0 WHERE hdr_type = 'hdr10'")
+        await _db.execute("PRAGMA user_version = 1")
+        await _db.commit()
+
     log.info("Database initialized at %s", db_path)
 
 
