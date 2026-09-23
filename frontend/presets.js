@@ -511,7 +511,7 @@ function renderPresetFormCard(name, data, description) {
         <div class="preset-tab-panel pc-tab-video">
             <div class="form-row form-row-4">
                 <div class="form-group">
-                    <label data-tooltip="The FFmpeg <em>encoder</em> to use for the video stream.<br>Determines codec, hardware acceleration, and available quality/speed options.<br><br>A transcode drops Dolby Vision metadata and HDR10+ dynamic metadata. To keep those files as they are, add the skip rule <code>hdr_type equals dolby_vision</code> or <code>hdr_type equals hdr10+</code> to the library.">Encoder</label>
+                    <label data-tooltip="The FFmpeg <em>encoder</em> to use for the video stream.<br>Determines codec, hardware acceleration, and available quality/speed options.<br><br>Undarr removes the Dolby Vision metadata and the HDR10+ dynamic metadata when it transcodes a file. To keep Dolby Vision or HDR10+ files as they are, add the skip rule <code>hdr_type equals dolby_vision</code> or <code>hdr_type equals hdr10+</code> to the library.">Encoder</label>
                     <select class="pc-encoder">${buildEncoderOptionsHTML()}</select>
                 </div>
                 <div class="form-group">
