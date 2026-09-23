@@ -1660,6 +1660,7 @@ input[type="checkbox"][role="switch"]:disabled {
     border: 1px solid var(--text-muted);
     padding: 1px 4px;
     font-size: 12px;
+    white-space: nowrap;
 }
 
 /* Schedule */
