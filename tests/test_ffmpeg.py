@@ -87,6 +87,20 @@ class TestDetectEncoders:
         assert [e["name"] for e in result["hevc"]] == ["libx265", "hevc_nvenc"]
         assert [e["name"] for e in result["av1"]] == ["libsvtav1"]
 
+    async def test_marks_encoders_with_ten_bit_format(self):
+        with patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=_mock_proc(SAMPLE_ENCODERS)),
+        ):
+            result = await ffmpeg.detect_encoders()
+        ten_bit = {e["name"]: e["ten_bit"] for encs in result.values() for e in encs}
+        assert ten_bit == {
+            "libx264": False,
+            "libx265": True,
+            "libsvtav1": True,
+            "hevc_nvenc": True,
+        }
+
     async def test_skips_non_video_and_unknown_codecs(self):
         with patch(
             "asyncio.create_subprocess_exec",

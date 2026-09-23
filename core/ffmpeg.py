@@ -447,7 +447,13 @@ async def detect_encoders() -> dict[str, list[dict]]:
         codec = m.group(1) if m else name.split("_")[0]
 
         if codec in result:
-            result[codec].append({"name": name, "description": desc})
+            result[codec].append(
+                {
+                    "name": name,
+                    "description": desc,
+                    "ten_bit": name in _TEN_BIT_PIX_FMT,
+                }
+            )
 
     result = {k: v for k, v in result.items() if v}
     _encoder_cache = result

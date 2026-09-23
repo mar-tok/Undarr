@@ -970,6 +970,11 @@ tr.clickable:hover {
     align-self: center;
 }
 
+.audio-checkbox:has(input:disabled) {
+    color: var(--text-muted);
+    cursor: default;
+}
+
 .audio-checkbox input[type="checkbox"]:not([role="switch"]) {
     width: 18px;
     height: 18px;
@@ -1278,6 +1283,11 @@ input[type="checkbox"][role="switch"]:checked::before {
 input[type="checkbox"][role="switch"]:focus-visible {
     outline: 1px solid var(--accent);
     outline-offset: 1px;
+}
+
+input[type="checkbox"][role="switch"]:disabled {
+    border-color: var(--border);
+    cursor: default;
 }
 
 .toggle-row label {

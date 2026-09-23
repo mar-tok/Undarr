@@ -141,6 +141,10 @@ function buildEncoderOptionsHTML() {
     return html;
 }
 
+function encoderHasTenBit(encoder) {
+    return Object.values(encoderCache || {}).some(encs => encs.some(e => e.name === encoder && e.ten_bit));
+}
+
 function buildSpeedOptionsHTML(encoder, selected) {
     const group = ENCODER_SPEED_MAP[encoder];
     const options = group ? SPEED_PRESETS[group] : [];
@@ -348,7 +352,7 @@ function renderPresetViewCard(p, builtin = false) {
     if (data.resolutionCap) {
         videoHtml += `<dt>Resolution Cap</dt><dd>${esc(String(data.resolutionCap))}p</dd>`;
     }
-    if (data.tenBit) {
+    if (data.tenBit && encoderHasTenBit(data.encoder)) {
         videoHtml += `<dt>Bit Depth</dt><dd>10-bit</dd>`;
     }
     if (data.renameFile) {
@@ -529,7 +533,7 @@ function renderPresetFormCard(name, data, description) {
                     <select class="pc-rescap">${buildResolutionCapOptionsHTML(resCap)}</select>
                 </div>
                 <div class="form-group" style="align-self:flex-end">
-                    <label class="audio-checkbox" style="align-self:flex-start" data-tooltip="Encodes with 10-bit color instead of 8-bit, which reduces visible banding in dark scenes and gradients.<br>Slower to encode. Some very old HEVC players cannot play 10-bit.<br>Has no effect on H.264 encoders."><input type="checkbox" role="switch" class="pc-ten-bit"${tenBitChecked}> 10-bit encoding</label>
+                    <label class="audio-checkbox" style="align-self:flex-start" data-tooltip="The output uses 10-bit color instead of 8-bit, which reduces visible banding in dark scenes and gradients.<br>Encoding takes longer. Some very old HEVC players cannot play 10-bit.<br><br>The switch is disabled for H.264 encoders, because few devices can play 10-bit H.264. It is also disabled for <code>av1_amf</code>, <code>hevc_vulkan</code>, and <code>hevc_v4l2m2m</code>."><input type="checkbox" role="switch" class="pc-ten-bit"${tenBitChecked}> 10-bit encoding</label>
                 </div>
             </div>
             <div>
@@ -647,6 +651,16 @@ function attachFormCardListeners(card, originalName) {
     const encoderSel = card.querySelector(".pc-encoder");
     encoderSel.value = data.encoder;
 
+    const tenBitSwitch = card.querySelector(".pc-ten-bit");
+    let tenBitChoice = tenBitSwitch.checked;
+    tenBitSwitch.addEventListener("change", () => { tenBitChoice = tenBitSwitch.checked; });
+    function updateTenBitSwitch() {
+        const unavailable = encoderSel.value !== "" && !encoderHasTenBit(encoderSel.value);
+        tenBitSwitch.disabled = unavailable;
+        tenBitSwitch.checked = tenBitChoice && !unavailable;
+    }
+    updateTenBitSwitch();
+
     const initialSnapshot = getFormSnapshot(card);
     function checkChanged() { saveBtn.disabled = getFormSnapshot(card) === initialSnapshot; }
     card.addEventListener("input", checkChanged);
@@ -657,6 +671,7 @@ function attachFormCardListeners(card, originalName) {
         qualityLabel.textContent = QUALITY_LABELS[encoderSel.value] || "Quality";
         qualityLabel.dataset.tooltip = QUALITY_TOOLTIPS[encoderSel.value] || "Select an encoder to see quality guidelines for it.";
         card.querySelector(".pc-speed").innerHTML = buildSpeedOptionsHTML(encoderSel.value, "");
+        updateTenBitSwitch();
     });
 
     const audioModeSel = card.querySelector(".pc-audio-mode");
