@@ -27,7 +27,7 @@
 - Filesystem watcher for new files, with a configurable delay before a new file is queued
 - Periodic rescan on an interval
 - Skip rules on video codec, audio codec, width, height, bitrate, file size, duration, and HDR type
-- Path patterns (globs) that exclude matching files, such as trailers or an Extras directory
+- Path patterns (globs) that exclude matching files, such as trailers or an Extras folder
 - Preview of the files the current settings would queue, before saving
 - Pause and resume per library
 - Finished files are marked as processed. A processed file counts as new again when its modification time changes. A processed file that is renamed stays processed. Undarr detects the rename when the old path is gone and the file at the new path has the same size, video codec, and duration
@@ -74,9 +74,9 @@
 
 ![Storage files tab](images/storage.png)
 
-- Every scanned file browsable by directory or as a flat table
+- Every scanned file browsable by folder or as a flat table
 - Filters on codec, container, and resolution, plus search
-- Queue files and directories from the storage view
+- Queue files and folders from the storage view
 - Duplicate finder that hashes files of equal size. Deleting of duplicates can be enabled under Settings
 
 ## Hardware encoding

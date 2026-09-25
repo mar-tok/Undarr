@@ -85,7 +85,7 @@ export function openDirBrowser(startPath, onSelect, opts = {}) {
         try {
             const data = await api("GET", `/api/filesystem/browse?path=${encodeURIComponent(path)}`);
             if (!data.entries.length) {
-                entriesContainer.innerHTML = '<div class="dir-browser-empty">No subdirectories</div>';
+                entriesContainer.innerHTML = '<div class="dir-browser-empty">No subfolders</div>';
                 if (!multi) { selectedPath = path; selectBtn.disabled = false; }
                 else if (!existingPaths.has(path)) { selectedPaths.add(path); updateSelectBtn(); }
                 return;

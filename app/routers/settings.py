@@ -108,7 +108,7 @@ async def update_settings(body: SettingsUpdate):
     kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
 
     if "cache_dir" in kwargs and not kwargs["cache_dir"].strip():
-        raise HTTPException(400, "Cache directory cannot be empty")
+        raise HTTPException(400, "Cache folder cannot be empty")
 
     if "schedule" in kwargs:
         sched = kwargs["schedule"]

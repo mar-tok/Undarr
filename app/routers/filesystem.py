@@ -115,7 +115,7 @@ async def browse_directory(path: str):
     if not p.exists():
         raise HTTPException(404, "Path not found")
     if not p.is_dir():
-        raise HTTPException(400, "Path is not a directory")
+        raise HTTPException(400, "Path is not a folder")
 
     try:
         entries = sorted(

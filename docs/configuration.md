@@ -1,6 +1,6 @@
 # Configuration
 
-The environment variables below set where Undarr runs and where it writes. Presets, libraries, and settings are edited in the web UI and stored in `config.yaml` under the data directory. Job history and scanned file records are in `undarr.db` in the same directory.
+The environment variables below set where Undarr runs and where it writes. Presets, libraries, and settings are edited in the web UI and stored in `config.yaml` under the data folder. Job history and scanned file records are in `undarr.db` in the same folder.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -13,9 +13,9 @@ The environment variables below set where Undarr runs and where it writes. Prese
 | `UNDARR_FFMPEG_BIN` | `ffmpeg` | ffmpeg binary |
 | `UNDARR_FFPROBE_BIN` | `ffprobe` | ffprobe binary |
 
-## Cache directory
+## Cache folder
 
-A transcode job writes the new file to the cache directory. When every check passes, the new file replaces the original file. The cache directory is set in Settings and defaults to `/tmp/undarr`. That path is inside the container, so the file is written to Docker's storage on the host (`/var/lib/docker` by default).
+A transcode job writes the new file to the cache folder. When every check passes, the new file replaces the original file. The cache folder is set in Settings and defaults to `/tmp/undarr`. That path is inside the container, so the file is written to Docker's storage on the host (`/var/lib/docker` by default).
 
 If the cache and the media are in the same volume mount, the new file is renamed to the original's path and replaces it. If they are in separate mounts, the new file is copied into the media mount and then deleted from the cache. A rename takes no time. A copy takes longer the larger the file is. Two mounts count as separate even when they are on the same filesystem on the host. The container's `/tmp` is separate from every mount.
 
@@ -23,7 +23,7 @@ To avoid the copy, put the cache inside the media mount and outside every librar
 
 ## Running from source
 
-You need Python 3.12 or newer and ffmpeg with ffprobe on `PATH`. Outside the image, the data and log directories default to `data` and `logs` in the working directory.
+You need Python 3.12 or newer and ffmpeg with ffprobe on `PATH`. Outside the image, the data and log folders default to `data` and `logs` in the working directory.
 
 ```sh
 pip install -e .

@@ -177,7 +177,7 @@ function renderLibraryFormCard(lib) {
             <input type="text" class="lc-desc" value="${escAttr(description)}" placeholder="Optional note about this library">
         </div>
         <div class="form-group">
-            <label data-tooltip="Directories to scan for media files.<br>All video files found in these paths (and subdirectories) will be evaluated for transcoding.">Paths</label>
+            <label data-tooltip="Folders to scan for media files.<br>All video files found in these paths (and subfolders) will be evaluated for transcoding.">Paths</label>
             <div class="path-chips lc-path-chips">${paths.length ? paths.map(p =>
                 `<span class="path-chip" data-path="${escAttr(p)}"><button class="browse-chip" type="button">${esc(p)}</button><button class="remove-chip" type="button"><img src="close.svg" alt="Remove"></button></span>`
             ).join("") : `<span class="path-empty">No paths added.</span>`}</div>
@@ -216,7 +216,7 @@ function renderLibraryFormCard(lib) {
             </div>
         </div>
         <div>
-            <label class="section-label" data-tooltip="Glob patterns matched against each file's path relative to the library root.<br>Case-insensitive. <code>*</code> matches any characters including directory separators.<br>Files matching any pattern are skipped before probing.<br><br>Examples:<br><code>*trailer*</code> (files with 'trailer' in the name)<br><code>*/Extras/*</code> (files inside an Extras folder)<br><code>*sample*</code> (files with 'sample' in the name)">Path Patterns</label>
+            <label class="section-label" data-tooltip="Glob patterns matched against each file's path relative to the library root.<br>Case-insensitive. <code>*</code> matches any characters including <code>/</code>.<br>Files matching any pattern are skipped before probing.<br><br>Examples:<br><code>*trailer*</code> (files with 'trailer' in the name)<br><code>*/Extras/*</code> (files inside an Extras folder)<br><code>*sample*</code> (files with 'sample' in the name)">Path Patterns</label>
             <div class="lc-path-patterns">${pathPatternsHtml}</div>
             <button class="btn lc-add-pattern" type="button" style="margin-top:6px">Add Pattern</button>
         </div>

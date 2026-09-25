@@ -47,7 +47,7 @@ function renderHeader() {
     const el = document.getElementById("storage-header");
     el.innerHTML = `
         <div class="settings-tabs">
-            <button class="settings-tab${activeTab === "tree" ? " active" : ""}" data-stab="tree">Directory</button>
+            <button class="settings-tab${activeTab === "tree" ? " active" : ""}" data-stab="tree">Folders</button>
             <button class="settings-tab${activeTab === "files" ? " active" : ""}" data-stab="files">Files</button>
             <button class="settings-tab${activeTab === "dupes" ? " active" : ""}" data-stab="dupes">Duplicates</button>
         </div>`;

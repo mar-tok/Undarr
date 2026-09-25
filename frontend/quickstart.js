@@ -53,7 +53,7 @@ function renderWelcome() {
     header.innerHTML = `
         <h2><span class="accent">Un</span>darr Quick Start</h2>
         <p class="setup-text">
-            Undarr transcodes your media libraries to match a target format and quality level. Transcoding decodes each video file and re-encodes it into a different format. Pick a preset, point it to a directory, and Undarr will match videos to the preset.
+            Undarr transcodes your media libraries to match a target format and quality level. Transcoding decodes each video file and re-encodes it into a different format. Pick a preset, point it to a folder, and Undarr will match videos to the preset.
         </p>
         <p class="setup-text">
             Transcoding discards data from the original file, but discarded data is not the same as lost quality. Most of what gets removed is either redundant or under the threshold of perception. Every major streaming service transcodes aggressively, and billions of viewers don't notice. A properly configured preset will save you space with no difference in perceived quality, at the cost of spending energy and time to do so. That said, the data is technically unrecoverable. It is destructive. Acquiring media in your desired format is therefore always preferable to transcoding it after the fact.
@@ -142,7 +142,7 @@ function renderPathStep() {
     step.innerHTML = `
         <h3>Library</h3>
         <p class="setup-text">
-            Pick the parent directory that contains all the video files you want to be affected. Undarr scans all subfolders automatically, so in most cases you'd select <code>/media/category</code> rather than individual folders containing files.
+            Pick the parent folder that contains all the video files you want to be affected. Undarr scans all subfolders automatically, so in most cases you'd select <code>/media/category</code> rather than individual folders containing files.
         </p>
         <div class="setup-path-display" style="display:none"></div>
         <button class="btn" id="setup-browse">Browse</button>`;

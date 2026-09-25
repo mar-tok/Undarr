@@ -345,7 +345,7 @@ class TestSettings:
             ({"process_priority": "ultra"}, "process_priority must be one of"),
             ({"queue_order": "random"}, "queue_order must be one of"),
             ({"max_size_ratio": 1.5}, "max_size_ratio must be between"),
-            ({"cache_dir": "  "}, "Cache directory cannot be empty"),
+            ({"cache_dir": "  "}, "Cache folder cannot be empty"),
             ({"schedule": {"mon": [True] * 24}}, "Schedule must have exactly keys"),
             (
                 {
