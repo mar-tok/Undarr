@@ -149,10 +149,12 @@ function renderChart() {
 
     const { labels, data } = chartData(daily);
     const wrap = el.querySelector(".chart-wrap");
-    if (labels.length < 2) {
+    const emptyText = labels.length < 2 ? "Not enough data for this range yet."
+        : data.every(v => !v) ? "No space saved in this range." : "";
+    if (emptyText) {
         chartInstance?.destroy();
         chartInstance = null;
-        wrap.innerHTML = '<p class="section-empty">Not enough data for this range yet.</p>';
+        wrap.innerHTML = `<p class="section-empty">${emptyText}</p>`;
         return;
     }
     if (!wrap.querySelector("canvas")) {
