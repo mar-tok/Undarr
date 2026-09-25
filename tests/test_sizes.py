@@ -25,3 +25,12 @@ class TestFormatSize:
 
     def test_gb(self):
         assert format_size(3 * 1073741824) == "3.0 GB"
+
+    def test_exact_tb_boundary(self):
+        assert format_size(1099511627776) == "1.0 TB"
+
+    def test_tb(self):
+        assert format_size(int(1691.1 * 1073741824)) == "1.7 TB"
+
+    def test_rounding_to_1024_moves_to_next_unit(self):
+        assert format_size(int(1023.96 * 1048576)) == "1.0 GB"

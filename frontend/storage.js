@@ -1,4 +1,4 @@
-import { api, formatBytes, formatBytesLarge, esc, escAttr, codecLabel, codecColor, formatBitrate, formatFileDuration, formatChannels, hdrLabel } from "./helpers.js";
+import { api, formatBytes, esc, escAttr, codecLabel, codecColor, formatBitrate, formatFileDuration, formatChannels, hdrLabel } from "./helpers.js";
 
 let currentLibrary = null;
 let currentPath = null;
@@ -113,8 +113,6 @@ function renderBreadcrumb(path) {
     return html;
 }
 
-const formatSize = formatBytesLarge;
-
 function renderMiniCodecBar(codecs) {
     if (!codecs || !Object.keys(codecs).length) return { html: "", tooltip: "" };
     const entries = Object.entries(codecs).sort((a, b) => b[1] - a[1]);
@@ -133,7 +131,7 @@ function renderMiniCodecBar(codecs) {
 
 function renderTreeControls() {
     const stats = treeData
-        ? `${formatSize(treeData.total_size)} total, ${treeData.total_files} files${treeData.total_saved > 0 ? `, ${formatSize(treeData.total_saved)} saved` : ""}`
+        ? `${formatBytes(treeData.total_size)} total, ${treeData.total_files} files${treeData.total_saved > 0 ? `, ${formatBytes(treeData.total_saved)} saved` : ""}`
         : "";
     return `<div class="storage-filters" id="tree-controls">
         <select id="storage-lib-select">${renderLibraryOptions()}</select>
@@ -154,7 +152,7 @@ function updateTreeControls() {
     if (sel) sel.innerHTML = renderLibraryOptions();
     const stats = document.querySelector("#tree-controls .storage-stats");
     if (stats && treeData) {
-        stats.innerHTML = `${formatSize(treeData.total_size)} total, ${treeData.total_files} files${treeData.total_saved > 0 ? `, ${formatSize(treeData.total_saved)} saved` : ""}`;
+        stats.innerHTML = `${formatBytes(treeData.total_size)} total, ${treeData.total_files} files${treeData.total_saved > 0 ? `, ${formatBytes(treeData.total_saved)} saved` : ""}`;
     }
     const search = document.getElementById("tree-search");
     if (search && document.activeElement !== search) search.value = treeSearch;
@@ -230,7 +228,7 @@ async function loadTree(refetch = true) {
         html += `<tr class="storage-row${i % 2 ? " stripe" : ""}">
             <td><input type="checkbox" class="tree-check" data-path="${escAttr(entry.path)}"${treeSelected.has(entry.path) ? " checked" : ""}></td>
             <td${nameTooltip}><img class="storage-icon" src="${icon}" alt="">${nameHtml}</td>
-            <td class="storage-size-cell"><div class="progress-cell"><span>${formatSize(entry.total_size)}</span><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${barW}%"></div></div></div></td>
+            <td class="storage-size-cell"><div class="progress-cell"><span>${formatBytes(entry.total_size)}</span><div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${barW}%"></div></div></div></td>
             <td>${entry.file_count}</td>
             <td class="codec-cell"${codecTip}>${codec.html}</td>
             <td>${savedText}</td>
@@ -373,7 +371,7 @@ async function loadFiles() {
         html += `<tr class="storage-row${i % 2 ? " stripe" : ""}" data-tooltip="${escAttr(f.file_path)}">
             <td><input type="checkbox" class="files-check" data-path="${escAttr(f.file_path)}"${filesSelected.has(f.file_path) ? " checked" : ""}></td>
             <td>${esc(f.file_path.split("/").pop())}</td>
-            <td>${formatSize(f.file_size)}</td>
+            <td>${formatBytes(f.file_size)}</td>
             <td>${formatFileDuration(f.duration)}</td>
             <td>${formatBitrate(f.bitrate_kbps)}</td>
             <td>${esc(codec)}</td>
@@ -656,7 +654,7 @@ function renderDuplicateResults() {
     }
     let html = `<div class="dup-summary">
         <span>${dupGroups.length} duplicate group${dupGroups.length === 1 ? "" : "s"}</span>
-        <span>${formatSize(dupTotalSize)} in extra copies</span>
+        <span>${formatBytes(dupTotalSize)} in extra copies</span>
         ${notHashed}
     </div>`;
 
@@ -665,7 +663,7 @@ function renderDuplicateResults() {
         const codec = f0.video_codec ? codecLabel(f0.video_codec) : "";
         const res = f0.resolution_h ? f0.resolution_h + "p" : "";
         const container = f0.container ? f0.container.toUpperCase() : "";
-        const meta = [formatSize(group.file_size), codec, res, container].filter(Boolean).join(", ");
+        const meta = [formatBytes(group.file_size), codec, res, container].filter(Boolean).join(", ");
         html += `<div class="dup-group">
             <div class="dup-group-header">
                 <span>${group.files.length} copies</span>

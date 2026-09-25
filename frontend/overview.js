@@ -1,4 +1,4 @@
-import { api, formatBytes, formatBytesLarge, formatDuration, basename, esc, escAttr, renderCodecBar } from "./helpers.js";
+import { api, formatBytes, formatDuration, basename, esc, escAttr, renderCodecBar } from "./helpers.js";
 
 let statsData = null;
 let activeJobs = {};
@@ -63,7 +63,7 @@ function renderStatCards() {
 
     el.innerHTML = `
         <div class="stat-card" data-tooltip="Total size reduction across all completed transcodes. Original size minus new size.">
-            <div class="stat-value">${formatBytesLarge(t.space_saved_bytes)}</div>
+            <div class="stat-value">${formatBytes(t.space_saved_bytes)}</div>
             <div class="stat-label">Space Saved</div>
         </div>
         <div class="stat-card" data-tooltip="Files that completed transcoding successfully.">
@@ -179,7 +179,7 @@ function renderChart() {
                 tooltip: {
                     displayColors: false,
                     callbacks: {
-                        label: ctx => formatBytesLarge(ctx.parsed.y),
+                        label: ctx => formatBytes(ctx.parsed.y),
                     },
                 },
             },
@@ -193,7 +193,7 @@ function renderChart() {
                     grid: { color: "#333" },
                     ticks: {
                         color: "#e0e0e0",
-                        callback: v => formatBytesLarge(v),
+                        callback: v => formatBytes(v),
                     },
                     border: { color: "#333" },
                     beginAtZero: true,
@@ -266,7 +266,7 @@ function renderLibraryTable() {
         const progressText = total > 0 ? `${processed} / ${total}` : "-";
 
         const currentSize = librarySizes[lib] || 0;
-        const sizeText = formatBytesLarge(currentSize);
+        const sizeText = formatBytes(currentSize);
 
         const codecTip = codec.tooltip ? ` data-tooltip="${escAttr(codec.tooltip)}"` : "";
         html += `<tr${i++ % 2 ? ' class="stripe"' : ""}>

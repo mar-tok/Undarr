@@ -15,19 +15,16 @@ export async function api(method, path, body) {
     return res.json();
 }
 
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"];
+
 export function formatBytes(bytes) {
     if (bytes == null) return "-";
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1048576) return Math.ceil(bytes / 1024) + " KB";
-    if (bytes < 1073741824) return Math.ceil(bytes / 1048576) + " MB";
-    return (bytes / 1073741824).toFixed(1) + " GB";
-}
-
-export function formatBytesLarge(bytes) {
-    if (bytes == null || bytes === 0) return "0 B";
-    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + " MB";
-    if (bytes < 1099511627776) return (bytes / 1073741824).toFixed(1) + " GB";
-    return (bytes / 1099511627776).toFixed(1) + " TB";
+    for (let i = 0; ; i++) {
+        const value = bytes / 1024 ** i;
+        const text = i < 3 ? `${Math.ceil(value)}` : value.toFixed(1);
+        // Checks the rounded text, or 1023.6 MB would print as 1024 MB
+        if (parseFloat(text) < 1024 || i === BYTE_UNITS.length - 1) return `${text} ${BYTE_UNITS[i]}`;
+    }
 }
 
 export function basename(path) {
