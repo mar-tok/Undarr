@@ -5,7 +5,7 @@ Undarr transcodes media libraries in place to match your quality standards. Sele
 ![Overview](docs/images/overview.png)
 
 > [!CAUTION]
-> Transcoding is lossy and the original is deleted after a successful job. Test presets on a library of copied files first. Verify that your test library behaves as expected before you move on to your real files.
+> Undarr is in early development and has had limited testing. Transcoding is lossy and the original is deleted after a successful job. You should test presets on a library of copied files first. Verify that your test library behaves as expected before you move on to your real files. Report problems in [Issues](https://github.com/mar-tok/Undarr/issues).
 
 ## Quick start
 
