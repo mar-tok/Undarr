@@ -72,6 +72,13 @@ async def _startup_scan() -> None:
     log.info("Startup scan complete")
 
 
+class FrontendFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("Starting Undarr")
@@ -119,4 +126,4 @@ async def health():
     return {"status": "ok"}
 
 
-app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+app.mount("/", FrontendFiles(directory="frontend", html=True), name="frontend")

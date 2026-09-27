@@ -99,6 +99,15 @@ async def test_health(client):
     assert resp.json() == {"status": "ok"}
 
 
+async def test_frontend_files_are_revalidated(client):
+    for path in ("/", "/helpers.js"):
+        resp = await client.get(path)
+        assert resp.headers["cache-control"] == "no-cache"
+        resp = await client.get(path, headers={"If-None-Match": resp.headers["etag"]})
+        assert resp.status_code == 304
+        assert resp.headers["cache-control"] == "no-cache"
+
+
 class TestPresets:
     async def test_list_starts_with_builtins(self, client):
         resp = await client.get("/api/presets")
