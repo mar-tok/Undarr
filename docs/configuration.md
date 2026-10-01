@@ -21,6 +21,10 @@ If the cache and the media are in the same volume mount, the new file is renamed
 
 To avoid the copy, put the cache inside the media mount and outside every library path. With `/path/to/media:/media` mounted and libraries at `/media/Movies` and `/media/Shows`, set the cache to `/media/.undarr-cache`. The cache needs free space for the largest output.
 
+## Building the image
+
+To build the image from a clone of the repository, replace the `image` line in `docker-compose.yml` with `build: .` and run `docker compose up -d --build`.
+
 ## Running from source
 
 You need Python 3.12 or newer and ffmpeg with ffprobe on `PATH`. Outside the image, the data and log folders default to `data` and `logs` in the working directory.

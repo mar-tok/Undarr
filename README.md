@@ -9,19 +9,12 @@ Undarr transcodes media libraries in place to match your quality standards. Sele
 
 ## Quick start
 
-No image is published yet, so the container is built from a clone of this repository.
-
-```sh
-git clone https://github.com/mar-tok/Undarr.git
-cd Undarr
-```
-
-Edit `docker-compose.yml` so the media volume points at your files, and set `PUID` and `PGID` in `.env` to the owner of those files (copy `.env.example`).
+The image is built for x86_64 (amd64). Create a folder for Undarr and save the Compose file below as `docker-compose.yml` in that folder. Change `/path/to/media` to the folder with your media files, and set `PUID` and `PGID` to the IDs of the user and group that own those files.
 
 ```yaml
 services:
   undarr:
-    build: .
+    image: ghcr.io/mar-tok/undarr:latest
     container_name: undarr
     restart: unless-stopped
     ports:
@@ -31,15 +24,17 @@ services:
       - ./logs:/logs
       - /path/to/media:/media
     environment:
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
+      - PUID=1000
+      - PGID=1000
 ```
 
 ```sh
-docker compose up -d --build
+docker compose up -d
 ```
 
 Open `http://localhost:6545`. The quick start page will help you get started.
+
+To update, run `docker compose pull` and then `docker compose up -d` in the same folder.
 
 ## Documentation
 

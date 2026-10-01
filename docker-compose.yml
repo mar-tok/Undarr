@@ -1,6 +1,6 @@
 services:
   undarr:
-    build: .
+    image: ghcr.io/mar-tok/undarr:latest
     container_name: undarr
     restart: unless-stopped
     ports:
@@ -10,5 +10,5 @@ services:
       - ./logs:/logs
       - /path/to/media:/media
     environment:
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
+      - PUID=1000
+      - PGID=1000
