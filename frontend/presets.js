@@ -345,18 +345,18 @@ function renderPresetViewCard(p, builtin = false) {
     const disabled = data.encoder && isEncoderDisabled(data.encoder);
 
     let videoHtml = "";
-    if (data.encoder) videoHtml += `<dt>Encoder</dt><dd>${esc(data.encoder)}</dd>`;
-    if (data.quality) videoHtml += `<dt>${esc(data.qualityLabel)}</dt><dd>${esc(data.quality)}</dd>`;
-    if (data.speed) videoHtml += `<dt>Speed</dt><dd>${esc(data.speed)}</dd>`;
-    videoHtml += `<dt>Container</dt><dd>${data.container ? "." + esc(data.container) : "Keep original"}</dd>`;
+    if (data.encoder) videoHtml += `<div><dt>Encoder</dt><dd>${esc(data.encoder)}</dd></div>`;
+    if (data.quality) videoHtml += `<div><dt>${esc(data.qualityLabel)}</dt><dd>${esc(data.quality)}</dd></div>`;
+    if (data.speed) videoHtml += `<div><dt>Speed</dt><dd>${esc(data.speed)}</dd></div>`;
+    videoHtml += `<div><dt>Container</dt><dd>${data.container ? "." + esc(data.container) : "Keep original"}</dd></div>`;
     if (data.resolutionCap) {
-        videoHtml += `<dt>Resolution Cap</dt><dd>${esc(String(data.resolutionCap))}p</dd>`;
+        videoHtml += `<div><dt>Resolution Cap</dt><dd>${esc(String(data.resolutionCap))}p</dd></div>`;
     }
     if (data.tenBit && encoderHasTenBit(data.encoder)) {
-        videoHtml += `<dt>Bit Depth</dt><dd>10-bit</dd>`;
+        videoHtml += `<div><dt>Bit Depth</dt><dd>10-bit</dd></div>`;
     }
     if (data.renameFile) {
-        videoHtml += `<dt>Rename</dt><dd>Update filename</dd>`;
+        videoHtml += `<div><dt>Rename</dt><dd>Update filename</dd></div>`;
     }
 
     let audioHtml = "";
@@ -367,18 +367,18 @@ function renderPresetViewCard(p, builtin = false) {
             const cl = AUDIO_TIER_CODEC_OPTIONS.find(c => c.value === t.codec)?.label || t.codec;
             return t.bitrate ? `${cl} ${t.bitrate}` : cl;
         };
-        audioHtml += `<dt>Stereo</dt><dd>${esc(tierLabel(a.stereo))}</dd>`;
-        audioHtml += `<dt>Surround</dt><dd>${esc(tierLabel(a.surround))}</dd>`;
+        audioHtml += `<div><dt>Stereo</dt><dd>${esc(tierLabel(a.stereo))}</dd></div>`;
+        audioHtml += `<div><dt>Surround</dt><dd>${esc(tierLabel(a.surround))}</dd></div>`;
         if (a.add_stereo_downmix && a.add_stereo_downmix !== "never") {
             const dmxLabel = a.add_stereo_downmix === "if_no_stereo" ? "If no stereo" : "Always";
-            audioHtml += `<dt>Downmix</dt><dd>${esc(dmxLabel)}</dd>`;
-            if (a.downmix_bitrate) audioHtml += `<dt>Dmx Bitrate</dt><dd>${esc(a.downmix_bitrate)}</dd>`;
+            audioHtml += `<div><dt>Downmix</dt><dd>${esc(dmxLabel)}</dd></div>`;
+            if (a.downmix_bitrate) audioHtml += `<div><dt>Dmx Bitrate</dt><dd>${esc(a.downmix_bitrate)}</dd></div>`;
         }
         if (a.languages && a.languages.length) {
-            audioHtml += `<dt>Languages</dt><dd>${esc(a.languages.join(", "))}</dd>`;
+            audioHtml += `<div><dt>Languages</dt><dd>${esc(a.languages.join(", "))}</dd></div>`;
         }
         if (a.remove_commentary) {
-            audioHtml += `<dt>Commentary</dt><dd>Remove</dd>`;
+            audioHtml += `<div><dt>Commentary</dt><dd>Remove</dd></div>`;
         }
     }
 
@@ -386,14 +386,14 @@ function renderPresetViewCard(p, builtin = false) {
     if (data.subtitleMode !== "keep") {
         const s = data.subtitle;
         if (data.subtitleMode === "remove") {
-            subtitleHtml += `<dt>Mode</dt><dd>Remove all</dd>`;
+            subtitleHtml += `<div><dt>Mode</dt><dd>Remove all</dd></div>`;
         } else {
-            subtitleHtml += `<dt>Mode</dt><dd>Keep by language</dd>`;
+            subtitleHtml += `<div><dt>Mode</dt><dd>Keep by language</dd></div>`;
             if (s && s.languages && s.languages.length) {
-                subtitleHtml += `<dt>Languages</dt><dd>${esc(s.languages.join(", "))}</dd>`;
+                subtitleHtml += `<div><dt>Languages</dt><dd>${esc(s.languages.join(", "))}</dd></div>`;
             }
             if (s && s.remove_commentary) {
-                subtitleHtml += `<dt>Commentary</dt><dd>Remove</dd>`;
+                subtitleHtml += `<div><dt>Commentary</dt><dd>Remove</dd></div>`;
             }
         }
     }
@@ -401,7 +401,7 @@ function renderPresetViewCard(p, builtin = false) {
     let extraHtml = "";
     if (data.extraArgs.length) {
         let dlHtml = data.extraArgs.map(a =>
-            `<dt>${esc(a.flag)}</dt><dd>${esc(a.value) || "(flag)"}</dd>`
+            `<div><dt>${esc(a.flag)}</dt><dd>${esc(a.value) || "(flag)"}</dd></div>`
         ).join("");
         extraHtml = `<div class="preset-card-section"><span class="preset-card-section-label">Extra Arguments</span><dl class="preset-card-props">${dlHtml}</dl></div>`;
     }

@@ -813,10 +813,8 @@ tr.clickable:hover {
     margin-bottom: 12px;
 }
 
-.preset-card-props {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0;
+.preset-card-props > div {
+    display: flex;
 }
 
 .preset-card-props dt,
@@ -836,13 +834,13 @@ tr.clickable:hover {
 .preset-card-props dd {
     font-size: 13px;
     color: var(--text);
+    flex: 1;
     text-align: right;
     overflow-wrap: break-word;
     min-width: 0;
 }
 
-.preset-card-props dt:nth-of-type(odd),
-.preset-card-props dd:nth-of-type(odd) {
+.preset-card-props > div:nth-child(odd) {
     background: var(--bg-tertiary);
 }
 
