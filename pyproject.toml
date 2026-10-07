@@ -1,6 +1,6 @@
 [project]
 name = "undarr"
-version = "0.1.0"
+version = "0.1.1"
 description = "Self-hosted video transcoding"
 requires-python = ">=3.12"
 dependencies = [
