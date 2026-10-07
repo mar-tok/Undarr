@@ -58,11 +58,18 @@ async def _check_latest_version() -> str | None:
     return _latest_version
 
 
+def _is_newer(latest: str, current: str) -> bool:
+    try:
+        return tuple(map(int, latest.split("."))) > tuple(map(int, current.split(".")))
+    except ValueError:
+        return False
+
+
 @router.get("/version")
 async def get_version():
     latest = await _check_latest_version()
     result = {"version": APP_VERSION}
-    if latest and latest != APP_VERSION:
+    if latest and _is_newer(latest, APP_VERSION):
         result["latest"] = latest
     return result
 

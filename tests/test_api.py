@@ -374,6 +374,29 @@ class TestSettings:
         assert detail in resp.json()["detail"]
         assert _on_disk(store) == before
 
+    @pytest.mark.parametrize(
+        "running, latest, shown",
+        [
+            ("0.1.0", "0.2.0", "0.2.0"),
+            ("0.9.0", "0.10.0", "0.10.0"),
+            ("0.1.0", "0.1.0", None),
+            ("0.2.0", "0.1.0", None),
+            ("0.1.0", "nightly", None),
+            ("0.1.0", None, None),
+        ],
+    )
+    async def test_version_shows_only_newer_release(
+        self, client, monkeypatch, running, latest, shown
+    ):
+        monkeypatch.setattr("app.routers.settings.APP_VERSION", running)
+        monkeypatch.setattr(
+            "app.routers.settings._check_latest_version",
+            AsyncMock(return_value=latest),
+        )
+        data = (await client.get("/api/version")).json()
+        assert data["version"] == running
+        assert data.get("latest") == shown
+
 
 class TestHistory:
     async def test_get_history_filters_by_status(self, client):
