@@ -17,6 +17,7 @@ if [ -d /dev/dri ]; then
     done
 fi
 
-chown undarr:undarr /data /logs
+mkdir -p /tmp/undarr
+chown undarr:undarr /data /logs /tmp/undarr
 
 exec gosu undarr "$@"
